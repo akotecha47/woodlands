@@ -12,6 +12,6 @@ export const hasAdminClient = Boolean(serviceRoleKey)
 
 export const supabaseAdmin = hasAdminClient
   ? createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
+      auth: { storageKey: 'sb-admin-token', autoRefreshToken: false, persistSession: false },
     })
   : null
