@@ -1,15 +1,54 @@
 import { NavLink } from 'react-router-dom'
-import { Package, Clock, CalendarDays, UtensilsCrossed, ShoppingBasket, TreePine, X } from 'lucide-react'
+import { Package, Clock, CalendarDays, UtensilsCrossed, ShoppingBasket, Settings, TreePine, X, LogOut } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
+import { ROLE_LABELS } from '../lib/roles'
 
-const navItems = [
-  { label: 'Inventory',       to: '/',                icon: Package,          end: true },
-  { label: 'Attendance',      to: '/attendance',      icon: Clock },
-  { label: 'Events',          to: '/events',          icon: CalendarDays },
-  { label: 'Table Bookings',  to: '/table-bookings',  icon: UtensilsCrossed },
-  { label: 'Farmers Market',  to: '/farmers-market',  icon: ShoppingBasket },
+const ALL_NAV_ITEMS = [
+  {
+    label: 'Inventory',
+    to: '/',
+    icon: Package,
+    end: true,
+    allowed: ['owner', 'manager', 'store_supervisor', 'head_of_department', 'barman', 'kitchen_staff'],
+  },
+  {
+    label: 'Attendance',
+    to: '/attendance',
+    icon: Clock,
+    allowed: ['owner', 'manager', 'head_of_department', 'housekeeping', 'grounds', 'security'],
+  },
+  {
+    label: 'Events',
+    to: '/events',
+    icon: CalendarDays,
+    allowed: ['owner', 'manager'],
+  },
+  {
+    label: 'Table Bookings',
+    to: '/table-bookings',
+    icon: UtensilsCrossed,
+    allowed: ['owner', 'manager', 'barman', 'head_waiter', 'waiter'],
+  },
+  {
+    label: 'Farmers Market',
+    to: '/farmers-market',
+    icon: ShoppingBasket,
+    allowed: ['owner', 'manager', 'farmers_market_admin'],
+  },
+  {
+    label: 'Admin',
+    to: '/admin',
+    icon: Settings,
+    allowed: ['owner'],
+  },
 ]
 
 export default function Sidebar({ open, onClose }) {
+  const { profile, signOut } = useAuth()
+  const role = profile?.role ?? ''
+
+  const navItems = ALL_NAV_ITEMS.filter(item => item.allowed.includes(role))
+
   return (
     <>
       {/* Mobile overlay */}
@@ -79,9 +118,29 @@ export default function Sidebar({ open, onClose }) {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-gray-200 shrink-0">
-          <p className="text-[11px] text-gray-400">Lodge Management Demo</p>
+        {/* Footer — user info + logout */}
+        <div className="px-4 py-4 border-t border-gray-200 shrink-0">
+          {profile ? (
+            <div className="flex items-center gap-3">
+              {/* Avatar */}
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#16a34a]/10 text-[#16a34a] font-semibold text-xs shrink-0 uppercase">
+                {profile.full_name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-gray-900 truncate">{profile.full_name}</p>
+                <p className="text-[11px] text-gray-400 truncate">{ROLE_LABELS[profile.role] ?? profile.role}</p>
+              </div>
+              <button
+                onClick={signOut}
+                title="Sign out"
+                className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+          ) : (
+            <p className="text-[11px] text-gray-400">Lodge Management</p>
+          )}
         </div>
       </aside>
     </>

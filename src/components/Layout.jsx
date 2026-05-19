@@ -9,6 +9,7 @@ const pageTitles = {
   '/events':          'Events',
   '/table-bookings':  'Table Bookings',
   '/farmers-market':  'Farmers Market',
+  '/admin':           'Admin Panel',
 }
 
 export default function Layout() {
