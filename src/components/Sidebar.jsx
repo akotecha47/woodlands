@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { Package, Clock, BedDouble, TrendingUp, TreePine, X } from 'lucide-react'
+import { Package, Clock, CalendarDays, UtensilsCrossed, ShoppingBasket, TreePine, X } from 'lucide-react'
 
 const navItems = [
-  { label: 'Inventory',    to: '/',            icon: Package,    end: true },
-  { label: 'Attendance',   to: '/attendance',  icon: Clock },
-  { label: 'Housekeeping', to: '/housekeeping',icon: BedDouble },
-  { label: 'Revenue',      to: '/revenue',     icon: TrendingUp },
+  { label: 'Inventory',       to: '/',                icon: Package,          end: true },
+  { label: 'Attendance',      to: '/attendance',      icon: Clock },
+  { label: 'Events',          to: '/events',          icon: CalendarDays },
+  { label: 'Table Bookings',  to: '/table-bookings',  icon: UtensilsCrossed },
+  { label: 'Farmers Market',  to: '/farmers-market',  icon: ShoppingBasket },
 ]
 
 export default function Sidebar({ open, onClose }) {

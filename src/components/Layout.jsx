@@ -4,10 +4,11 @@ import { Menu } from 'lucide-react'
 import Sidebar from './Sidebar'
 
 const pageTitles = {
-  '/':             'Inventory',
-  '/attendance':   'Attendance',
-  '/housekeeping': 'Housekeeping',
-  '/revenue':      'Revenue',
+  '/':                'Inventory',
+  '/attendance':      'Attendance',
+  '/events':          'Events',
+  '/table-bookings':  'Table Bookings',
+  '/farmers-market':  'Farmers Market',
 }
 
 export default function Layout() {

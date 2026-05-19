@@ -2,8 +2,9 @@ import { Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import Inventory from './pages/Inventory'
 import Attendance from './pages/Attendance'
-import Housekeeping from './pages/Housekeeping'
-import Revenue from './pages/Revenue'
+import Events from './pages/Events'
+import TableBookings from './pages/TableBookings'
+import FarmersMarket from './pages/FarmersMarket'
 
 function App() {
   return (
@@ -11,8 +12,9 @@ function App() {
       <Route element={<Layout />}>
         <Route index element={<Inventory />} />
         <Route path="attendance" element={<Attendance />} />
-        <Route path="housekeeping" element={<Housekeeping />} />
-        <Route path="revenue" element={<Revenue />} />
+        <Route path="events" element={<Events />} />
+        <Route path="table-bookings" element={<TableBookings />} />
+        <Route path="farmers-market" element={<FarmersMarket />} />
       </Route>
     </Routes>
   )
