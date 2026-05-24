@@ -9,12 +9,24 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   async function fetchProfile(userId) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_profiles')
       .select('*, departments(name)')
       .eq('id', userId)
       .single()
-    return data ?? null
+
+    if (!error) return data
+
+    // departments join can fail if the table has restrictive RLS or the FK
+    // relationship isn't resolved by PostgREST — fall back to core fields so
+    // the role is always returned and auth doesn't break.
+    const { data: core } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+
+    return core ?? null
   }
 
   useEffect(() => {
