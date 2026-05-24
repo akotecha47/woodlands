@@ -8,27 +8,6 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  async function fetchProfile(userId) {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*, departments(name)')
-      .eq('id', userId)
-      .single()
-
-    if (!error) return data
-
-    // departments join can fail if the table has restrictive RLS or the FK
-    // relationship isn't resolved by PostgREST — fall back to core fields so
-    // the role is always returned and auth doesn't break.
-    const { data: core } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-
-    return core ?? null
-  }
-
   useEffect(() => {
     let mounted = true
 
@@ -37,16 +16,21 @@ export function AuthProvider({ children }) {
         if (!mounted) return
 
         if (session?.user) {
-          const p = await fetchProfile(session.user.id)
+          const { data } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single()
+
           if (!mounted) return
 
-          if (p?.is_active === false) {
+          if (data?.is_active === false) {
             await supabase.auth.signOut()
             return
           }
 
           setUser(session.user)
-          setProfile(p)
+          setProfile(data ?? null)
         } else {
           setUser(null)
           setProfile(null)
