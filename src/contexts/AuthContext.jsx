@@ -29,7 +29,6 @@ export function AuthProvider({ children }) {
           if (!mounted) return
 
           if (p?.is_active === false) {
-            // Deactivated account — force sign out
             await supabase.auth.signOut()
             return
           }
@@ -41,10 +40,7 @@ export function AuthProvider({ children }) {
           setProfile(null)
         }
 
-        // Only mark loading done on initial resolution and sign-in/out events
-        if (['INITIAL_SESSION', 'SIGNED_IN', 'SIGNED_OUT'].includes(event)) {
-          setLoading(false)
-        }
+        setLoading(false)
       }
     )
 
