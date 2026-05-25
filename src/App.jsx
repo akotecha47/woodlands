@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Inventory     from './pages/Inventory'
 import TableBookings from './pages/TableBookings'
+import FarmersMarket from './pages/FarmersMarket'
 
 function PlaceholderPage({ title }) {
   return <h1 className="text-2xl font-semibold text-gray-800">{title}</h1>
@@ -30,7 +31,7 @@ export default function App() {
         <Route path="/attendance"     element={<Protected title="Attendance" />} />
         <Route path="/events"         element={<Protected title="Events" />} />
         <Route path="/table-bookings" element={<Protected><TableBookings /></Protected>} />
-        <Route path="/farmers-market" element={<Protected title="Farmers Market" />} />
+        <Route path="/farmers-market" element={<Protected><FarmersMarket /></Protected>} />
         <Route path="/admin"          element={<Protected title="Admin" />} />
         <Route path="*"               element={<Navigate to="/" replace />} />
       </Routes>
