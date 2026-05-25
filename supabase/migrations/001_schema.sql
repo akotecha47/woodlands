@@ -251,3 +251,10 @@ GRANT SELECT, INSERT, UPDATE ON table_bookings     TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON fm_holders         TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON fm_visits          TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON fm_payments        TO authenticated;
+
+-- ============================================================
+-- Policies
+-- ============================================================
+
+CREATE POLICY "authenticated can read profiles"
+  ON user_profiles FOR SELECT TO authenticated USING (true);
