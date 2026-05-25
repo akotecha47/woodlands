@@ -56,10 +56,11 @@ export default function Admin() {
   }
 
   async function fetchUsers() {
-    const { data } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('user_profiles')
       .select('*')
       .order('full_name')
+    console.log('[Admin] fetchUsers data:', data, 'error:', error)
     if (data) setUsers(data)
   }
 
