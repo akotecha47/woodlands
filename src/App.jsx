@@ -1,0 +1,37 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { RequireAuth, GuardedPage } from './components/RouteGuard'
+import Layout from './components/Layout'
+import Login from './pages/Login'
+
+function PlaceholderPage({ title }) {
+  return <h1 className="text-2xl font-semibold text-gray-800">{title}</h1>
+}
+
+function Protected({ title }) {
+  return (
+    <RequireAuth>
+      <GuardedPage>
+        <Layout>
+          <PlaceholderPage title={title} />
+        </Layout>
+      </GuardedPage>
+    </RequireAuth>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/"               element={<Protected title="Inventory" />} />
+        <Route path="/attendance"     element={<Protected title="Attendance" />} />
+        <Route path="/events"         element={<Protected title="Events" />} />
+        <Route path="/table-bookings" element={<Protected title="Table Bookings" />} />
+        <Route path="/farmers-market" element={<Protected title="Farmers Market" />} />
+        <Route path="/admin"          element={<Protected title="Admin" />} />
+        <Route path="*"               element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
