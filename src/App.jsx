@@ -2,7 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { RequireAuth, GuardedPage } from './components/RouteGuard'
 import Layout from './components/Layout'
 import Login from './pages/Login'
-import Inventory from './pages/Inventory'
+import Inventory     from './pages/Inventory'
+import TableBookings from './pages/TableBookings'
 
 function PlaceholderPage({ title }) {
   return <h1 className="text-2xl font-semibold text-gray-800">{title}</h1>
@@ -28,7 +29,7 @@ export default function App() {
         <Route path="/"               element={<Protected><Inventory /></Protected>} />
         <Route path="/attendance"     element={<Protected title="Attendance" />} />
         <Route path="/events"         element={<Protected title="Events" />} />
-        <Route path="/table-bookings" element={<Protected title="Table Bookings" />} />
+        <Route path="/table-bookings" element={<Protected><TableBookings /></Protected>} />
         <Route path="/farmers-market" element={<Protected title="Farmers Market" />} />
         <Route path="/admin"          element={<Protected title="Admin" />} />
         <Route path="*"               element={<Navigate to="/" replace />} />
