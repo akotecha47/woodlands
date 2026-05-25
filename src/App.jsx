@@ -2,17 +2,18 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { RequireAuth, GuardedPage } from './components/RouteGuard'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import Inventory from './pages/Inventory'
 
 function PlaceholderPage({ title }) {
   return <h1 className="text-2xl font-semibold text-gray-800">{title}</h1>
 }
 
-function Protected({ title }) {
+function Protected({ children, title }) {
   return (
     <RequireAuth>
       <GuardedPage>
         <Layout>
-          <PlaceholderPage title={title} />
+          {children ?? <PlaceholderPage title={title} />}
         </Layout>
       </GuardedPage>
     </RequireAuth>
@@ -24,7 +25,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/"               element={<Protected title="Inventory" />} />
+        <Route path="/"               element={<Protected><Inventory /></Protected>} />
         <Route path="/attendance"     element={<Protected title="Attendance" />} />
         <Route path="/events"         element={<Protected title="Events" />} />
         <Route path="/table-bookings" element={<Protected title="Table Bookings" />} />
