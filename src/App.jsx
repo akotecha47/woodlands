@@ -3,6 +3,7 @@ import { RequireAuth, GuardedPage } from './components/RouteGuard'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Inventory     from './pages/Inventory'
+import Attendance    from './pages/Attendance'
 import TableBookings from './pages/TableBookings'
 import FarmersMarket from './pages/FarmersMarket'
 import Events        from './pages/Events'
@@ -29,7 +30,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/"               element={<Protected><Inventory /></Protected>} />
-        <Route path="/attendance"     element={<Protected title="Attendance" />} />
+        <Route path="/attendance"     element={<Protected><Attendance /></Protected>} />
         <Route path="/events"         element={<Protected><Events /></Protected>} />
         <Route path="/table-bookings" element={<Protected><TableBookings /></Protected>} />
         <Route path="/farmers-market" element={<Protected><FarmersMarket /></Protected>} />
