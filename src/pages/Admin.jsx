@@ -5,6 +5,25 @@ import { ROLE_LABELS } from '../lib/roles'
 
 const ROLES = Object.keys(ROLE_LABELS)
 
+const DEPT_CODES = {
+  'Kitchen':         'KIT',
+  'Restaurant Bar':  'RBA',
+  'Sports Bar':      'SBA',
+  'Restaurant':      'RST',
+  'Housekeeping':    'HSK',
+  'Grounds':         'GRD',
+  'Security':        'SEC',
+}
+
+function deptCode(dept) { return DEPT_CODES[dept] ?? 'GEN' }
+
+function defaultUnit(dept) {
+  if (!dept) return 'units'
+  if (dept === 'Kitchen' || dept === 'Restaurant') return 'kg'
+  if (dept.toLowerCase().includes('bar')) return 'litres'
+  return 'units'
+}
+
 const TABS = [
   { id: 'users',       label: 'Users'       },
   { id: 'add_user',    label: 'Add User'    },
@@ -61,7 +80,7 @@ export default function Admin() {
   const [stockItems,   setStockItems]   = useState([])
   const [stockBusy,    setStockBusy]    = useState(false)
   const [editingStock, setEditingStock] = useState(null) // { id, name, unit, reorder_level }
-  const [stockForm,    setStockForm]    = useState({ name: '', sku: '', unit: '', department: '', reorder_level: 0 })
+  const [stockForm,    setStockForm]    = useState({ name: '', unit: 'units', department: '', reorder_level: 0 })
 
   function flash(msg, ok = true) {
     setToast({ msg, ok })
@@ -91,17 +110,23 @@ export default function Admin() {
     e.preventDefault()
     setStockBusy(true)
     try {
+      const dept = stockForm.department || null
+      let countQuery = supabaseAdmin.from('stock_items').select('*', { count: 'exact', head: true })
+      countQuery = dept ? countQuery.eq('department', dept) : countQuery.is('department', null)
+      const { count } = await countQuery
+      const sku = `${deptCode(dept)}-${String((count ?? 0) + 1).padStart(3, '0')}`
+
       const { error } = await supabaseAdmin.from('stock_items').insert({
         name: stockForm.name.trim(),
-        sku: stockForm.sku.trim(),
+        sku,
         unit: stockForm.unit.trim(),
-        department: stockForm.department || null,
+        department: dept,
         reorder_level: Number(stockForm.reorder_level),
       })
       if (error) throw error
-      setStockForm({ name: '', sku: '', unit: '', department: '', reorder_level: 0 })
+      setStockForm({ name: '', unit: 'units', department: '', reorder_level: 0 })
       await fetchStockItems()
-      flash('Stock item added')
+      flash(`Stock item added (SKU: ${sku})`)
     } catch (err) { flash(err.message, false) }
     finally { setStockBusy(false) }
   }
@@ -438,13 +463,16 @@ export default function Admin() {
                   placeholder="Item name"
                 />
               </Field>
-              <Field label="SKU *">
-                <Inp
-                  required
-                  value={stockForm.sku}
-                  onChange={e => setStockForm(f => ({ ...f, sku: e.target.value }))}
-                  placeholder="e.g. BEV-001"
-                />
+              <Field label="Department">
+                <Sel
+                  value={stockForm.department}
+                  onChange={e => {
+                    const dept = e.target.value
+                    setStockForm(f => ({ ...f, department: dept, unit: defaultUnit(dept) }))
+                  }}>
+                  <option value="">— None —</option>
+                  {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                </Sel>
               </Field>
               <Field label="Unit *">
                 <Inp
@@ -454,14 +482,6 @@ export default function Admin() {
                   placeholder="kg / litres / units"
                 />
               </Field>
-              <Field label="Department">
-                <Sel
-                  value={stockForm.department}
-                  onChange={e => setStockForm(f => ({ ...f, department: e.target.value }))}>
-                  <option value="">— None —</option>
-                  {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                </Sel>
-              </Field>
               <Field label="Reorder Level">
                 <Inp
                   type="number"
@@ -470,13 +490,14 @@ export default function Admin() {
                   onChange={e => setStockForm(f => ({ ...f, reorder_level: e.target.value }))}
                 />
               </Field>
-              <div className="flex items-end">
+              <div className="col-span-2 flex items-center gap-3">
                 <button
                   type="submit"
                   disabled={stockBusy}
                   className="bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
                   {stockBusy ? 'Adding…' : 'Add Item'}
                 </button>
+                <span className="text-xs text-gray-400">SKU auto-generated on save</span>
               </div>
             </form>
 
