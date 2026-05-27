@@ -88,6 +88,7 @@ export default function Admin() {
     setFormError(null)
     setSuccess(null)
     try {
+      console.log('[handleAddUser] invoking create-user with:', JSON.stringify(form))
       const { data, error } = await supabase.functions.invoke('create-user', { body: form })
       if (error) throw error
       if (data?.error) throw new Error(data.error)

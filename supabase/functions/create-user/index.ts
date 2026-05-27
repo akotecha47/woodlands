@@ -12,9 +12,12 @@ serve(async (req) => {
   }
 
   try {
-    const { email, password, full_name, role, department } = await req.json()
+    const body = await req.json()
+    console.log('[create-user] received body:', JSON.stringify(body))
+    const { email, password, full_name, role, department } = body
 
     if (!email || !password || !full_name || !role) {
+      console.log('[create-user] validation failed — missing fields:', { email: !!email, password: !!password, full_name: !!full_name, role: !!role })
       return new Response(
         JSON.stringify({ error: 'email, password, full_name, and role are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
