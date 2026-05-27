@@ -75,6 +75,16 @@ export async function fetchUserMap() {
   return data ? Object.fromEntries(data.map(u => [u.id, u.full_name])) : {}
 }
 
+export async function fetchStaffUsers() {
+  const { data } = await supabaseAdmin
+    .from('user_profiles')
+    .select('id, full_name')
+    .in('role', ['owner', 'manager', 'store_supervisor'])
+    .eq('is_active', true)
+    .order('full_name')
+  return data ?? []
+}
+
 // Add `delta` to a stock item's current_stock row (upserts if row missing).
 // Throws on DB error so callers can catch and flash.
 export async function shiftStock(stockItemId, delta) {

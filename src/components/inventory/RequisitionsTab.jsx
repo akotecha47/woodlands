@@ -120,11 +120,14 @@ export default function RequisitionsTab() {
             </Sel>
           </Field>
           <Field label="Department">
-            <Sel value={form.department}
-              onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
-              <option value="">— My department —</option>
-              {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-            </Sel>
+            {profile?.department
+              ? <Inp disabled value={profile.department} />
+              : <Sel value={form.department}
+                  onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
+                  <option value="">Select department…</option>
+                  {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                </Sel>
+            }
           </Field>
           <Field label="Quantity *">
             <input type="number" required min="0.01" step="any"

@@ -2,23 +2,25 @@ import { useState, useEffect } from 'react'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
-import { todayStr, itemLabel, AccessDenied, shiftStock, fetchActiveItems } from './InventoryUI'
+import { todayStr, itemLabel, AccessDenied, shiftStock, fetchActiveItems, fetchStaffUsers } from './InventoryUI'
 
 const ALLOWED = ['owner', 'manager', 'store_supervisor']
 
 export default function LogDeliveryTab() {
   const { profile, session } = useAuth()
-  const [items, setItems] = useState([])
-  const [busy,  setBusy]  = useState(false)
-  const [toast, setToast] = useState(null)
+  const [items,      setItems]      = useState([])
+  const [staffUsers, setStaffUsers] = useState([])
+  const [busy,       setBusy]       = useState(false)
+  const [toast,      setToast]      = useState(null)
   const flash = useFlash(setToast)
   const [form, setForm] = useState({
-    stock_item_id: '', quantity: '', supplier: '', date: todayStr(), notes: '',
+    stock_item_id: '', quantity: '', supplier: '', date: todayStr(), notes: '', received_by_id: '',
   })
 
   useEffect(() => {
     if (!ALLOWED.includes(profile?.role)) return
     fetchActiveItems().then(setItems)
+    fetchStaffUsers().then(setStaffUsers)
   }, [profile?.role])
 
   if (!ALLOWED.includes(profile?.role)) return <AccessDenied />
@@ -27,22 +29,24 @@ export default function LogDeliveryTab() {
     e.preventDefault()
     setBusy(true)
     try {
+      const receivedName = staffUsers.find(u => u.id === form.received_by_id)?.full_name ?? ''
       const noteValue = [
-        form.supplier && `Supplier: ${form.supplier}`,
+        form.supplier    && `Supplier: ${form.supplier}`,
+        receivedName     && `Received by: ${receivedName}`,
         form.notes,
       ].filter(Boolean).join('\n') || null
 
       const { error } = await supabaseAdmin.from('stock_movements').insert({
-        stock_item_id:  form.stock_item_id,
-        movement_type:  'delivery',
-        quantity_change: Number(form.quantity),
-        performed_by:   session.user.id,
-        notes:          noteValue,
+        stock_item_id:   form.stock_item_id,
+        movement_type:   'delivery',
+        quantity_change:  Number(form.quantity),
+        performed_by:    session.user.id,
+        notes:           noteValue,
       })
       if (error) throw error
       await shiftStock(form.stock_item_id, Number(form.quantity))
       flash('Delivery logged')
-      setForm({ stock_item_id: '', quantity: '', supplier: '', date: todayStr(), notes: '' })
+      setForm({ stock_item_id: '', quantity: '', supplier: '', date: todayStr(), notes: '', received_by_id: '' })
     } catch (err) { flash(err.message, false) }
     finally { setBusy(false) }
   }
@@ -74,12 +78,19 @@ export default function LogDeliveryTab() {
             value={form.date}
             onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
         </Field>
+        <Field label="Received By *">
+          <Sel required value={form.received_by_id}
+            onChange={e => setForm(f => ({ ...f, received_by_id: e.target.value }))}>
+            <option value="">Select staff member…</option>
+            {staffUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </Sel>
+        </Field>
         <Field label="Notes">
           <textarea rows={2} className={fieldCls} placeholder="Any notes…"
             value={form.notes}
             onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
         </Field>
-        <Field label="Received By">
+        <Field label="Logged By">
           <Inp disabled value={profile?.full_name ?? '—'} />
         </Field>
         <button type="submit" disabled={busy}

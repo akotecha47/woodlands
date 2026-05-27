@@ -73,7 +73,13 @@ export default function StockLevelsTab() {
                 </td>
               </tr>
             ))}
-            {visible.length === 0 && <EmptyRow cols={7} msg="No stock data found" />}
+            {visible.length === 0 && (
+              <EmptyRow cols={7} msg={
+                rows.length === 0
+                  ? 'No stock items yet. Add items in Admin → Stock Items.'
+                  : 'No items in this department.'
+              } />
+            )}
           </tbody>
         </table>
       </div>

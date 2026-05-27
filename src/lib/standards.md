@@ -117,7 +117,29 @@ alter table user_profiles
 
 ---
 
-## 9. Reports are built last
+## 9. Every new table requires these three things
+
+**Rule:** Without exception, every new table needs all three of the following:
+
+```sql
+-- 1. Enable RLS
+ALTER TABLE x ENABLE ROW LEVEL SECURITY;
+
+-- 2. Service role policy (full access for backend/admin operations)
+CREATE POLICY "service role full access x" ON x
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- 3. Grant
+GRANT ALL ON x TO service_role;
+```
+
+**Why:** Missing any one of these causes silent empty results or permission denied errors in the frontend, with no obvious error message to diagnose. The service role policy is what allows `supabaseAdmin` (the service-role client) to read and write the table. Without the grant, even the service role client gets blocked. RLS without the policy means every query returns zero rows.
+
+Always add all three together in the same migration block so none can be forgotten independently.
+
+---
+
+## 10. Reports are built last
 
 **Rule:** The Reports module is always built after all other modules are complete.
 
