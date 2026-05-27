@@ -11,8 +11,10 @@ ALTER TABLE attendance_records
   ADD COLUMN IF NOT EXISTS gps_verified boolean NOT NULL DEFAULT false;
 
 -- RLS policies for attendance tables (other tables may need similar policies)
+DROP POLICY IF EXISTS "authenticated can access staff" ON staff;
 CREATE POLICY "authenticated can access staff"
   ON staff FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "authenticated can access attendance_records" ON attendance_records;
 CREATE POLICY "authenticated can access attendance_records"
   ON attendance_records FOR ALL TO authenticated USING (true) WITH CHECK (true);

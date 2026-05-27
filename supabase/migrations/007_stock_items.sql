@@ -9,5 +9,7 @@ create table if not exists stock_items (
   created_at    timestamptz default now()
 );
 alter table stock_items enable row level security;
+drop policy if exists "authenticated read stock_items" on stock_items;
 create policy "authenticated read stock_items" on stock_items for select to authenticated using (true);
+drop policy if exists "service role full access on stock_items" on stock_items;
 create policy "service role full access on stock_items" on stock_items for all to service_role using (true) with check (true);

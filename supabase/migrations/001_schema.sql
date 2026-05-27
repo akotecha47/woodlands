@@ -3,7 +3,7 @@
 -- ============================================================
 
 -- user_profiles
-CREATE TABLE user_profiles (
+CREATE TABLE IF NOT EXISTS user_profiles (
   id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name     text,
   email         text,
@@ -14,7 +14,7 @@ CREATE TABLE user_profiles (
 );
 
 -- inventory_items
-CREATE TABLE inventory_items (
+CREATE TABLE IF NOT EXISTS inventory_items (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name            text NOT NULL,
   category        text,
@@ -27,7 +27,7 @@ CREATE TABLE inventory_items (
 );
 
 -- deliveries
-CREATE TABLE deliveries (
+CREATE TABLE IF NOT EXISTS deliveries (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   item_id         uuid NOT NULL REFERENCES inventory_items(id),
   quantity        numeric NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE deliveries (
 );
 
 -- requisitions
-CREATE TABLE requisitions (
+CREATE TABLE IF NOT EXISTS requisitions (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   item_id           uuid NOT NULL REFERENCES inventory_items(id),
   quantity          numeric NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE requisitions (
 );
 
 -- stock_transfers
-CREATE TABLE stock_transfers (
+CREATE TABLE IF NOT EXISTS stock_transfers (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   item_id          uuid NOT NULL REFERENCES inventory_items(id),
   quantity         numeric NOT NULL,
@@ -72,7 +72,7 @@ CREATE TABLE stock_transfers (
 );
 
 -- stock_adjustments
-CREATE TABLE stock_adjustments (
+CREATE TABLE IF NOT EXISTS stock_adjustments (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   item_id          uuid NOT NULL REFERENCES inventory_items(id),
   adjustment_type  text NOT NULL,
@@ -83,7 +83,7 @@ CREATE TABLE stock_adjustments (
 );
 
 -- staff
-CREATE TABLE staff (
+CREATE TABLE IF NOT EXISTS staff (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   full_name        text NOT NULL,
   role             text,
@@ -98,7 +98,7 @@ CREATE TABLE staff (
 );
 
 -- attendance_records
-CREATE TABLE attendance_records (
+CREATE TABLE IF NOT EXISTS attendance_records (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   staff_id     uuid NOT NULL REFERENCES staff(id),
   date         date NOT NULL,
@@ -111,7 +111,7 @@ CREATE TABLE attendance_records (
 );
 
 -- events
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title              text NOT NULL,
   description        text,
@@ -130,7 +130,7 @@ CREATE TABLE events (
 );
 
 -- event_payments
-CREATE TABLE event_payments (
+CREATE TABLE IF NOT EXISTS event_payments (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id        uuid NOT NULL REFERENCES events(id),
   amount          numeric NOT NULL,
@@ -142,7 +142,7 @@ CREATE TABLE event_payments (
 );
 
 -- event_tasks
-CREATE TABLE event_tasks (
+CREATE TABLE IF NOT EXISTS event_tasks (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id     uuid NOT NULL REFERENCES events(id),
   title        text NOT NULL,
@@ -156,7 +156,7 @@ CREATE TABLE event_tasks (
 );
 
 -- table_bookings
-CREATE TABLE table_bookings (
+CREATE TABLE IF NOT EXISTS table_bookings (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_name    text NOT NULL,
   customer_phone   text,
@@ -173,7 +173,7 @@ CREATE TABLE table_bookings (
 );
 
 -- fm_holders
-CREATE TABLE fm_holders (
+CREATE TABLE IF NOT EXISTS fm_holders (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   full_name        text NOT NULL,
   business_name    text,
@@ -187,7 +187,7 @@ CREATE TABLE fm_holders (
 );
 
 -- fm_visits
-CREATE TABLE fm_visits (
+CREATE TABLE IF NOT EXISTS fm_visits (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   holder_id      uuid NOT NULL REFERENCES fm_holders(id),
   visit_date     date NOT NULL,
@@ -199,7 +199,7 @@ CREATE TABLE fm_visits (
 );
 
 -- fm_payments
-CREATE TABLE fm_payments (
+CREATE TABLE IF NOT EXISTS fm_payments (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   holder_id      uuid NOT NULL REFERENCES fm_holders(id),
   amount         numeric NOT NULL,
@@ -256,5 +256,6 @@ GRANT SELECT, INSERT, UPDATE ON fm_payments        TO authenticated;
 -- Policies
 -- ============================================================
 
+DROP POLICY IF EXISTS "authenticated can read profiles" ON user_profiles;
 CREATE POLICY "authenticated can read profiles"
   ON user_profiles FOR SELECT TO authenticated USING (true);

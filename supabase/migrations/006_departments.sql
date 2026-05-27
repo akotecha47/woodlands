@@ -6,6 +6,7 @@ create table if not exists departments (
 
 alter table departments enable row level security;
 
+drop policy if exists "authenticated read departments" on departments;
 create policy "authenticated read departments"
   on departments for select
   to authenticated
