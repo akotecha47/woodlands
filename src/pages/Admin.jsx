@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { supabaseAdmin } from '../lib/supabaseAdmin'
 import { ROLE_LABELS } from '../lib/roles'
+import { UNITS } from '../lib/constants'
 
 const ROLES = Object.keys(ROLE_LABELS)
 
@@ -475,12 +476,12 @@ export default function Admin() {
                 </Sel>
               </Field>
               <Field label="Unit *">
-                <Inp
+                <Sel
                   required
                   value={stockForm.unit}
-                  onChange={e => setStockForm(f => ({ ...f, unit: e.target.value }))}
-                  placeholder="kg / litres / units"
-                />
+                  onChange={e => setStockForm(f => ({ ...f, unit: e.target.value }))}>
+                  {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                </Sel>
               </Field>
               <Field label="Reorder Level">
                 <Inp
@@ -528,7 +529,9 @@ export default function Admin() {
                         <Td>{item.sku}</Td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {editing
-                            ? <Inp value={editingStock.unit} onChange={e => setEditingStock(s => ({ ...s, unit: e.target.value }))} />
+                            ? <Sel value={editingStock.unit} onChange={e => setEditingStock(s => ({ ...s, unit: e.target.value }))}>
+                                {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                              </Sel>
                             : item.unit}
                         </td>
                         <Td>{item.department}</Td>
