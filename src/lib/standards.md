@@ -1,0 +1,116 @@
+# Woodlands — Resolved Issues & Permanent Standards
+
+These are real bugs that were hit in production or development. Each fix is permanent. Do not reintroduce these patterns.
+
+---
+
+## 1. Supabase admin client
+
+**Rule:** All DB reads/writes in admin pages must use `supabaseAdmin` (service role client). Never use the anon `supabase` client for admin operations.
+
+**Config** (`src/lib/supabaseAdmin.js`):
+```js
+createClient(url, serviceRoleKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    storageKey: 'sb-admin-token',
+  },
+})
+```
+
+**Why:** The anon client is subject to RLS and returns empty results or permission errors for rows the logged-in user doesn't own. Admin pages need unrestricted access.
+
+---
+
+## 2. Edge function secrets — service role key naming
+
+**Rule:** Store the service role key as `SERVICE_ROLE_KEY` in Edge Function Secrets. Do not use `SUPABASE_SERVICE_ROLE_KEY`.
+
+**Why:** The Supabase runtime auto-injects `SUPABASE_SERVICE_ROLE_KEY` but it is the new 41-character non-JWT key format. This key cannot be used for `auth.admin` calls (e.g. `createUser`), which require the JWT service role key. The manually set `SERVICE_ROLE_KEY` holds the correct JWT value.
+
+---
+
+## 3. Auth trigger — handle_new_user must not exist
+
+**Rule:** There must be no `handle_new_user` trigger on `auth.users`. If found, drop it.
+
+```sql
+drop trigger if exists handle_new_user on auth.users;
+drop function if exists public.handle_new_user();
+```
+
+**Why:** The trigger caused an `unexpected_failure` error on every user creation call made through `auth.admin.createUser`. User profile rows are created manually by the `create-user` edge function after the auth user is created, not via trigger.
+
+---
+
+## 4. RLS policies — both policies required on every table
+
+**Rule:** Every table must have both:
+1. `authenticated` SELECT policy
+2. `service_role` ALL policy
+
+Template:
+```sql
+alter table <table> enable row level security;
+create policy "authenticated read <table>" on <table>
+  for select to authenticated using (true);
+create policy "service role full access on <table>" on <table>
+  for all to service_role using (true) with check (true);
+```
+
+**Why:** Missing the service role policy causes the admin client to return silent empty results even though no error is thrown. This is hard to debug. Always include both.
+
+---
+
+## 5. Vercel SPA routing
+
+**Rule:** `vercel.json` must include a catch-all rewrite or direct URL visits return 404.
+
+```json
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
+```
+
+**Why:** Vercel serves static files by path. Without the rewrite, any URL that isn't the root (e.g. `/admin`, `/inventory`) returns a 404 on hard refresh or direct navigation because there is no corresponding file on disk.
+
+---
+
+## 6. Shared constants
+
+**Rule:** Units, roles, departments, and any repeated dropdown values must be defined in `src/lib/constants.js` and imported wherever used. Never hardcode these inline in components.
+
+```js
+// src/lib/constants.js
+export const UNITS = ['kg', 'g', 'litres', 'ml', 'units', 'portions', 'boxes', 'bags', 'bottles', 'cans']
+```
+
+**Why:** Inline lists drift out of sync across pages. A single source of truth ensures every dropdown shows the same options.
+
+---
+
+## 7. Column naming — user_profiles
+
+**Rule:** The role column on `user_profiles` is `role`, not `user_role`. Before writing any query against an unfamiliar table, verify actual column names:
+
+```sql
+select column_name from information_schema.columns where table_name = 'user_profiles';
+```
+
+**Why:** A `user_role` column reference caused silent null values in user listings. The schema uses `role` as the column name.
+
+---
+
+## 8. Foreign key on user_profiles — deferrable constraint
+
+**Rule:** The foreign key `user_profiles.id → auth.users(id)` must be `DEFERRABLE INITIALLY DEFERRED`.
+
+```sql
+alter table user_profiles
+  add constraint user_profiles_id_fkey
+  foreign key (id) references auth.users(id)
+  deferrable initially deferred;
+```
+
+**Why:** The edge function creates the auth user and then immediately inserts the profile row within the same operation. A non-deferred FK constraint fires before the transaction commits and raises a constraint violation. The deferred version checks only at commit time, by which point both rows exist.
