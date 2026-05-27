@@ -24,18 +24,29 @@ serve(async (req) => {
       )
     }
 
+    console.log('[create-user] SUPABASE_URL:', Deno.env.get('SUPABASE_URL')?.slice(0, 30))
+    console.log('[create-user] SERVICE_ROLE_KEY length:', Deno.env.get('SERVICE_ROLE_KEY')?.length)
+
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      Deno.env.get('SERVICE_ROLE_KEY')!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    })
-    if (authErr) throw authErr
+    let authData
+    try {
+      const { data, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      })
+      console.log('[create-user] auth error:', JSON.stringify(authError))
+      if (authError) throw authError
+      authData = data
+    } catch (authError) {
+      console.log('[create-user] auth error:', JSON.stringify(authError))
+      throw authError
+    }
 
     const { error: profileErr } = await supabaseAdmin.from('user_profiles').insert({
       id:         authData.user.id,
