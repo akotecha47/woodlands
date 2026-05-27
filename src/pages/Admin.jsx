@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 import { supabaseAdmin } from '../lib/supabaseAdmin'
 import { ROLE_LABELS } from '../lib/roles'
 
@@ -87,22 +88,9 @@ export default function Admin() {
     setFormError(null)
     setSuccess(null)
     try {
-      const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-        email:         form.email,
-        password:      form.password,
-        email_confirm: true,
-      })
-      if (authErr) throw authErr
-
-      const { error: profileErr } = await supabaseAdmin.from('user_profiles').insert({
-        id:         authData.user.id,
-        full_name:  form.full_name,
-        email:      form.email,
-        role:       form.role,
-        department: form.department || null,
-        is_active:  true,
-      })
-      if (profileErr) throw profileErr
+      const { data, error } = await supabase.functions.invoke('create-user', { body: form })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
 
       setSuccess({ email: form.email, password: form.password, role: form.role })
       setForm({ full_name: '', email: '', password: '', role: ROLES[0], department: '' })
