@@ -72,7 +72,7 @@ export default function Admin() {
   }
 
   async function fetchDepartments() {
-    const { data } = await supabase.from('departments').select('*').order('name')
+    const { data } = await supabaseAdmin.from('departments').select('*').order('name')
     if (data) setDepartments(data)
   }
 
@@ -120,7 +120,7 @@ export default function Admin() {
     if (!name) return
     setDeptBusy(true)
     try {
-      const { error } = await supabase.from('departments').insert({ name })
+      const { error } = await supabaseAdmin.from('departments').insert({ name })
       if (error) throw error
       setDeptInput('')
       await fetchDepartments()
@@ -132,7 +132,7 @@ export default function Admin() {
   async function deleteDepartment(dept) {
     if (!window.confirm(`Delete department "${dept.name}"? This cannot be undone.`)) return
     try {
-      const { error } = await supabase.from('departments').delete().eq('id', dept.id)
+      const { error } = await supabaseAdmin.from('departments').delete().eq('id', dept.id)
       if (error) throw error
       await fetchDepartments()
       flash(`Department "${dept.name}" deleted`)
@@ -143,7 +143,7 @@ export default function Admin() {
     const name = editingDept.name.trim()
     if (!name) return
     try {
-      const { error } = await supabase.from('departments').update({ name }).eq('id', editingDept.id)
+      const { error } = await supabaseAdmin.from('departments').update({ name }).eq('id', editingDept.id)
       if (error) throw error
       setEditingDept(null)
       await fetchDepartments()
