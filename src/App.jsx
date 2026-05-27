@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import ErrorBoundary from './components/ErrorBoundary'
 import { RequireAuth, GuardedPage } from './components/RouteGuard'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -27,6 +28,7 @@ function Protected({ children, title }) {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -39,5 +41,6 @@ export default function App() {
         <Route path="*"               element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   )
 }
