@@ -114,3 +114,11 @@ alter table user_profiles
 ```
 
 **Why:** The edge function creates the auth user and then immediately inserts the profile row within the same operation. A non-deferred FK constraint fires before the transaction commits and raises a constraint violation. The deferred version checks only at commit time, by which point both rows exist.
+
+---
+
+## 9. Reports are built last
+
+**Rule:** The Reports module is always built after all other modules are complete.
+
+**Why:** Reports need full visibility of all data sources. Building reports before the underlying modules are stable means the report layer ends up querying half-formed schemas, missing tables, or provisional column names — all of which require rework. Complete every module first, then build reports once the data model is settled.

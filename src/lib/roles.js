@@ -2,7 +2,7 @@ export const ROUTE_ACCESS = {
   '/':               ['owner', 'manager', 'store_supervisor', 'bar1', 'bar2'],
   '/attendance':     ['owner', 'manager', 'restaurant_manager'],
   '/events':         ['owner', 'manager'],
-  '/table-bookings': ['owner', 'manager', 'restaurant_manager'],
+  '/table-bookings': ['owner', 'manager', 'restaurant_manager', 'bar1', 'bar2'],
   '/farmers-market': ['owner', 'manager'],
   '/admin':          ['owner'],
 }
