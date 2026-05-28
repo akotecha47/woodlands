@@ -3,7 +3,7 @@ export const ROUTE_ACCESS = {
   '/attendance':     ['owner', 'manager', 'restaurant_manager'],
   '/events':         ['owner', 'manager'],
   '/table-bookings': ['owner', 'manager', 'restaurant_manager', 'bar1', 'bar2'],
-  '/farmers-market': ['owner', 'manager'],
+  '/farmers-market': ['owner', 'manager', 'farmers_market_admin'],
   '/admin':          ['owner'],
 }
 
@@ -13,7 +13,8 @@ export const ROLE_LABELS = {
   store_supervisor:    'Store Supervisor',
   bar1:                'Bar 1',
   bar2:                'Bar 2',
-  restaurant_manager:  'Restaurant Manager',
+  restaurant_manager:   'Restaurant Manager',
+  farmers_market_admin: 'Market Admin',
 }
 
 export function getDefaultRoute(role) {
