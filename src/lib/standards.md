@@ -139,7 +139,29 @@ Always add all three together in the same migration block so none can be forgott
 
 ---
 
-## 10. Reports are built last
+## 10. Scaffolded tables — verify schema before writing frontend code
+
+**Rule:** Before building any module that has an existing scaffolded page, run the following query and share the output:
+
+```sql
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'x'
+ORDER BY ordinal_position;
+```
+
+The scaffold may have different column names, spellings, or constraints than the new spec. Reconcile before writing any frontend code.
+
+**Watch for:**
+- American vs British spelling (`organizer` vs `organiser`)
+- `NOT NULL` constraints on old columns that no longer exist in the new spec
+- Duplicate columns from iterative `ALTER TABLE` migrations
+- Old column names (`title`, `description`, `capacity`) conflicting with new spec names (`name`, `notes`, `guest_count`)
+
+**Why:** Building against the wrong column names causes silent empty results, type errors, or constraint violations that are hard to trace back to a spelling mismatch. One query before starting saves the rework.
+
+---
+
+## 11. Reports are built last
 
 **Rule:** The Reports module is always built after all other modules are complete.
 

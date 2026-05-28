@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
-import { PAY_METHODS, PAY_TYPES, fmtDate, fmtMWK, todayStr, EmptyRow, fetchAllActiveStaff } from './EventsUI'
+import { PAY_METHODS, PAY_TYPES, fmtDate, fmtMWK, todayStr, fetchAllActiveStaff } from './EventsUI'
 
-export default function EventPaymentsSection({ eventId, depositRequired, canManage }) {
+export default function EventPaymentsSection({ eventId, billTotal, canManage }) {
   const { session } = useAuth()
   const [payments, setPayments] = useState([])
   const [staff,    setStaff]    = useState([])
@@ -25,11 +25,8 @@ export default function EventPaymentsSection({ eventId, depositRequired, canMana
 
   async function load() {
     const [payR, profilesR, activeStaffR] = await Promise.all([
-      supabaseAdmin
-        .from('event_payments')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('payment_date'),
+      supabaseAdmin.from('event_payments').select('*')
+        .eq('event_id', eventId).order('payment_date'),
       supabaseAdmin.from('user_profiles').select('id, full_name'),
       fetchAllActiveStaff(),
     ])
@@ -50,8 +47,8 @@ export default function EventPaymentsSection({ eventId, depositRequired, canMana
     .filter(p => p.payment_type === 'refund')
     .reduce((s, p) => s + Number(p.amount), 0)
 
-  const netPaid    = totalReceived - totalRefunded
-  const balanceDue = Math.max(0, Number(depositRequired || 0) - netPaid)
+  const totalPaid  = totalReceived - totalRefunded
+  const balanceDue = Math.max(0, Number(billTotal || 0) - totalPaid)
 
   async function handleAddPayment(e) {
     e.preventDefault()
@@ -70,7 +67,6 @@ export default function EventPaymentsSection({ eventId, depositRequired, canMana
       })
       if (error) throw error
 
-      // Mark deposit_paid on event when a deposit payment is recorded
       if (form.payment_type === 'deposit') {
         await supabaseAdmin.from('events')
           .update({ deposit_paid: true, updated_at: new Date().toISOString() })
@@ -89,15 +85,18 @@ export default function EventPaymentsSection({ eventId, depositRequired, canMana
       <Toast toast={toast} />
       <h3 className="text-base font-semibold text-gray-800 mb-4">Payments</h3>
 
-      {/* Totals */}
+      {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4 mb-5">
         <div className="bg-gray-50 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">Total Received</p>
-          <p className="text-sm font-semibold text-gray-900">{fmtMWK(totalReceived)}</p>
+          <p className="text-xs text-gray-500 mb-1">Bill Total</p>
+          <p className="text-sm font-semibold text-gray-900">{fmtMWK(billTotal)}</p>
         </div>
         <div className="bg-gray-50 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">Total Refunded</p>
-          <p className="text-sm font-semibold text-gray-900">{fmtMWK(totalRefunded)}</p>
+          <p className="text-xs text-gray-500 mb-1">Total Paid</p>
+          <p className="text-sm font-semibold text-gray-900">{fmtMWK(totalPaid)}</p>
+          {totalRefunded > 0 && (
+            <p className="text-xs text-red-500 mt-0.5">incl. {fmtMWK(totalRefunded)} refunded</p>
+          )}
         </div>
         <div className={`rounded-xl p-4 ${balanceDue > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
           <p className="text-xs text-gray-500 mb-1">Balance Due</p>
@@ -105,7 +104,7 @@ export default function EventPaymentsSection({ eventId, depositRequired, canMana
             {fmtMWK(balanceDue)}
           </p>
           {balanceDue > 0 && (
-            <p className="text-xs text-red-500 mt-0.5">Payment outstanding</p>
+            <p className="text-xs text-red-500 mt-0.5">Outstanding</p>
           )}
         </div>
       </div>
@@ -128,7 +127,7 @@ export default function EventPaymentsSection({ eventId, depositRequired, canMana
               {payments.map(p => (
                 <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <Td>{fmtDate(p.payment_date)}</Td>
-                  <td className="px-4 py-3 text-sm text-gray-600 capitalize">
+                  <td className="px-4 py-3 text-sm text-gray-600">
                     {PAY_TYPES.find(t => t.value === p.payment_type)?.label ?? p.payment_type}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
@@ -153,7 +152,7 @@ export default function EventPaymentsSection({ eventId, depositRequired, canMana
         <p className="text-sm text-gray-400 mb-6">No payments recorded yet.</p>
       )}
 
-      {/* Add payment form (owner/manager only) */}
+      {/* Add payment form — owner/manager only */}
       {canManage && (
         <div className="border border-gray-200 rounded-xl p-5">
           <h4 className="text-sm font-semibold text-gray-700 mb-4">Add Payment</h4>
@@ -191,7 +190,7 @@ export default function EventPaymentsSection({ eventId, depositRequired, canMana
               </Field>
             </div>
             <Field label="Notes">
-              <textarea rows={2} className={fieldCls} placeholder="Any notes…"
+              <textarea rows={2} className={`${fieldCls} resize-none`} placeholder="Any notes…"
                 value={form.notes} onChange={f('notes')} />
             </Field>
             <button type="submit" disabled={busy}

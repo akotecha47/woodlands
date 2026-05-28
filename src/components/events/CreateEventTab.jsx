@@ -4,21 +4,20 @@ import 'react-phone-number-input/style.css'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
-import { EVENT_TYPES, VENUES, fmtMWK, todayStr, AccessDenied } from './EventsUI'
+import { EVENT_TYPES, VENUES, todayStr, AccessDenied } from './EventsUI'
 
 const ALLOWED = ['owner', 'manager']
 
 const BLANK = {
   name: '', event_type: 'wedding', event_date: '', start_time: '', end_time: '',
   guest_count: '', venue_area: '', organiser_name: '', organiser_contact: '',
-  organiser_email: '', deposit_required: '', special_requirements: '', notes: '',
+  organiser_email: '', special_requirements: '', notes: '',
 }
 
 export default function CreateEventTab({ onCreated }) {
   const { profile, session } = useAuth()
-  const [form,           setForm]           = useState({ ...BLANK, event_date: todayStr() })
-  const [depositFocused, setDepositFocused] = useState(false)
-  const [busy,           setBusy]           = useState(false)
+  const [form, setForm] = useState({ ...BLANK, event_date: todayStr() })
+  const [busy, setBusy] = useState(false)
   const [toast,          setToast]          = useState(null)
   const flash = useFlash(setToast)
 
@@ -27,10 +26,6 @@ export default function CreateEventTab({ onCreated }) {
   function f(field) {
     return e => setForm(prev => ({ ...prev, [field]: e.target.value }))
   }
-
-  const depositDisplay = !depositFocused && form.deposit_required !== ''
-    ? fmtMWK(form.deposit_required)
-    : form.deposit_required
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -47,7 +42,6 @@ export default function CreateEventTab({ onCreated }) {
         organiser_name:       form.organiser_name || null,
         organiser_contact:    form.organiser_contact || null,
         organiser_email:      form.organiser_email || null,
-        deposit_required:     form.deposit_required ? Number(form.deposit_required) : 0,
         deposit_paid:         false,
         status:               'enquiry',
         special_requirements: form.special_requirements || null,
@@ -124,22 +118,6 @@ export default function CreateEventTab({ onCreated }) {
             <Inp type="email" placeholder="Email address" value={form.organiser_email} onChange={f('organiser_email')} />
           </Field>
         </div>
-
-        <Field label="Deposit Required (MWK)">
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="0"
-            className={fieldCls}
-            value={depositDisplay}
-            onChange={e => setForm(prev => ({
-              ...prev,
-              deposit_required: e.target.value.replace(/[^0-9.]/g, ''),
-            }))}
-            onFocus={() => setDepositFocused(true)}
-            onBlur={() => setDepositFocused(false)}
-          />
-        </Field>
 
         <Field label="Special Requirements">
           <textarea rows={4} className={`${fieldCls} resize-none`}

@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
   EVENT_TYPES, VENUES, EVENT_STATUSES,
-  fmtDate, fmtTime, fmtMWK,
+  fmtDate, fmtTime,
   EventStatusBadge, EmptyRow, todayStr,
 } from './EventsUI'
 
@@ -21,19 +21,54 @@ const STATUS_FILTERS = [
 function rowHighlight(ev) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const evDate     = new Date(ev.event_date + 'T12:00:00')
-  const daysUntil  = (evDate - today) / 86400000
-  const soonAlert  = daysUntil >= 0 && daysUntil <= 7 && ev.status !== 'cancelled'
+  const evDate    = new Date(ev.event_date + 'T12:00:00')
+  const daysUntil = (evDate - today) / 86400000
+  const soonAlert    = daysUntil >= 0 && daysUntil <= 7 && ev.status !== 'cancelled'
   const depositAlert = ev.status === 'confirmed' && !ev.deposit_paid
   return soonAlert || depositAlert
     ? 'bg-amber-50 border-b border-amber-100 hover:bg-amber-100'
     : 'border-b border-gray-100 hover:bg-gray-50'
 }
 
+function applySort(events, sortBy) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const arr = [...events]
+
+  if (sortBy === 'date') {
+    return arr.sort((a, b) => {
+      const da = new Date(a.event_date + 'T12:00:00')
+      const db = new Date(b.event_date + 'T12:00:00')
+      const aFut = da >= today
+      const bFut = db >= today
+      if (aFut !== bFut) return aFut ? -1 : 1
+      const dir = aFut ? 1 : -1
+      if (da.getTime() !== db.getTime()) return (da - db) * dir
+      // Same date: confirmed+unpaid deposit floats up
+      const ap = a.status === 'confirmed' && !a.deposit_paid
+      const bp = b.status === 'confirmed' && !b.deposit_paid
+      return ap === bp ? 0 : ap ? -1 : 1
+    })
+  }
+
+  if (sortBy === 'deposit') {
+    return arr.sort((a, b) => {
+      if (a.deposit_paid !== b.deposit_paid) return a.deposit_paid ? 1 : -1
+      return new Date(a.event_date + 'T12:00:00') - new Date(b.event_date + 'T12:00:00')
+    })
+  }
+
+  if (sortBy === 'guests') {
+    return arr.sort((a, b) => (b.guest_count ?? 0) - (a.guest_count ?? 0))
+  }
+
+  return arr
+}
+
 const BLANK_EDIT = {
   name: '', event_type: 'wedding', event_date: '', start_time: '', end_time: '',
   guest_count: '', venue_area: '', organiser_name: '', organiser_contact: '',
-  organiser_email: '', deposit_required: '', deposit_paid: 'false',
+  organiser_email: '', deposit_paid: 'false',
   status: 'enquiry', special_requirements: '', notes: '',
 }
 
@@ -43,31 +78,63 @@ export default function EventsListTab({ onView }) {
 
   const [events,    setEvents]    = useState([])
   const [loading,   setLoading]   = useState(true)
-  const [filter,    setFilter]    = useState('all')
   const [toast,     setToast]     = useState(null)
   const flash = useFlash(setToast)
 
+  // Filters & sort
+  const [statusFilter,  setStatusFilter]  = useState('all')
+  const [depositFilter, setDepositFilter] = useState('all')
+  const [sortBy,        setSortBy]        = useState('date')
+
+  // Edit modal
   const [editEvent, setEditEvent] = useState(null)
   const [editForm,  setEditForm]  = useState(BLANK_EDIT)
   const [editBusy,  setEditBusy]  = useState(false)
 
-  const [deleteId,  setDeleteId]  = useState(null)
-  const [delBusy,   setDelBusy]   = useState(false)
+  // Delete confirm
+  const [deleteId, setDeleteId] = useState(null)
+  const [delBusy,  setDelBusy]  = useState(false)
 
   async function load() {
     setLoading(true)
     const { data } = await supabaseAdmin
       .from('events')
       .select('*, event_checklists(id, is_complete)')
-      .order('event_date', { ascending: false })
     setEvents(data ?? [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
-  const displayed = filter === 'all' ? events : events.filter(e => e.status === filter)
+  // ── Summary stats (computed from raw events before any filter) ──
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+  const monthEnd   = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59)
+  const next7      = new Date(today.getTime() + 7 * 86400000)
 
+  const totalThisMonth = events.filter(ev => {
+    const d = new Date(ev.event_date + 'T12:00:00')
+    return d >= monthStart && d <= monthEnd && ev.status !== 'cancelled'
+  }).length
+
+  const confirmedUnpaid = events.filter(ev =>
+    ev.status === 'confirmed' && !ev.deposit_paid
+  ).length
+
+  const inNext7Days = events.filter(ev => {
+    const d = new Date(ev.event_date + 'T12:00:00')
+    return d >= today && d <= next7 && ev.status !== 'cancelled'
+  }).length
+
+  // ── Filter + sort ───────────────────────────────────────────────
+  let displayed = events
+  if (statusFilter !== 'all')  displayed = displayed.filter(e => e.status === statusFilter)
+  if (depositFilter === 'paid')   displayed = displayed.filter(e => e.deposit_paid)
+  if (depositFilter === 'unpaid') displayed = displayed.filter(e => !e.deposit_paid)
+  displayed = applySort(displayed, sortBy)
+
+  // ── Edit handlers ───────────────────────────────────────────────
   function openEdit(ev) {
     setEditForm({
       name:                 ev.name,
@@ -80,7 +147,6 @@ export default function EventsListTab({ onView }) {
       organiser_name:       ev.organiser_name ?? '',
       organiser_contact:    ev.organiser_contact ?? '',
       organiser_email:      ev.organiser_email ?? '',
-      deposit_required:     ev.deposit_required ?? '',
       deposit_paid:         ev.deposit_paid ? 'true' : 'false',
       status:               ev.status,
       special_requirements: ev.special_requirements ?? '',
@@ -104,7 +170,6 @@ export default function EventsListTab({ onView }) {
         organiser_name:       editForm.organiser_name || null,
         organiser_contact:    editForm.organiser_contact || null,
         organiser_email:      editForm.organiser_email || null,
-        deposit_required:     Number(editForm.deposit_required) || 0,
         deposit_paid:         editForm.deposit_paid === 'true',
         status:               editForm.status,
         special_requirements: editForm.special_requirements || null,
@@ -135,18 +200,63 @@ export default function EventsListTab({ onView }) {
     <div>
       <Toast toast={toast} />
 
+      {/* Summary strip */}
+      <div className="grid grid-cols-3 gap-4 p-4 border-b border-gray-200">
+        <div className="bg-gray-50 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1">Events This Month</p>
+          <p className="text-2xl font-bold text-gray-900">{totalThisMonth}</p>
+        </div>
+        <div className="bg-amber-50 rounded-xl p-4">
+          <p className="text-xs text-amber-600 mb-1">Confirmed · Unpaid Deposit</p>
+          <p className="text-2xl font-bold text-amber-700">{confirmedUnpaid}</p>
+        </div>
+        <div className="bg-blue-50 rounded-xl p-4">
+          <p className="text-xs text-blue-600 mb-1">Events in Next 7 Days</p>
+          <p className="text-2xl font-bold text-blue-700">{inNext7Days}</p>
+        </div>
+      </div>
+
       {/* Status filter tabs */}
       <div className="flex gap-0 overflow-x-auto border-b border-gray-200 px-4 pt-3">
         {STATUS_FILTERS.map(f => (
-          <button key={f.value} onClick={() => setFilter(f.value)}
+          <button key={f.value} onClick={() => setStatusFilter(f.value)}
             className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-              filter === f.value
+              statusFilter === f.value
                 ? 'border-green-600 text-green-700'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}>
             {f.label}
           </button>
         ))}
+      </div>
+
+      {/* Filter + sort controls */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 whitespace-nowrap">Deposit</span>
+          <select
+            value={depositFilter}
+            onChange={e => setDepositFilter(e.target.value)}
+            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-600">
+            <option value="all">All</option>
+            <option value="paid">Paid</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 whitespace-nowrap">Sort by</span>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-600">
+            <option value="date">Date</option>
+            <option value="deposit">Deposit Status</option>
+            <option value="guests">Guest Count</option>
+          </select>
+        </div>
+        <span className="text-xs text-gray-400 ml-auto">
+          {displayed.length} event{displayed.length !== 1 ? 's' : ''}
+        </span>
       </div>
 
       {/* Table */}
@@ -168,11 +278,9 @@ export default function EventsListTab({ onView }) {
           </thead>
           <tbody>
             {displayed.map(ev => {
-              const cl    = ev.event_checklists ?? []
-              const done  = cl.filter(c => c.is_complete).length
-              const start = fmtTime(ev.start_time)
-              const end   = fmtTime(ev.end_time)
-              const time  = [start, end].filter(Boolean).join('–') || '—'
+              const cl   = ev.event_checklists ?? []
+              const done = cl.filter(c => c.is_complete).length
+              const time = [fmtTime(ev.start_time), fmtTime(ev.end_time)].filter(Boolean).join('–') || '—'
               const typeName = EVENT_TYPES.find(t => t.value === ev.event_type)?.label ?? ev.event_type
               return (
                 <tr key={ev.id} className={rowHighlight(ev)}>
@@ -195,7 +303,7 @@ export default function EventsListTab({ onView }) {
                   <td className="px-4 py-3"><EventStatusBadge status={ev.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 whitespace-nowrap">
-                      <button onClick={() => onView(ev.id, ev.name)}
+                      <button onClick={() => onView(ev.id)}
                         className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
                         <Eye size={13} /> View
                       </button>
@@ -285,19 +393,13 @@ export default function EventsListTab({ onView }) {
                     onChange={e => setEditForm(f => ({ ...f, organiser_email: e.target.value }))} />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Deposit Required (MWK)">
-                  <Inp type="number" min="0" value={editForm.deposit_required}
-                    onChange={e => setEditForm(f => ({ ...f, deposit_required: e.target.value }))} />
-                </Field>
-                <Field label="Deposit Paid">
-                  <Sel value={editForm.deposit_paid}
-                    onChange={e => setEditForm(f => ({ ...f, deposit_paid: e.target.value }))}>
-                    <option value="false">No</option>
-                    <option value="true">Yes</option>
-                  </Sel>
-                </Field>
-              </div>
+              <Field label="Deposit Paid">
+                <Sel value={editForm.deposit_paid}
+                  onChange={e => setEditForm(f => ({ ...f, deposit_paid: e.target.value }))}>
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </Sel>
+              </Field>
               <Field label="Status">
                 <Sel value={editForm.status}
                   onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
@@ -305,11 +407,11 @@ export default function EventsListTab({ onView }) {
                 </Sel>
               </Field>
               <Field label="Special Requirements">
-                <textarea rows={2} className={fieldCls} value={editForm.special_requirements}
+                <textarea rows={2} className={`${fieldCls} resize-none`} value={editForm.special_requirements}
                   onChange={e => setEditForm(f => ({ ...f, special_requirements: e.target.value }))} />
               </Field>
               <Field label="Notes">
-                <textarea rows={2} className={fieldCls} value={editForm.notes}
+                <textarea rows={2} className={`${fieldCls} resize-none`} value={editForm.notes}
                   onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
               </Field>
               <div className="flex gap-2 justify-end pt-1">
@@ -333,7 +435,7 @@ export default function EventsListTab({ onView }) {
           <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
             <h3 className="text-base font-semibold text-gray-900 mb-2">Delete Event?</h3>
             <p className="text-sm text-gray-500 mb-5">
-              This permanently deletes the event along with all checklists and payments.
+              This permanently deletes the event along with all checklists, payments, and bill items.
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setDeleteId(null)}

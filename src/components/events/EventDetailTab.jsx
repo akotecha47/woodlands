@@ -5,9 +5,10 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Toast, useFlash } from '../admin/AdminUI'
 import {
   EVENT_TYPES, STATUS_CFG, DEPT_ORDER,
-  fmtDate, fmtTime, fmtMWK,
+  fmtDate, fmtTime,
   EventStatusBadge, generateBEO,
 } from './EventsUI'
+import EventBillSection    from './EventBillSection'
 import EventPaymentsSection from './EventPaymentsSection'
 
 export default function EventDetailTab({ eventId, onBack }) {
@@ -16,6 +17,7 @@ export default function EventDetailTab({ eventId, onBack }) {
 
   const [event,      setEvent]      = useState(null)
   const [checklists, setChecklists] = useState([])
+  const [billItems,  setBillItems]  = useState([])
   const [userMap,    setUserMap]    = useState({})
   const [loading,    setLoading]    = useState(true)
   const [toast,      setToast]      = useState(null)
@@ -23,14 +25,17 @@ export default function EventDetailTab({ eventId, onBack }) {
 
   async function load() {
     setLoading(true)
-    const [evtR, clR, profilesR] = await Promise.all([
+    const [evtR, clR, billR, profilesR] = await Promise.all([
       supabaseAdmin.from('events').select('*').eq('id', eventId).single(),
       supabaseAdmin.from('event_checklists').select('*')
         .eq('event_id', eventId).order('department').order('created_at'),
+      supabaseAdmin.from('event_bill_items').select('*')
+        .eq('event_id', eventId).order('created_at'),
       supabaseAdmin.from('user_profiles').select('id, full_name'),
     ])
     if (evtR.data)      setEvent(evtR.data)
     if (clR.data)       setChecklists(clR.data)
+    if (billR.data)     setBillItems(billR.data)
     if (profilesR.data) {
       const map = {}
       for (const u of profilesR.data) map[u.id] = u.full_name
@@ -83,10 +88,9 @@ export default function EventDetailTab({ eventId, onBack }) {
   const totalTasks  = checklists.length
   const doneTasks   = checklists.filter(c => c.is_complete).length
   const overallPct  = totalTasks > 0 ? Math.round(doneTasks / totalTasks * 100) : 0
+  const billTotal   = billItems.reduce((s, i) => s + Number(i.amount), 0)
   const eventType   = EVENT_TYPES.find(t => t.value === event.event_type)?.label ?? event.event_type
-  const startTime   = fmtTime(event.start_time)
-  const endTime     = fmtTime(event.end_time)
-  const timeDisplay = [startTime, endTime].filter(Boolean).join(' – ')
+  const timeDisplay = [fmtTime(event.start_time), fmtTime(event.end_time)].filter(Boolean).join(' – ')
 
   return (
     <div className="p-6 space-y-8">
@@ -108,9 +112,7 @@ export default function EventDetailTab({ eventId, onBack }) {
               {event.deposit_paid ? 'Deposit Paid' : 'Deposit Unpaid'}
             </span>
             {totalTasks > 0 && (
-              <span className="text-xs text-gray-500">
-                {doneTasks}/{totalTasks} tasks complete
-              </span>
+              <span className="text-xs text-gray-500">{doneTasks}/{totalTasks} tasks</span>
             )}
           </div>
         </div>
@@ -149,16 +151,15 @@ export default function EventDetailTab({ eventId, onBack }) {
       {/* Event info grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 bg-gray-50 rounded-xl p-5 text-sm">
         {[
-          ['Type',        eventType],
-          ['Date',        fmtDate(event.event_date)],
-          ['Time',        timeDisplay || null],
-          ['Guests',      event.guest_count],
-          ['Venue',       event.venue_area],
-          ['Organiser',   event.organiser_name],
-          ['Contact',     event.organiser_contact],
-          ['Email',       event.organiser_email],
-          ['Deposit Req', event.deposit_required ? fmtMWK(event.deposit_required) : null],
-          ['Created',     fmtDate(event.created_at)],
+          ['Type',      eventType],
+          ['Date',      fmtDate(event.event_date)],
+          ['Time',      timeDisplay || null],
+          ['Guests',    event.guest_count],
+          ['Venue',     event.venue_area],
+          ['Organiser', event.organiser_name],
+          ['Contact',   event.organiser_contact],
+          ['Email',     event.organiser_email],
+          ['Created',   fmtDate(event.created_at)],
         ].filter(([, val]) => val != null && val !== '').map(([label, val]) => (
           <div key={label} className="flex gap-2">
             <span className="text-gray-500 w-24 shrink-0">{label}</span>
@@ -191,9 +192,9 @@ export default function EventDetailTab({ eventId, onBack }) {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {DEPT_ORDER.filter(d => byDept[d]?.length > 0).map(dept => {
-              const tasks  = byDept[dept]
-              const dDone  = tasks.filter(t => t.is_complete).length
-              const dPct   = tasks.length > 0 ? Math.round(dDone / tasks.length * 100) : 0
+              const tasks = byDept[dept]
+              const dDone = tasks.filter(t => t.is_complete).length
+              const dPct  = tasks.length > 0 ? Math.round(dDone / tasks.length * 100) : 0
               return (
                 <div key={dept} className="border border-gray-200 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-1.5">
@@ -247,10 +248,18 @@ export default function EventDetailTab({ eventId, onBack }) {
         )
       )}
 
+      {/* Bill */}
+      <EventBillSection
+        eventId={eventId}
+        items={billItems}
+        canManage={canManage}
+        onRefresh={load}
+      />
+
       {/* Payments */}
       <EventPaymentsSection
         eventId={eventId}
-        depositRequired={event.deposit_required}
+        billTotal={billTotal}
         canManage={canManage}
       />
     </div>
