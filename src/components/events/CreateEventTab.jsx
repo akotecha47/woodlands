@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import PhoneInput from 'react-phone-number-input'
+import 'react-phone-number-input/style.css'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
-import { EVENT_TYPES, VENUES, todayStr, AccessDenied } from './EventsUI'
+import { EVENT_TYPES, VENUES, fmtMWK, todayStr, AccessDenied } from './EventsUI'
 
 const ALLOWED = ['owner', 'manager']
 
@@ -14,9 +16,10 @@ const BLANK = {
 
 export default function CreateEventTab({ onCreated }) {
   const { profile, session } = useAuth()
-  const [form,  setForm]  = useState({ ...BLANK, event_date: todayStr() })
-  const [busy,  setBusy]  = useState(false)
-  const [toast, setToast] = useState(null)
+  const [form,           setForm]           = useState({ ...BLANK, event_date: todayStr() })
+  const [depositFocused, setDepositFocused] = useState(false)
+  const [busy,           setBusy]           = useState(false)
+  const [toast,          setToast]          = useState(null)
   const flash = useFlash(setToast)
 
   if (!ALLOWED.includes(profile?.role)) return <AccessDenied />
@@ -24,6 +27,10 @@ export default function CreateEventTab({ onCreated }) {
   function f(field) {
     return e => setForm(prev => ({ ...prev, [field]: e.target.value }))
   }
+
+  const depositDisplay = !depositFocused && form.deposit_required !== ''
+    ? fmtMWK(form.deposit_required)
+    : form.deposit_required
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -102,7 +109,16 @@ export default function CreateEventTab({ onCreated }) {
             <Inp placeholder="Full name" value={form.organiser_name} onChange={f('organiser_name')} />
           </Field>
           <Field label="Organiser Contact">
-            <Inp type="tel" placeholder="Phone number" value={form.organiser_contact} onChange={f('organiser_contact')} />
+            {/* Phone input wrapper styled to match fieldCls */}
+            <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-green-600">
+              <PhoneInput
+                international
+                defaultCountry="MW"
+                value={form.organiser_contact}
+                onChange={val => setForm(prev => ({ ...prev, organiser_contact: val ?? '' }))}
+                inputClassName="flex-1 py-2 px-1 text-sm outline-none border-none bg-transparent min-w-0"
+              />
+            </div>
           </Field>
           <Field label="Organiser Email">
             <Inp type="email" placeholder="Email address" value={form.organiser_email} onChange={f('organiser_email')} />
@@ -110,18 +126,29 @@ export default function CreateEventTab({ onCreated }) {
         </div>
 
         <Field label="Deposit Required (MWK)">
-          <Inp type="number" min="0" placeholder="0"
-            value={form.deposit_required} onChange={f('deposit_required')} />
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="0"
+            className={fieldCls}
+            value={depositDisplay}
+            onChange={e => setForm(prev => ({
+              ...prev,
+              deposit_required: e.target.value.replace(/[^0-9.]/g, ''),
+            }))}
+            onFocus={() => setDepositFocused(true)}
+            onBlur={() => setDepositFocused(false)}
+          />
         </Field>
 
         <Field label="Special Requirements">
-          <textarea rows={3} className={fieldCls}
+          <textarea rows={4} className={`${fieldCls} resize-none`}
             placeholder="Dietary requirements, AV equipment, seating preferences…"
             value={form.special_requirements} onChange={f('special_requirements')} />
         </Field>
 
         <Field label="Notes">
-          <textarea rows={3} className={fieldCls}
+          <textarea rows={4} className={`${fieldCls} resize-none`}
             placeholder="Internal notes…"
             value={form.notes} onChange={f('notes')} />
         </Field>
