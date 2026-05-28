@@ -266,7 +266,7 @@ export default function EventsListTab({ onView }) {
                 <Field label="Venue Area">
                   <Sel value={editForm.venue_area}
                     onChange={e => setEditForm(f => ({ ...f, venue_area: e.target.value }))}>
-                    <option value="">Select venue…</option>
+                    <option value="">Select venue area…</option>
                     {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
                   </Sel>
                 </Field>
