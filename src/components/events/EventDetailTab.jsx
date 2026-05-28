@@ -33,8 +33,19 @@ export default function EventDetailTab({ eventId, onBack }) {
         .eq('event_id', eventId).order('created_at'),
       supabaseAdmin.from('user_profiles').select('id, full_name'),
     ])
-    if (evtR.data)      setEvent(evtR.data)
-    if (clR.data)       setChecklists(clR.data)
+    const evt = evtR.data
+    let cls = clR.data ?? []
+
+    // Auto-generate BEO if event is confirmed/in_progress but has no checklists
+    if (evt && ['confirmed', 'in_progress'].includes(evt.status) && cls.length === 0) {
+      await generateBEO(eventId)
+      const clR2 = await supabaseAdmin.from('event_checklists').select('*')
+        .eq('event_id', eventId).order('department').order('created_at')
+      cls = clR2.data ?? []
+    }
+
+    if (evt)            setEvent(evt)
+    setChecklists(cls)
     if (billR.data)     setBillItems(billR.data)
     if (profilesR.data) {
       const map = {}
@@ -55,6 +66,8 @@ export default function EventDetailTab({ eventId, onBack }) {
         .update({ status: newStatus, updated_at: new Date().toISOString() })
         .eq('id', eventId)
       if (error) throw error
+      // Update event state immediately so buttons reflect the new status before the full reload
+      setEvent(prev => ({ ...prev, status: newStatus }))
       flash(`Status → ${STATUS_CFG[newStatus]?.label ?? newStatus}`)
       load()
     } catch (err) { flash(err.message, false) }
