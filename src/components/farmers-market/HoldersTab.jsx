@@ -37,13 +37,14 @@ export default function HoldersTab() {
   const [expandedVisits,   setExpandedVisits]    = useState([])
   const [editHolder,       setEditHolder]        = useState(null)
   const [editForm,         setEditForm]          = useState(BLANK_EDIT)
+  const [confirmAction,    setConfirmAction]     = useState(null) // { type: 'approve'|'deactivate', holder }
   const [busy,             setBusy]              = useState(false)
   const [toast,            setToast]             = useState(null)
   const flash = useFlash(setToast)
 
   async function load() {
-    const yearStart      = `${new Date().getFullYear()}-01-01`
-    const lastThreeDays  = getLastNMarketDays(3)
+    const yearStart     = `${new Date().getFullYear()}-01-01`
+    const lastThreeDays = getLastNMarketDays(3)
 
     const [holdersR, yearVisitsR, atRiskVisitsR] = await Promise.all([
       supabaseAdmin.from('fm_holders').select('*').order('stall_number'),
@@ -55,8 +56,8 @@ export default function HoldersTab() {
 
     setYearVisits(yearVisitsR.data ?? [])
 
-    const allHolders    = holdersR.data ?? []
-    const atRiskVisits  = atRiskVisitsR.data ?? []
+    const allHolders   = holdersR.data ?? []
+    const atRiskVisits = atRiskVisitsR.data ?? []
 
     // Auto-flag: active holders with 0 visits across last 3 market days
     if (lastThreeDays.length > 0 && allHolders.length > 0) {
@@ -84,16 +85,12 @@ export default function HoldersTab() {
     yearVisitCountMap[v.holder_id] = (yearVisitCountMap[v.holder_id] ?? 0) + 1
   }
 
-  const activeHolders  = holders.filter(h => h.status === 'active')
-  const atRiskHolders  = holders.filter(h => h.status === 'at_risk')
+  const activeHolders = holders.filter(h => h.status === 'active')
+  const atRiskHolders = holders.filter(h => h.status === 'at_risk')
 
-  const outstandingTotal = holders
-    .filter(h => h.status !== 'inactive')
-    .reduce((sum, h) => sum + (!h.application_paid ? 10000 : 0) + (!h.acceptance_paid ? 20000 : 0), 0)
-
-  function holderOutstanding(h) {
-    return (!h.application_paid ? 10000 : 0) + (!h.acceptance_paid ? 20000 : 0)
-  }
+  // Outstanding fees = 0 until an explicit invoicing system is added.
+  // Do not infer debt from application_paid / acceptance_paid flags alone.
+  const outstandingTotal = 0
 
   const stallTypeBreakdown = STALL_TYPES.map(type => ({
     type,
@@ -134,14 +131,16 @@ export default function HoldersTab() {
   // ── actions ────────────────────────────────────────────────────────────────
 
   async function handleMarkContacted(holder) {
+    const now = new Date().toISOString()
     try {
-      await supabaseAdmin.from('fm_holders').update({ last_contacted: new Date().toISOString() }).eq('id', holder.id)
+      await supabaseAdmin.from('fm_holders').update({ last_contacted: now }).eq('id', holder.id)
+      // Optimistic update — reflect in banner immediately without full reload
+      setHolders(prev => prev.map(h => h.id === holder.id ? { ...h, last_contacted: now } : h))
       flash('Marked as contacted')
-      load()
     } catch (err) { flash(err.message, false) }
   }
 
-  async function handleApprove(holder) {
+  async function doApprove(holder) {
     try {
       await supabaseAdmin.from('fm_holders').update({ status: 'active' }).eq('id', holder.id)
       flash(`${holder.full_name} approved`)
@@ -149,13 +148,20 @@ export default function HoldersTab() {
     } catch (err) { flash(err.message, false) }
   }
 
-  async function handleDeactivate(holder) {
+  async function doDeactivate(holder) {
     try {
       await supabaseAdmin.from('fm_holders').update({ status: 'inactive' }).eq('id', holder.id)
       flash(`${holder.full_name} deactivated`)
       if (expandedId === holder.id) setExpandedId(null)
       load()
     } catch (err) { flash(err.message, false) }
+  }
+
+  async function executeConfirm() {
+    const { type, holder } = confirmAction
+    setConfirmAction(null)
+    if (type === 'approve') await doApprove(holder)
+    else await doDeactivate(holder)
   }
 
   function openEdit(holder) {
@@ -241,7 +247,7 @@ export default function HoldersTab() {
               <div key={h.id} className="flex items-center gap-2 bg-white border border-red-200 rounded-lg px-3 py-1.5">
                 <span className="text-sm text-gray-800">{h.full_name} ({h.stall_number})</span>
                 {h.last_contacted && (
-                  <span className="text-xs text-gray-400">Contacted {fmtDate(h.last_contacted)}</span>
+                  <span className="text-xs text-gray-400">Last contacted: {fmtDate(h.last_contacted)}</span>
                 )}
                 <button
                   onClick={() => handleMarkContacted(h)}
@@ -287,166 +293,158 @@ export default function HoldersTab() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(h => {
-              const outstanding = holderOutstanding(h)
-              return (
-                <Fragment key={h.id}>
-                  <tr className={`border-b border-gray-100 transition-colors ${
-                    h.status === 'at_risk' ? 'bg-amber-50' : 'hover:bg-gray-50'
-                  }`}>
-                    <Td>{h.stall_number}</Td>
-                    <td className="px-4 py-3">
+            {filtered.map(h => (
+              <Fragment key={h.id}>
+                <tr className={`border-b border-gray-100 transition-colors ${
+                  h.status === 'at_risk' ? 'bg-amber-50' : 'hover:bg-gray-50'
+                }`}>
+                  <Td>{h.stall_number}</Td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => handleExpand(h)}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-800 text-left">
+                      {h.full_name}
+                    </button>
+                  </td>
+                  <Td>{h.business_name}</Td>
+                  <Td>{h.stall_type}</Td>
+                  <Td>{h.phone}</Td>
+                  <td className="px-4 py-3"><HolderStatusBadge status={h.status} /></td>
+                  <td className="px-4 py-3"><PaidIcon paid={h.application_paid} /></td>
+                  <td className="px-4 py-3"><PaidIcon paid={h.acceptance_paid} /></td>
+                  <td className="px-4 py-3 text-sm text-gray-700">{yearVisitCountMap[h.id] ?? 0}</td>
+                  <td className="px-4 py-3 text-sm text-gray-400">—</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1.5 flex-wrap">
                       <button onClick={() => handleExpand(h)}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800 text-left">
-                        {h.full_name}
+                        className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors">
+                        View
                       </button>
-                    </td>
-                    <Td>{h.business_name}</Td>
-                    <Td>{h.stall_type}</Td>
-                    <Td>{h.phone}</Td>
-                    <td className="px-4 py-3"><HolderStatusBadge status={h.status} /></td>
-                    <td className="px-4 py-3"><PaidIcon paid={h.application_paid} /></td>
-                    <td className="px-4 py-3"><PaidIcon paid={h.acceptance_paid} /></td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{yearVisitCountMap[h.id] ?? 0}</td>
-                    <td className="px-4 py-3 text-sm font-medium">
-                      {outstanding > 0
-                        ? <span className="text-amber-700">{fmtMWK(outstanding)}</span>
-                        : <span className="text-gray-400">—</span>
-                      }
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1.5 flex-wrap">
-                        <button onClick={() => handleExpand(h)}
+                      {canManage && (
+                        <button onClick={() => openEdit(h)}
                           className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors">
-                          View
+                          Edit
                         </button>
-                        {canManage && (
-                          <button onClick={() => openEdit(h)}
-                            className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors">
-                            Edit
-                          </button>
-                        )}
-                        {canManage && h.status === 'pending_review' && (
-                          <button onClick={() => handleApprove(h)}
-                            className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-700 transition-colors">
-                            Approve
-                          </button>
-                        )}
-                        {canManage && ['active', 'at_risk', 'accepted'].includes(h.status) && (
-                          <button onClick={() => handleDeactivate(h)}
-                            className="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 rounded text-red-700 transition-colors">
-                            Deactivate
-                          </button>
+                      )}
+                      {canManage && h.status === 'pending_review' && (
+                        <button onClick={() => setConfirmAction({ type: 'approve', holder: h })}
+                          className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-700 transition-colors">
+                          Approve
+                        </button>
+                      )}
+                      {canManage && ['active', 'at_risk', 'accepted'].includes(h.status) && (
+                        <button onClick={() => setConfirmAction({ type: 'deactivate', holder: h })}
+                          className="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 rounded text-red-700 transition-colors">
+                          Deactivate
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-gray-400 cursor-pointer" onClick={() => handleExpand(h)}>
+                    {expandedId === h.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </td>
+                </tr>
+
+                {expandedId === h.id && (
+                  <tr>
+                    <td colSpan={12} className="bg-gray-50 border-b border-gray-200 px-6 py-5">
+
+                      {/* Contact details */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-sm mb-5">
+                        {[
+                          ['Email',          h.email],
+                          ['Phone',          h.phone],
+                          ['Last Contacted', fmtDate(h.last_contacted)],
+                          ['Registered',     fmtDate(h.created_at)],
+                        ].map(([label, val]) => (
+                          <div key={label}>
+                            <p className="text-xs text-gray-500">{label}</p>
+                            <p className="text-gray-900 font-medium">{val || '—'}</p>
+                          </div>
+                        ))}
+                        {h.notes && (
+                          <div className="col-span-full mt-1">
+                            <p className="text-xs text-gray-500">Notes</p>
+                            <p className="text-gray-700">{h.notes}</p>
+                          </div>
                         )}
                       </div>
-                    </td>
-                    <td className="px-3 py-3 text-gray-400 cursor-pointer" onClick={() => handleExpand(h)}>
-                      {expandedId === h.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    </td>
-                  </tr>
 
-                  {expandedId === h.id && (
-                    <tr>
-                      <td colSpan={12} className="bg-gray-50 border-b border-gray-200 px-6 py-5">
-
-                        {/* Contact details */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-sm mb-5">
-                          {[
-                            ['Email',          h.email],
-                            ['Phone',          h.phone],
-                            ['Last Contacted', fmtDate(h.last_contacted)],
-                            ['Registered',     fmtDate(h.created_at)],
-                          ].map(([label, val]) => (
-                            <div key={label}>
-                              <p className="text-xs text-gray-500">{label}</p>
-                              <p className="text-gray-900 font-medium">{val || '—'}</p>
-                            </div>
-                          ))}
-                          {h.notes && (
-                            <div className="col-span-full mt-1">
-                              <p className="text-xs text-gray-500">Notes</p>
-                              <p className="text-gray-700">{h.notes}</p>
-                            </div>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Payment history */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Payment History</p>
+                          {expandedPayments.length === 0 ? (
+                            <p className="text-sm text-gray-400">No payments recorded</p>
+                          ) : (
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-gray-200">
+                                  {['Date', 'Type', 'Amount', 'Method', 'Reference'].map(c => (
+                                    <th key={c} className="text-left pb-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase">{c}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {expandedPayments.map(p => (
+                                  <tr key={p.id} className="border-t border-gray-100">
+                                    <td className="py-1.5 pr-4 text-gray-700">{fmtDate(p.payment_date)}</td>
+                                    <td className="py-1.5 pr-4 text-gray-700">{FM_PAY_TYPES.find(t => t.value === p.payment_type)?.label ?? p.payment_type}</td>
+                                    <td className="py-1.5 pr-4 font-semibold text-gray-900">{fmtMWK(p.amount)}</td>
+                                    <td className="py-1.5 pr-4 text-gray-600 capitalize">{p.payment_method?.replace(/_/g, ' ')}</td>
+                                    <td className="py-1.5 text-gray-500">{p.reference ?? '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          {/* Payment history */}
-                          <div>
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Payment History</p>
-                            {expandedPayments.length === 0 ? (
-                              <p className="text-sm text-gray-400">No payments recorded</p>
-                            ) : (
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b border-gray-200">
-                                    {['Date', 'Type', 'Amount', 'Method', 'Reference'].map(c => (
-                                      <th key={c} className="text-left pb-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase">{c}</th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {expandedPayments.map(p => (
-                                    <tr key={p.id} className="border-t border-gray-100">
-                                      <td className="py-1.5 pr-4 text-gray-700">{fmtDate(p.payment_date)}</td>
-                                      <td className="py-1.5 pr-4 text-gray-700">{FM_PAY_TYPES.find(t => t.value === p.payment_type)?.label ?? p.payment_type}</td>
-                                      <td className="py-1.5 pr-4 font-semibold text-gray-900">{fmtMWK(p.amount)}</td>
-                                      <td className="py-1.5 pr-4 text-gray-600 capitalize">{p.payment_method?.replace(/_/g, ' ')}</td>
-                                      <td className="py-1.5 text-gray-500">{p.reference ?? '—'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            )}
-                          </div>
-
-                          {/* Visit history */}
-                          <div>
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Visit History</p>
-                            {(() => {
-                              const history = buildVisitHistory(h)
-                              if (history.length === 0) {
-                                return <p className="text-sm text-gray-400">No market days since registration</p>
-                              }
-                              return (
-                                <div className="max-h-52 overflow-y-auto">
-                                  <table className="w-full text-sm">
-                                    <thead>
-                                      <tr className="border-b border-gray-200">
-                                        {['Date', 'Checked In', 'Fee Paid'].map(c => (
-                                          <th key={c} className="text-left pb-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase">{c}</th>
-                                        ))}
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {history.map(({ date, checkedIn, feePaid }) => (
-                                        <tr key={date} className="border-t border-gray-100">
-                                          <td className="py-1.5 pr-4 text-gray-700">{fmtDate(date)}</td>
-                                          <td className="py-1.5 pr-4">
-                                            <span className={`text-xs font-medium ${checkedIn ? 'text-green-600' : 'text-gray-400'}`}>
-                                              {checkedIn ? 'Yes' : 'No'}
-                                            </span>
-                                          </td>
-                                          <td className="py-1.5">
-                                            <span className={`text-xs font-medium ${feePaid ? 'text-green-600' : 'text-gray-400'}`}>
-                                              {feePaid ? 'Yes' : '—'}
-                                            </span>
-                                          </td>
-                                        </tr>
+                        {/* Visit history */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Visit History</p>
+                          {(() => {
+                            const history = buildVisitHistory(h)
+                            if (history.length === 0) {
+                              return <p className="text-sm text-gray-400">No market days since registration</p>
+                            }
+                            return (
+                              <div className="max-h-52 overflow-y-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-gray-200">
+                                      {['Date', 'Checked In', 'Fee Paid'].map(c => (
+                                        <th key={c} className="text-left pb-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase">{c}</th>
                                       ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )
-                            })()}
-                          </div>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {history.map(({ date, checkedIn, feePaid }) => (
+                                      <tr key={date} className="border-t border-gray-100">
+                                        <td className="py-1.5 pr-4 text-gray-700">{fmtDate(date)}</td>
+                                        <td className="py-1.5 pr-4">
+                                          <span className={`text-xs font-medium ${checkedIn ? 'text-green-600' : 'text-gray-400'}`}>
+                                            {checkedIn ? 'Yes' : 'No'}
+                                          </span>
+                                        </td>
+                                        <td className="py-1.5">
+                                          <span className={`text-xs font-medium ${feePaid ? 'text-green-600' : 'text-gray-400'}`}>
+                                            {feePaid ? 'Yes' : '—'}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )
+                          })()}
                         </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              )
-            })}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={12} className="px-4 py-8 text-center text-sm text-gray-400">No holders found</td>
@@ -455,6 +453,41 @@ export default function HoldersTab() {
           </tbody>
         </table>
       </div>
+
+      {/* Approve / Deactivate confirmation modal */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-sm w-full mx-4">
+            <h4 className="text-base font-semibold text-gray-900 mb-2">
+              {confirmAction.type === 'approve' ? 'Approve Holder' : 'Deactivate Holder'}
+            </h4>
+            <p className="text-sm text-gray-600 mb-5">
+              {confirmAction.type === 'approve'
+                ? `Approve ${confirmAction.holder.full_name} as an active market holder?`
+                : `Deactivate ${confirmAction.holder.full_name}? They will no longer appear on market day check-in.`
+              }
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={executeConfirm}
+                className={`flex-1 font-medium py-2 rounded-lg text-sm transition-colors text-white ${
+                  confirmAction.type === 'approve'
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {confirmAction.type === 'approve' ? 'Approve' : 'Deactivate'}
+              </button>
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit modal */}
       {editHolder && (
