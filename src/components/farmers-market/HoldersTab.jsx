@@ -77,11 +77,17 @@ export default function HoldersTab() {
     const allHolders   = holdersR.data ?? []
     const atRiskVisits = atRiskVisitsR.data ?? []
 
-    // Auto-flag: active holders with 0 visits across last 3 market days
+    // Auto-flag: active holders with 0 visits across last 3 market days AND created > 90 days ago
     if (lastThreeDays.length > 0 && allHolders.length > 0) {
+      const now        = Date.now()
       const visitedIds = new Set(atRiskVisits.map(v => v.holder_id))
       const toFlag     = allHolders
-        .filter(h => h.status === 'active' && !visitedIds.has(h.id))
+        .filter(h => {
+          if (h.status !== 'active') return false
+          const daysSinceCreation = (now - new Date(h.created_at).getTime()) / 86400000
+          if (daysSinceCreation < 90) return false
+          return !visitedIds.has(h.id)
+        })
         .map(h => h.id)
 
       if (toFlag.length > 0) {
