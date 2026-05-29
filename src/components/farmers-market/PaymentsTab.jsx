@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
-import { FM_PAY_METHODS, FM_PAY_TYPES, fmtDate, fmtMWK, todayStr } from './FarmersMarketUI'
+import { FM_PAY_METHODS, fmtDate, fmtMWK, todayStr } from './FarmersMarketUI'
 
-// Visit fees are logged directly on the Market Day tab — exclude them here
-const REG_PAY_TYPES = FM_PAY_TYPES.filter(t => t.value !== 'visit')
+const REG_PAY_TYPES = [
+  { value: 'application', label: 'Application Fee', amount: 10000 },
+  { value: 'acceptance',  label: 'Registration Fee', amount: 20000 },
+]
 
 export default function PaymentsTab() {
   const { session } = useAuth()

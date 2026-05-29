@@ -1,16 +1,14 @@
 import { useState } from 'react'
-import MarketDayTab      from '../components/farmers-market/MarketDayTab'
-import HoldersTab        from '../components/farmers-market/HoldersTab'
-import AddHolderTab      from '../components/farmers-market/AddHolderTab'
-import PaymentsTab       from '../components/farmers-market/PaymentsTab'
-import MarketPlanningTab from '../components/farmers-market/MarketPlanningTab'
+import MarketDayTab from '../components/farmers-market/MarketDayTab'
+import HoldersTab   from '../components/farmers-market/HoldersTab'
+import AddHolderTab from '../components/farmers-market/AddHolderTab'
+import PaymentsTab  from '../components/farmers-market/PaymentsTab'
 
 const TABS = [
-  { id: 'market',   label: 'Market Day'      },
-  { id: 'holders',  label: 'Holders'         },
-  { id: 'add',      label: 'Add Holder'      },
-  { id: 'payments', label: 'Payments'        },
-  { id: 'planning', label: 'Market Planning' },
+  { id: 'market',   label: 'Market Day' },
+  { id: 'holders',  label: 'Holders'    },
+  { id: 'add',      label: 'Add Holder' },
+  { id: 'payments', label: 'Payments'   },
 ]
 
 export default function FarmersMarket() {
@@ -36,7 +34,6 @@ export default function FarmersMarket() {
         {tab === 'holders'  && <HoldersTab />}
         {tab === 'add'      && <AddHolderTab onCreated={() => setTab('holders')} />}
         {tab === 'payments' && <PaymentsTab />}
-        {tab === 'planning' && <MarketPlanningTab />}
       </div>
     </div>
   )
