@@ -23,6 +23,7 @@ export default function MarketDayTab() {
   const [visitNote,       setVisitNote]       = useState('')
   const [feeModal,        setFeeModal]        = useState(null) // { holder, visitId }
   const [feeMethod,       setFeeMethod]       = useState('cash')
+  const [feeAmount,       setFeeAmount]       = useState(String(VISIT_FEE))
   const [feeBusy,         setFeeBusy]         = useState(false)
   const [removeConfirm,   setRemoveConfirm]   = useState(null) // { holder, visitId }
   const [addModal,        setAddModal]        = useState(false)
@@ -130,7 +131,7 @@ export default function MarketDayTab() {
         supabaseAdmin.from('fm_payments').insert({
           holder_id:      holder.id,
           payment_type:   'visit',
-          amount:         VISIT_FEE,
+          amount:         Number(feeAmount) || VISIT_FEE,
           payment_date:   marketDate,
           payment_method: feeMethod,
           recorded_by:    session?.user?.id ?? null,
@@ -322,9 +323,9 @@ export default function MarketDayTab() {
               <Th>Name</Th>
               <Th>Business</Th>
               <Th>Type</Th>
-              <Th>Checked In</Th>
-              <Th>Fee Paid</Th>
-              {canManage && <th className="w-14" />}
+              <Th>Check In</Th>
+              <Th>Log Fee</Th>
+              {canManage && <Th>Remove</Th>}
             </tr>
           </thead>
           <tbody>
@@ -377,7 +378,7 @@ export default function MarketDayTab() {
                       </span>
                     ) : checkedIn && canManage ? (
                       <button
-                        onClick={() => { setFeeModal({ holder: h, visitId: visit.id }); setFeeMethod('cash') }}
+                        onClick={() => { setFeeModal({ holder: h, visitId: visit.id }); setFeeMethod('cash'); setFeeAmount(String(VISIT_FEE)) }}
                         className="text-xs font-medium px-2.5 py-1 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
                       >
                         Log Fee
@@ -457,9 +458,16 @@ export default function MarketDayTab() {
               {feeModal.holder.full_name}
               {feeModal.holder.stall_number && ` — Stall ${feeModal.holder.stall_number}`}
             </p>
-            <div className="bg-gray-50 rounded-lg px-4 py-2.5 mb-4 flex items-center justify-between">
-              <span className="text-sm text-gray-600">Amount</span>
-              <span className="text-sm font-semibold text-gray-900">{fmtMWK(VISIT_FEE)}</span>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (MWK)</label>
+              <input
+                type="number"
+                min="0.01"
+                step="any"
+                value={feeAmount}
+                onChange={e => setFeeAmount(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+              />
             </div>
             <div className="mb-5">
               <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
