@@ -97,6 +97,13 @@ export default function PaymentsTab() {
       if (form.payment_type === 'acceptance') {
         await supabaseAdmin.from('fm_holders').update({ acceptance_paid: true }).eq('id', form.holder_id)
       }
+      // Sync fee_paid on the matching visit row
+      if (form.payment_type === 'visit') {
+        await supabaseAdmin.from('fm_visits')
+          .update({ fee_paid: true })
+          .eq('holder_id', form.holder_id)
+          .eq('visit_date', form.payment_date)
+      }
 
       flash('Payment recorded')
       setForm(BLANK_FORM)

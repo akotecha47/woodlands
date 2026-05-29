@@ -1,6 +1,6 @@
 import { useState, useEffect, Fragment, useRef } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
+import { QRCodeCanvas } from 'qrcode.react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
@@ -40,19 +40,27 @@ export default function HoldersTab() {
   const [editForm,         setEditForm]          = useState(BLANK_EDIT)
   const [confirmAction,    setConfirmAction]     = useState(null) // { type: 'approve'|'deactivate', holder }
   const [qrHolder,         setQrHolder]          = useState(null)
+  const [lastMarketDay,    setLastMarketDay]      = useState(null) // { date, attended, collected, noShows }
   const [busy,             setBusy]              = useState(false)
   const [toast,            setToast]             = useState(null)
-  const flash    = useFlash(setToast)
-  const qrTarget = useRef(null)
+  const flash     = useFlash(setToast)
+  const qrWrapRef = useRef(null)
 
   function handlePrintQr() {
     const style = document.createElement('style')
-    style.id = 'qr-print-style'
     style.textContent = `
       @media print {
-        body * { visibility: hidden; }
-        #qr-print-target, #qr-print-target * { visibility: visible; }
-        #qr-print-target { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); text-align: center; }
+        @page { size: 85mm 54mm; margin: 4mm; }
+        body > * { display: none !important; }
+        body { margin: 0; background: white; }
+        #qr-print-target {
+          display: flex !important; flex-direction: column; align-items: center;
+          justify-content: center; gap: 3px; height: 46mm;
+          font-family: sans-serif; text-align: center;
+        }
+        #qr-print-target * { display: block; }
+        #qr-print-target canvas { width: 28mm !important; height: 28mm !important; }
+        #qr-print-target p { font-size: 10pt; margin: 0; }
       }
     `
     document.head.appendChild(style)
@@ -60,21 +68,35 @@ export default function HoldersTab() {
     document.head.removeChild(style)
   }
 
+  function handleDownloadQr() {
+    const canvas = qrWrapRef.current?.querySelector('canvas')
+    if (!canvas || !qrHolder) return
+    const safe = qrHolder.full_name.replace(/[^a-zA-Z0-9]/g, '_')
+    const a = document.createElement('a')
+    a.download = `${qrHolder.stall_number}-${safe}.png`
+    a.href = canvas.toDataURL('image/png')
+    a.click()
+  }
+
   async function load() {
     const yearStart     = `${new Date().getFullYear()}-01-01`
     const lastThreeDays = getLastNMarketDays(3)
+    const lastDay       = getLastNMarketDays(1)[0] ?? null
 
-    const [holdersR, yearVisitsR, atRiskVisitsR] = await Promise.all([
+    const [holdersR, yearVisitsR, atRiskVisitsR, lastVisitsR] = await Promise.all([
       supabaseAdmin.from('fm_holders').select('*').order('stall_number'),
       supabaseAdmin.from('fm_visits').select('holder_id').gte('visit_date', yearStart),
       lastThreeDays.length > 0
         ? supabaseAdmin.from('fm_visits').select('holder_id, visit_date').in('visit_date', lastThreeDays)
         : Promise.resolve({ data: [] }),
+      lastDay
+        ? supabaseAdmin.from('fm_visits').select('holder_id, fee_paid').eq('visit_date', lastDay)
+        : Promise.resolve({ data: [] }),
     ])
 
     setYearVisits(yearVisitsR.data ?? [])
 
-    const allHolders   = holdersR.data ?? []
+    let allHolders     = holdersR.data ?? []
     const atRiskVisits = atRiskVisitsR.data ?? []
 
     // Auto-flag: active holders with 0 visits across last 3 market days AND created > 90 days ago
@@ -93,11 +115,25 @@ export default function HoldersTab() {
       if (toFlag.length > 0) {
         await supabaseAdmin.from('fm_holders').update({ status: 'at_risk' }).in('id', toFlag)
         const flaggedSet = new Set(toFlag)
-        setHolders(allHolders.map(h => flaggedSet.has(h.id) ? { ...h, status: 'at_risk' } : h))
-        return
+        allHolders = allHolders.map(h => flaggedSet.has(h.id) ? { ...h, status: 'at_risk' } : h)
       }
     }
+
     setHolders(allHolders)
+
+    // Last market day summary
+    if (lastDay) {
+      const activeIds   = new Set(allHolders.filter(h => h.status === 'active').map(h => h.id))
+      const lastVisits  = lastVisitsR.data ?? []
+      const attended    = lastVisits.filter(v => activeIds.has(v.holder_id))
+      const attendedIds = new Set(attended.map(v => v.holder_id))
+      setLastMarketDay({
+        date:      lastDay,
+        attended:  attended.length,
+        collected: attended.filter(v => v.fee_paid).length * 10000,
+        noShows:   [...activeIds].filter(id => !attendedIds.has(id)).length,
+      })
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -145,10 +181,12 @@ export default function HoldersTab() {
     const allDays      = getMarketDaysSince(holder.created_at)
     const visitDateSet = new Set(expandedVisits.map(v => v.visit_date))
     const feeMap       = Object.fromEntries(expandedVisits.map(v => [v.visit_date, v.fee_paid]))
+    const notesMap     = Object.fromEntries(expandedVisits.filter(v => v.notes).map(v => [v.visit_date, v.notes]))
     return allDays.map(date => ({
       date,
       checkedIn: visitDateSet.has(date),
       feePaid:   feeMap[date] ?? false,
+      notes:     notesMap[date] ?? null,
     }))
   }
 
@@ -259,6 +297,31 @@ export default function HoldersTab() {
           <p className="text-2xl font-bold text-gray-900">{holders.length}</p>
         </div>
       </div>
+
+      {/* Last market day summary */}
+      {lastMarketDay && (
+        <div className="mb-5 bg-blue-50 border border-blue-100 rounded-xl p-4">
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-3">
+            Last Market Day — {fmtDate(lastMarketDay.date)}
+          </p>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{lastMarketDay.attended}</p>
+              <p className="text-xs text-gray-500 mt-0.5">Vendors attended</p>
+            </div>
+            <div>
+              <p className="text-xl font-bold text-gray-900">{fmtMWK(lastMarketDay.collected)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">Collected</p>
+            </div>
+            <div>
+              <p className={`text-2xl font-bold ${lastMarketDay.noShows > 0 ? 'text-amber-700' : 'text-gray-900'}`}>
+                {lastMarketDay.noShows}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">No-shows</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* At-risk banner */}
       {atRiskHolders.length > 0 && (
@@ -442,13 +505,13 @@ export default function HoldersTab() {
                                 <table className="w-full text-sm">
                                   <thead>
                                     <tr className="border-b border-gray-200">
-                                      {['Date', 'Checked In', 'Fee Paid'].map(c => (
+                                      {['Date', 'Checked In', 'Fee Paid', 'Notes'].map(c => (
                                         <th key={c} className="text-left pb-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase">{c}</th>
                                       ))}
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {history.map(({ date, checkedIn, feePaid }) => (
+                                    {history.map(({ date, checkedIn, feePaid, notes }) => (
                                       <tr key={date} className="border-t border-gray-100">
                                         <td className="py-1.5 pr-4 text-gray-700">{fmtDate(date)}</td>
                                         <td className="py-1.5 pr-4">
@@ -456,10 +519,13 @@ export default function HoldersTab() {
                                             {checkedIn ? 'Yes' : 'No'}
                                           </span>
                                         </td>
-                                        <td className="py-1.5">
+                                        <td className="py-1.5 pr-4">
                                           <span className={`text-xs font-medium ${feePaid ? 'text-green-600' : 'text-gray-400'}`}>
                                             {feePaid ? 'Yes' : '—'}
                                           </span>
+                                        </td>
+                                        <td className="py-1.5 text-xs text-gray-500 max-w-[160px] truncate" title={notes ?? ''}>
+                                          {notes ?? '—'}
                                         </td>
                                       </tr>
                                     ))}
@@ -593,26 +659,34 @@ export default function HoldersTab() {
               <h4 className="text-base font-semibold text-gray-900">Holder QR Code</h4>
               <button onClick={() => setQrHolder(null)} className="text-gray-400 hover:text-gray-600 leading-none">✕</button>
             </div>
-            <div id="qr-print-target" ref={qrTarget} className="flex flex-col items-center gap-3 py-2">
+            <div id="qr-print-target" className="flex flex-col items-center gap-2 py-2">
               <p className="text-base font-semibold text-gray-900">{qrHolder.full_name}</p>
               {qrHolder.business_name && <p className="text-sm text-gray-500">{qrHolder.business_name}</p>}
-              <p className="text-sm text-gray-600">Stall {qrHolder.stall_number} · {qrHolder.stall_type}</p>
-              <QRCodeSVG
-                value={`https://woodlands-beta.vercel.app/checkin?holder=${qrHolder.id}`}
-                size={200}
-                level="M"
-                includeMargin
-              />
-              <p className="text-xs text-gray-400 break-all">
-                woodlands-beta.vercel.app/checkin?holder={qrHolder.id}
-              </p>
+              <p className="text-sm text-gray-600">Stall {qrHolder.stall_number}</p>
+              <div ref={qrWrapRef}>
+                <QRCodeCanvas
+                  value={`https://woodlands-beta.vercel.app/checkin?holder=${qrHolder.id}`}
+                  size={200}
+                  level="M"
+                  includeMargin
+                />
+              </div>
+              <p className="text-xs text-gray-400">Woodlands Lodge Farmers Market</p>
             </div>
-            <button
-              onClick={handlePrintQr}
-              className="mt-4 w-full bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 rounded-lg text-sm transition-colors"
-            >
-              Print / Save
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleDownloadQr}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+              >
+                Download QR
+              </button>
+              <button
+                onClick={handlePrintQr}
+                className="flex-1 bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+              >
+                Print
+              </button>
+            </div>
           </div>
         </div>
       )}

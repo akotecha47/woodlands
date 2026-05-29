@@ -38,6 +38,19 @@ export default function AddHolderTab({ onCreated }) {
     setStallError('')
     setBusy(true)
     try {
+      // Pre-check for duplicate stall number among non-inactive holders
+      const { data: taken } = await supabaseAdmin
+        .from('fm_holders')
+        .select('id')
+        .eq('stall_number', form.stall_number.toUpperCase())
+        .not('status', 'eq', 'inactive')
+        .maybeSingle()
+      if (taken) {
+        setStallError('Stall number is already in use by an active holder')
+        setBusy(false)
+        return
+      }
+
       const { error } = await supabaseAdmin.from('fm_holders').insert({
         full_name:        form.full_name,
         business_name:    form.business_name    || null,
