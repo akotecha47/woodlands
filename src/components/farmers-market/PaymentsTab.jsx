@@ -4,10 +4,18 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { FM_PAY_METHODS, fmtDate, fmtMWK, todayStr } from './FarmersMarketUI'
 
+// Form dropdown — application and registration only (visit fees are logged from Market Day tab)
 const REG_PAY_TYPES = [
   { value: 'application', label: 'Application Fee', amount: 10000 },
   { value: 'acceptance',  label: 'Registration Fee', amount: 20000 },
 ]
+
+// Label map for history display — covers all payment types including visit
+const PAY_TYPE_LABELS = {
+  application: 'Application Fee',
+  acceptance:  'Registration Fee',
+  visit:       'Visit Fee',
+}
 
 export default function PaymentsTab() {
   const { session } = useAuth()
@@ -44,7 +52,6 @@ export default function PaymentsTab() {
         .not('status', 'eq', 'inactive').order('stall_number'),
       supabaseAdmin.from('fm_payments')
         .select('*, fm_holders(full_name, stall_number)')
-        .in('payment_type', ['application', 'acceptance'])
         .order('payment_date', { ascending: false })
         .order('created_at', { ascending: false }),
       supabaseAdmin.from('user_profiles').select('id, full_name'),
@@ -69,7 +76,8 @@ export default function PaymentsTab() {
       .reduce((s, p) => s + Number(p.amount), 0)
     return acc
   }, {})
-  const monthGrandTotal = Object.values(monthTotals).reduce((s, v) => s + v, 0)
+  // Grand total includes all payment types (application + acceptance + visit fees from Market Day tab)
+  const monthGrandTotal = monthPayments.reduce((s, p) => s + Number(p.amount), 0)
 
   // History filter
   const filtered = payments.filter(p => {
@@ -247,7 +255,7 @@ export default function PaymentsTab() {
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.fm_holders?.full_name ?? '—'}</td>
                 <Td>{p.fm_holders?.stall_number}</Td>
                 <td className="px-4 py-3 text-sm text-gray-700">
-                  {REG_PAY_TYPES.find(t => t.value === p.payment_type)?.label ?? p.payment_type}
+                  {PAY_TYPE_LABELS[p.payment_type] ?? p.payment_type}
                 </td>
                 <td className="px-4 py-3 text-sm font-semibold text-gray-900">{fmtMWK(p.amount)}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">

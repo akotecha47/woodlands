@@ -52,6 +52,14 @@ export default function MarketDayTab() {
     setConditionsDirty(false)
   }
 
+  async function reloadVisits() {
+    const { data } = await supabaseAdmin
+      .from('fm_visits').select('*').eq('visit_date', marketDate)
+    const map = {}
+    for (const v of (data ?? [])) map[v.holder_id] = v
+    setVisitMap(map)
+  }
+
   useEffect(() => {
     load()
 
@@ -136,13 +144,10 @@ export default function MarketDayTab() {
           payment_method: feeMethod,
           recorded_by:    session?.user?.id ?? null,
         }),
-        supabaseAdmin.from('fm_visits').update({ fee_paid: true }).eq('id', visitId),
+        supabaseAdmin.from('fm_visits').update({ fee_paid: true })
+          .eq('holder_id', holder.id).eq('visit_date', marketDate),
       ])
-      setVisitMap(prev =>
-        prev[holder.id]
-          ? { ...prev, [holder.id]: { ...prev[holder.id], fee_paid: true } }
-          : prev
-      )
+      await reloadVisits()
       flash('Visit fee recorded')
       setFeeModal(null)
     } catch (err) { flash(err.message, false) }
