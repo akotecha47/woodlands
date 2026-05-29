@@ -1,5 +1,6 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, Fragment, useRef } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
@@ -38,9 +39,26 @@ export default function HoldersTab() {
   const [editHolder,       setEditHolder]        = useState(null)
   const [editForm,         setEditForm]          = useState(BLANK_EDIT)
   const [confirmAction,    setConfirmAction]     = useState(null) // { type: 'approve'|'deactivate', holder }
+  const [qrHolder,         setQrHolder]          = useState(null)
   const [busy,             setBusy]              = useState(false)
   const [toast,            setToast]             = useState(null)
-  const flash = useFlash(setToast)
+  const flash    = useFlash(setToast)
+  const qrTarget = useRef(null)
+
+  function handlePrintQr() {
+    const style = document.createElement('style')
+    style.id = 'qr-print-style'
+    style.textContent = `
+      @media print {
+        body * { visibility: hidden; }
+        #qr-print-target, #qr-print-target * { visibility: visible; }
+        #qr-print-target { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); text-align: center; }
+      }
+    `
+    document.head.appendChild(style)
+    window.print()
+    document.head.removeChild(style)
+  }
 
   async function load() {
     const yearStart     = `${new Date().getFullYear()}-01-01`
@@ -325,6 +343,12 @@ export default function HoldersTab() {
                           Edit
                         </button>
                       )}
+                      {canManage && (
+                        <button onClick={() => setQrHolder(h)}
+                          className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors">
+                          QR Code
+                        </button>
+                      )}
                       {canManage && h.status === 'pending_review' && (
                         <button onClick={() => setConfirmAction({ type: 'approve', holder: h })}
                           className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-700 transition-colors">
@@ -551,6 +575,38 @@ export default function HoldersTab() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code modal */}
+      {qrHolder && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-xs w-full mx-4 text-center">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-base font-semibold text-gray-900">Holder QR Code</h4>
+              <button onClick={() => setQrHolder(null)} className="text-gray-400 hover:text-gray-600 leading-none">✕</button>
+            </div>
+            <div id="qr-print-target" ref={qrTarget} className="flex flex-col items-center gap-3 py-2">
+              <p className="text-base font-semibold text-gray-900">{qrHolder.full_name}</p>
+              {qrHolder.business_name && <p className="text-sm text-gray-500">{qrHolder.business_name}</p>}
+              <p className="text-sm text-gray-600">Stall {qrHolder.stall_number} · {qrHolder.stall_type}</p>
+              <QRCodeSVG
+                value={`https://woodlands-beta.vercel.app/checkin?holder=${qrHolder.id}`}
+                size={200}
+                level="M"
+                includeMargin
+              />
+              <p className="text-xs text-gray-400 break-all">
+                woodlands-beta.vercel.app/checkin?holder={qrHolder.id}
+              </p>
+            </div>
+            <button
+              onClick={handlePrintQr}
+              className="mt-4 w-full bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+            >
+              Print / Save
+            </button>
           </div>
         </div>
       )}

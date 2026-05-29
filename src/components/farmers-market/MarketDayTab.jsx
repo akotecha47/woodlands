@@ -7,11 +7,13 @@ import { fmtDate, fmtMWK, defaultMarketDate, FM_MANAGE_ROLES } from './FarmersMa
 export default function MarketDayTab() {
   const { profile, session } = useAuth()
   const canCheckIn = FM_MANAGE_ROLES.includes(profile?.role)
+  const canManage  = ['owner', 'manager'].includes(profile?.role)
 
   const [marketDate, setMarketDate] = useState(defaultMarketDate)
   const [holders,    setHolders]    = useState([])
   const [visitMap,   setVisitMap]   = useState({}) // holder_id → visit row
   const [feePrompt,  setFeePrompt]  = useState(null) // { holder, visitId }
+  const [addModal,   setAddModal]   = useState(false)
   const [toast,      setToast]      = useState(null)
   const flash = useFlash(setToast)
 
@@ -71,7 +73,23 @@ export default function MarketDayTab() {
     } catch (err) { flash(err.message, false) }
   }
 
-  const checkedInCount = Object.keys(visitMap).filter(id => holders.some(h => h.id === id)).length
+  async function handleAddFromModal(holder) {
+    try {
+      const { data, error } = await supabaseAdmin.from('fm_visits').insert({
+        holder_id:     holder.id,
+        visit_date:    marketDate,
+        checked_in_by: session?.user?.id ?? null,
+        fee_paid:      false,
+      }).select().single()
+      if (error) throw error
+      setVisitMap(prev => ({ ...prev, [holder.id]: data }))
+      setAddModal(false)
+      flash(`${holder.full_name} added`)
+    } catch (err) { flash(err.message, false) }
+  }
+
+  const checkedInCount  = Object.keys(visitMap).filter(id => holders.some(h => h.id === id)).length
+  const unaddedHolders  = holders.filter(h => !visitMap[h.id])
 
   return (
     <div className="p-6">
@@ -88,10 +106,20 @@ export default function MarketDayTab() {
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
           />
         </div>
-        <div className="ml-auto bg-green-50 border border-green-200 rounded-lg px-4 py-2">
-          <span className="text-sm font-semibold text-green-700">
-            {checkedInCount} / {holders.length} checked in
-          </span>
+        <div className="ml-auto flex items-center gap-2">
+          {canManage && (
+            <button
+              onClick={() => setAddModal(true)}
+              className="bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
+            >
+              + Add Holder
+            </button>
+          )}
+          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+            <span className="text-sm font-semibold text-green-700">
+              {checkedInCount} / {holders.length} checked in
+            </span>
+          </div>
         </div>
       </div>
 
@@ -155,6 +183,41 @@ export default function MarketDayTab() {
           </tbody>
         </table>
       </div>
+
+      {/* Add Holder modal */}
+      {addModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-base font-semibold text-gray-900">Add Holder to {fmtDate(marketDate)}</h4>
+              <button onClick={() => setAddModal(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+            {unaddedHolders.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">All active holders are already on the list.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
+                {unaddedHolders.map(h => (
+                  <li key={h.id}>
+                    <button
+                      onClick={() => handleAddFromModal(h)}
+                      className="w-full text-left px-3 py-3 hover:bg-green-50 transition-colors rounded-lg"
+                    >
+                      <span className="text-sm font-medium text-gray-900">{h.full_name}</span>
+                      <span className="text-xs text-gray-400 ml-2">Stall {h.stall_number} · {h.stall_type}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              onClick={() => setAddModal(false)}
+              className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Visit fee prompt modal */}
       {feePrompt && (

@@ -9,6 +9,7 @@ import TableBookings from './pages/TableBookings'
 import FarmersMarket from './pages/FarmersMarket'
 import Events        from './pages/Events'
 import Admin         from './pages/Admin'
+import CheckIn       from './pages/CheckIn'
 
 function PlaceholderPage({ title }) {
   return <h1 className="text-2xl font-semibold text-gray-800">{title}</h1>
@@ -31,7 +32,8 @@ export default function App() {
     <ErrorBoundary>
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/login"   element={<Login />} />
+        <Route path="/checkin" element={<CheckIn />} />
         <Route path="/"               element={<Protected><Inventory /></Protected>} />
         <Route path="/attendance"     element={<Protected><Attendance /></Protected>} />
         <Route path="/events"         element={<Protected><Events /></Protected>} />

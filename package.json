@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.105.3",
     "@tailwindcss/postcss": "^4.2.4",
     "lucide-react": "^1.14.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-phone-number-input": "^3.4.16",

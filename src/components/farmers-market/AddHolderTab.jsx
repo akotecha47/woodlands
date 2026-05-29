@@ -15,10 +15,13 @@ export default function AddHolderTab({ onCreated }) {
   const { profile, session } = useAuth()
   const canAdd = ['owner', 'manager'].includes(profile?.role)
 
-  const [form,  setForm]  = useState(BLANK)
-  const [busy,  setBusy]  = useState(false)
-  const [toast, setToast] = useState(null)
+  const [form,       setForm]       = useState(BLANK)
+  const [stallError, setStallError] = useState('')
+  const [busy,       setBusy]       = useState(false)
+  const [toast,      setToast]      = useState(null)
   const flash = useFlash(setToast)
+
+  const STALL_RE = /^[A-Za-z]+\d{2}$/
 
   if (!canAdd) return <AccessDenied />
 
@@ -28,6 +31,11 @@ export default function AddHolderTab({ onCreated }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!STALL_RE.test(form.stall_number)) {
+      setStallError('Stall number must be in format A01, B12, FM01 etc.')
+      return
+    }
+    setStallError('')
     setBusy(true)
     try {
       const { error } = await supabaseAdmin.from('fm_holders').insert({
@@ -72,7 +80,14 @@ export default function AddHolderTab({ onCreated }) {
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Stall Number *">
-            <Inp required placeholder="e.g. A1" value={form.stall_number} onChange={f('stall_number')} />
+            <Inp
+              required
+              placeholder="e.g. A01, FM01"
+              value={form.stall_number}
+              onChange={e => { setStallError(''); setForm(p => ({ ...p, stall_number: e.target.value })) }}
+              onBlur={() => setForm(p => ({ ...p, stall_number: p.stall_number.toUpperCase() }))}
+            />
+            {stallError && <p className="text-xs text-red-600 mt-1">{stallError}</p>}
           </Field>
           <Field label="Stall Type *">
             <Sel required value={form.stall_type} onChange={f('stall_type')}>
