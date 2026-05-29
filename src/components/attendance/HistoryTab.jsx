@@ -51,6 +51,7 @@ export default function HistoryTab() {
   const [userMap,      setUserMap]      = useState({})
   const [shifts,       setShifts]       = useState([])
   const [staffList,    setStaffList]    = useState([])
+  const [allDepts,     setAllDepts]     = useState([])
   const [filterStaff,  setFilterStaff]  = useState('')
   const [filterDept,   setFilterDept]   = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -61,17 +62,20 @@ export default function HistoryTab() {
   const flash = useFlash(setToast)
 
   async function load() {
-    const [recsR, usersR, shiftsR] = await Promise.all([
+    const [recsR, usersR, shiftsR, deptsR] = await Promise.all([
       supabaseAdmin.from('attendance_records')
         .select('*')
         .gte('shift_date', filterFrom)
         .lte('shift_date', filterTo)
         .order('shift_date', { ascending: false })
         .order('clock_in',   { ascending: false }),
+      // Exclude owner/manager — same staff list as Today tab
       supabaseAdmin.from('user_profiles')
         .select('id, full_name, department, shift_name, bar_week')
+        .not('role', 'in', '("owner","manager")')
         .order('full_name'),
       supabaseAdmin.from('shift_settings').select('*'),
+      supabaseAdmin.from('departments').select('name').order('name'),
     ])
 
     const um = {}
@@ -79,6 +83,7 @@ export default function HistoryTab() {
     setUserMap(um)
     setStaffList(usersR.data ?? [])
     setShifts(shiftsR.data ?? [])
+    setAllDepts((deptsR.data ?? []).map(d => d.name))
 
     let recs = recsR.data ?? []
     if (filterStaff)  recs = recs.filter(r => r.user_id === filterStaff)
@@ -88,8 +93,6 @@ export default function HistoryTab() {
   }
 
   useEffect(() => { load() }, [filterFrom, filterTo, filterStaff, filterDept, filterStatus])
-
-  const allDepts = [...new Set(staffList.map(u => u.department).filter(Boolean))].sort()
 
   // ── Daily view grouped by ISO week ──────────────────────────────────────────
 

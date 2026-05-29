@@ -3,7 +3,7 @@ import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { ROLE_LABELS } from '../../lib/roles'
 import { Th, Td, fmtDate, Toast, useFlash } from './AdminUI'
 
-const BAR_DEPTS = ['Restaurant Bar', 'Sports Bar']
+const BAR_ROLES = ['bar1', 'bar2']
 
 export default function UsersTab() {
   const [users,       setUsers]       = useState([])
@@ -53,6 +53,10 @@ export default function UsersTab() {
 
   async function handleSaveEdit() {
     if (!editUser) return
+    if (BAR_ROLES.includes(editUser.role) && !editForm.bar_week) {
+      flash('Bar Week is required for bar roles.', false)
+      return
+    }
     setBusyId(editUser.id)
     try {
       const patch = {
@@ -89,7 +93,7 @@ export default function UsersTab() {
   useEffect(() => { fetchUsers(); fetchDepartments() }, [])
 
   const nonRotatingShifts = shiftOpts.filter(s => s.shift_type !== 'rotating')
-  const isBarDept = BAR_DEPTS.includes(editForm.department)
+  const isBarRole = BAR_ROLES.includes(editUser?.role)
 
   return (
     <div className="p-6 space-y-4">
@@ -217,8 +221,8 @@ export default function UsersTab() {
                 </p>
               )}
 
-              {/* Bar Week selector */}
-              {isBarDept && (
+              {/* Bar Week selector — required for bar1/bar2 roles */}
+              {isBarRole && (
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Bar Week</label>
                   <select

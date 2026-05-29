@@ -1,5 +1,11 @@
-// Attendance seed — run AFTER migration 010 has been applied in Supabase Studio
-// Usage: node scripts/seed-attendance.mjs
+/**
+ * Attendance seed — realistic 7-day records
+ * Run after seed.sql has been applied in Supabase Studio:
+ *   node scripts/seed-attendance.mjs
+ *
+ * Per standards rule 12: no ON CONFLICT (check before insert), explicit date casts.
+ * Per standards rule 1: uses supabaseAdmin (service role) to bypass RLS.
+ */
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -9,72 +15,181 @@ const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY
 
 const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
-function dateStr(offset) {
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function isoDate(offsetDays) {
   const d = new Date()
-  d.setDate(d.getDate() + offset)
+  d.setDate(d.getDate() + offsetDays)
   return d.toISOString().slice(0, 10)
 }
 
-function pickStatus(userIdx, dayOffset) {
-  const mod = (dayOffset + userIdx) % 7
-  if (mod === 5) return 'absent'
-  if (mod === 6) return 'late'
-  return 'present'
+function rand(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-function clockTimes(day, status) {
-  if (status === 'absent') return { clock_in: null, clock_out: null }
-  const inT  = status === 'late' ? '08:45:00' : '08:00:00'
-  const outT = status === 'late' ? '17:30:00' : '17:00:00'
-  return {
-    clock_in:  new Date(`${day}T${inT}+02:00`).toISOString(),
-    clock_out: new Date(`${day}T${outT}+02:00`).toISOString(),
-  }
+// Parse "HH:MM" or "HH:MM:SS" → { h, m }
+function parseTime(str) {
+  const [h, m] = (str ?? '').split(':').map(Number)
+  return { h: h || 0, m: m || 0 }
 }
+
+// Build a timestamptz string for a given ISO date + hour/minute offset in Malawi time (UTC+2)
+function toISO(dateStr, h, m) {
+  const mm = String(m).padStart(2, '0')
+  const hh = String(h).padStart(2, '0')
+  return new Date(`${dateStr}T${hh}:${mm}:00+02:00`).toISOString()
+}
+
+// Add minutes to {h, m}
+function addMins({ h, m }, mins) {
+  const total = h * 60 + m + mins
+  return { h: Math.floor(total / 60) % 24, m: total % 60 }
+}
+
+// ── shift lookup (mirrors AttendanceUI.getShiftForUser) ──────────────────────
+
+function resolveShift(user, allShifts) {
+  if (!user.department) return null
+  const deptShifts = allShifts.filter(s => s.department === user.department)
+  if (deptShifts.length === 0) return null
+
+  const rotating = deptShifts.filter(s => s.shift_type === 'rotating')
+  if (rotating.length > 0) {
+    const week = user.bar_week ?? 'A'
+    return rotating.find(s => s.shift_name === `Week ${week}`) ?? rotating[0]
+  }
+
+  if (user.shift_name) {
+    const named = deptShifts.find(s => s.shift_name === user.shift_name)
+    if (named) return named
+  }
+  return deptShifts[0]
+}
+
+// ── main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
   // Guard: confirm user_id column exists
   const { error: probe } = await db.from('attendance_records').select('user_id').limit(0)
   if (probe) {
-    console.error('user_id column missing. Run supabase/seed.sql in Supabase Studio SQL Editor first.')
+    console.error('Column user_id missing — run supabase/seed.sql in Supabase Studio first.')
     process.exit(1)
   }
 
-  const { data: users, error: usersErr } = await db
-    .from('user_profiles')
-    .select('id, full_name, department, role')
-    .not('role', 'in', '("owner","manager")')
-    .order('full_name')
+  // Fetch users + shifts in parallel
+  const [usersR, shiftsR] = await Promise.all([
+    db.from('user_profiles')
+      .select('id, full_name, department, role, shift_name, bar_week')
+      .not('role', 'in', '("owner","manager")')
+      .order('full_name'),
+    db.from('shift_settings').select('*'),
+  ])
 
-  if (usersErr) { console.error('Fetch users:', usersErr.message); process.exit(1) }
-  if (!users?.length) { console.log('No eligible users found.'); return }
+  const users  = usersR.data ?? []
+  const shifts = shiftsR.data ?? []
 
-  console.log(`Seeding 7 days for ${users.length} user(s)…`)
+  if (!users.length) { console.log('No eligible users found.'); return }
+  console.log(`Found ${users.length} staff, ${shifts.length} shift rules`)
 
-  const today  = dateStr(0)
-  const oldest = dateStr(-6)
-  await db.from('attendance_records').delete().gte('shift_date', oldest).lte('shift_date', today)
+  // Build the 7-day window (skip Sundays)
+  const days = []
+  for (let off = 6; off >= 0; off--) {
+    const dateStr = isoDate(-off)
+    const dow = new Date(dateStr + 'T12:00:00').getDay() // 0 = Sunday
+    if (dow !== 0) days.push(dateStr)
+  }
+  console.log(`Seeding ${days.length} working days: ${days.join(', ')}`)
 
-  const rows = []
-  users.forEach((u, idx) => {
-    for (let off = 0; off <= 6; off++) {
-      const day    = dateStr(-off)
-      const status = pickStatus(idx, off)
-      rows.push({ user_id: u.id, shift_date: day, status, ...clockTimes(day, status) })
+  // Fetch existing records so we can skip already-seeded slots (no ON CONFLICT per rule 12)
+  const oldest = days[0]
+  const newest = days[days.length - 1]
+  const { data: existing } = await db
+    .from('attendance_records')
+    .select('user_id, shift_date')
+    .gte('shift_date', oldest)
+    .lte('shift_date', newest)
+
+  const existingKeys = new Set(
+    (existing ?? []).map(r => `${r.user_id}::${r.shift_date}`)
+  )
+
+  // Build inserts
+  const DEFAULT_START = { h: 8, m: 30 }
+  const DEFAULT_END   = { h: 16, m: 30 }
+  const DEFAULT_THRESHOLD = 15
+
+  const toInsert = []
+
+  for (const user of users) {
+    const shift = resolveShift(user, shifts)
+    const startT = shift ? parseTime(shift.shift_start) : DEFAULT_START
+    const endT   = shift ? parseTime(shift.shift_end)   : DEFAULT_END
+    const lateThreshold = shift?.late_threshold ?? DEFAULT_THRESHOLD
+
+    for (const day of days) {
+      const key = `${user.id}::${day}`
+      if (existingKeys.has(key)) continue
+
+      // 5% chance: absent — no record
+      if (Math.random() < 0.05) continue
+
+      // 10% chance: late arrival (shift_start + 15..30 mins)
+      // 90% chance: on time (shift_start - 0..10 mins)
+      let clockInT
+      let isLate
+      if (Math.random() < 0.10) {
+        const lateMins = rand(15, 30)
+        clockInT = addMins(startT, lateMins)
+        isLate = lateMins > lateThreshold
+      } else {
+        const earlyMins = rand(0, 10)
+        clockInT = addMins(startT, -earlyMins)
+        isLate = false
+      }
+
+      // Clock out: shift_end - 0..5 mins
+      const earlyOutMins = rand(0, 5)
+      const clockOutT = addMins(endT, -earlyOutMins)
+
+      toInsert.push({
+        user_id:       user.id,
+        shift_date:    day,
+        date:          day,   // satisfy legacy NOT NULL until migration drops it
+        clock_in:      toISO(day, clockInT.h, clockInT.m),
+        clock_out:     toISO(day, clockOutT.h, clockOutT.m),
+        status:        isLate ? 'late' : 'present',
+        within_radius: true,
+      })
     }
-  })
-
-  const BATCH = 50
-  let done = 0
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const { error } = await db.from('attendance_records').insert(rows.slice(i, i + BATCH))
-    if (error) { console.error('Insert error:', error.message); process.exit(1) }
-    done += Math.min(BATCH, rows.length - i)
-    process.stdout.write(`\r${done}/${rows.length} rows`)
   }
 
-  const tally = rows.reduce((a, r) => { a[r.status] = (a[r.status] ?? 0) + 1; return a }, {})
+  if (!toInsert.length) {
+    console.log('All slots already seeded — nothing to insert.')
+    return
+  }
+
+  console.log(`Inserting ${toInsert.length} records…`)
+
+  // Insert in batches of 50
+  const BATCH = 50
+  let done = 0
+  for (let i = 0; i < toInsert.length; i += BATCH) {
+    const batch = toInsert.slice(i, i + BATCH)
+    const { error } = await db.from('attendance_records').insert(batch)
+    if (error) {
+      console.error(`Batch ${i}–${i + BATCH - 1} failed:`, error.message)
+      process.exit(1)
+    }
+    done += batch.length
+    process.stdout.write(`\r${done}/${toInsert.length} inserted…`)
+  }
+
+  const tally = toInsert.reduce((a, r) => {
+    a[r.status] = (a[r.status] ?? 0) + 1
+    return a
+  }, {})
   console.log(`\nDone. ${done} records: ${JSON.stringify(tally)}`)
+  console.log(`Absent (skipped): ${users.length * days.length - toInsert.length - existingKeys.size} slots`)
 }
 
 main().catch(e => { console.error(e); process.exit(1) })

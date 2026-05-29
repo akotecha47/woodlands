@@ -5,7 +5,7 @@ import { ROLE_LABELS } from '../../lib/roles'
 import { Field, Inp, Sel } from './AdminUI'
 
 const ROLES = Object.keys(ROLE_LABELS)
-const BAR_DEPTS = ['Restaurant Bar', 'Sports Bar']
+const BAR_ROLES = ['bar1', 'bar2']
 
 const BLANK = { full_name: '', email: '', password: '', role: ROLES[0], department: '', shift_name: '', bar_week: '' }
 
@@ -47,6 +47,10 @@ export default function AddUserTab() {
 
   async function handleAddUser(e) {
     e.preventDefault()
+    if (BAR_ROLES.includes(form.role) && !form.bar_week) {
+      setFormError('Bar Week is required for bar roles.')
+      return
+    }
     setFormBusy(true)
     setFormError(null)
     setSuccess(null)
@@ -69,7 +73,7 @@ export default function AddUserTab() {
 
   useEffect(() => { fetchDepartments() }, [])
 
-  const isBarDept = BAR_DEPTS.includes(form.department)
+  const isBarRole = BAR_ROLES.includes(form.role)
   const nonRotatingShifts = shiftOptions.filter(s => s.shift_type !== 'rotating')
 
   return (
@@ -115,7 +119,10 @@ export default function AddUserTab() {
             placeholder="Min 6 characters" />
         </Field>
         <Field label="Role *">
-          <Sel required value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+          <Sel required value={form.role} onChange={e => {
+            const role = e.target.value
+            setForm(f => ({ ...f, role, bar_week: BAR_ROLES.includes(role) ? f.bar_week : '' }))
+          }}>
             {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
           </Sel>
         </Field>
@@ -147,10 +154,15 @@ export default function AddUserTab() {
           </p>
         )}
 
-        {/* Bar Week — shown for bar departments */}
-        {isBarDept && (
-          <Field label="Bar Week">
-            <Sel value={form.bar_week} onChange={e => setForm(f => ({ ...f, bar_week: e.target.value }))}>
+        {/* Bar Week — required for bar1/bar2 roles */}
+        {isBarRole && (
+          <Field label="Bar Week *">
+            <Sel
+              required
+              value={form.bar_week}
+              onChange={e => setForm(f => ({ ...f, bar_week: e.target.value }))}
+              className={!form.bar_week ? 'border-red-300' : ''}
+            >
               <option value="">— Select —</option>
               <option value="A">Week A</option>
               <option value="B">Week B</option>
