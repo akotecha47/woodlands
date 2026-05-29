@@ -108,13 +108,61 @@ export function isLate(clockInTs, shift) {
   return new Date(clockInTs) > shiftStart
 }
 
+// Returns minutes late (positive = late). Returns null if not computable.
+export function minsLateCalc(clockInTs, shift) {
+  if (!clockInTs || !shift?.shift_start) return null
+  const [sh, sm] = shift.shift_start.split(':').map(Number)
+  const threshold = shift.late_threshold ?? 15
+  const base = new Date(clockInTs)
+  base.setHours(sh, sm + threshold, 0, 0)
+  const diff = Math.round((new Date(clockInTs) - base) / 60000)
+  return diff > 0 ? diff : null
+}
+
+export function fmtLate(mins) {
+  if (!mins) return ''
+  if (mins < 60) return `${mins}m`
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`
+}
+
+// Per-user shift lookup — uses user.shift_name and user.bar_week
+export function getShiftForUser(user, shifts, globalWeek, nowDate) {
+  if (!user?.department) return null
+  const deptShifts = shifts.filter(s => s.department === user.department)
+  if (deptShifts.length === 0) return null
+
+  const rotating = deptShifts.filter(s => s.shift_type === 'rotating')
+  if (rotating.length > 0) {
+    const week = user.bar_week ?? globalWeek ?? 'A'
+    return rotating.find(s => s.shift_name === `Week ${week}`) ?? rotating[0]
+  }
+
+  if (user.shift_name) {
+    const named = deptShifts.find(s => s.shift_name === user.shift_name)
+    if (named) return named
+  }
+
+  if (deptShifts.length === 1) return deptShifts[0]
+
+  const now = nowDate ?? new Date()
+  const nowMins = now.getHours() * 60 + now.getMinutes()
+  const match = deptShifts.find(s => {
+    const [sh, sm] = s.shift_start.split(':').map(Number)
+    const [eh, em] = s.shift_end.split(':').map(Number)
+    return nowMins >= sh * 60 + sm && nowMins <= eh * 60 + em
+  })
+  return match ?? deptShifts[0]
+}
+
 // ── shared UI ──────────────────────────────────────────────────────────────────
 
-export function StatusBadge({ status }) {
+export function StatusBadge({ status, minsLate }) {
   const cfg = STATUS_CFG[status]
+  const label = cfg?.label ?? status ?? '—'
+  const suffix = status === 'late' && minsLate ? ` · ${fmtLate(minsLate)}` : ''
   return (
     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cfg?.badge ?? 'bg-gray-100 text-gray-400'}`}>
-      {cfg?.label ?? status ?? '—'}
+      {label}{suffix}
     </span>
   )
 }

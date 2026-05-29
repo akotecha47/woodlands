@@ -5,10 +5,11 @@ import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
   AT_MANAGE_ROLES, STATUS_CFG, ALL_STATUSES,
   todayStr, fmtDate, fmtTime, fmtDuration,
-  breakMins, netMins, getShiftForDept, AccessDenied, StatusBadge,
+  breakMins, netMins, getShiftForUser, minsLateCalc,
+  AccessDenied, StatusBadge,
 } from './AttendanceUI'
 
-const ELEVEN = 11  // hour threshold for "absent" vs "not arrived"
+const ELEVEN = 11
 
 export default function TodayTab() {
   const { profile, session } = useAuth()
@@ -16,38 +17,68 @@ export default function TodayTab() {
 
   if (!canManage) return <AccessDenied />
 
-  const [users,        setUsers]        = useState([])
-  const [recMap,       setRecMap]       = useState({})  // userId → record
-  const [shifts,       setShifts]       = useState([])
-  const [currentWeek,  setCurrentWeek]  = useState('A')
-  const [weekCfgId,    setWeekCfgId]    = useState(null)
-  const [deptFilter,   setDeptFilter]   = useState('')
-  const [now,          setNow]          = useState(() => new Date())
-  const [overrideModal,setOverrideModal]= useState(null) // { user, record }
-  const [overrideVal,  setOverrideVal]  = useState('absent')
-  const [noteModal,    setNoteModal]    = useState(null) // { user, record }
-  const [noteVal,      setNoteVal]      = useState('')
-  const [busy,         setBusy]         = useState(false)
-  const [toast,        setToast]        = useState(null)
+  const [users,           setUsers]           = useState([])
+  const [recMap,          setRecMap]          = useState({})
+  const [shifts,          setShifts]          = useState([])
+  const [deptFilter,      setDeptFilter]      = useState('')
+  const [now,             setNow]             = useState(() => new Date())
+  const [overrideModal,   setOverrideModal]   = useState(null)
+  const [overrideVal,     setOverrideVal]     = useState('absent')
+  const [noteModal,       setNoteModal]       = useState(null)
+  const [noteVal,         setNoteVal]         = useState('')
+  const [confirmAbsent,   setConfirmAbsent]   = useState(false)
+  const [consecutiveAlert,setConsecutiveAlert]= useState([]) // [{ name, days }]
+  const [busy,            setBusy]            = useState(false)
+  const [toast,           setToast]           = useState(null)
   const flash = useFlash(setToast)
 
   const today = todayStr()
+  const afterEleven = now.getHours() >= ELEVEN
 
   // ── data ────────────────────────────────────────────────────────────────────
 
   const load = useCallback(async () => {
-    const [usersR, recsR, shiftsR, weekR] = await Promise.all([
-      supabaseAdmin.from('user_profiles').select('id, full_name, department, role').not('role', 'in', '("owner","manager")').order('department').order('full_name'),
+    const [usersR, recsR, shiftsR, recentR] = await Promise.all([
+      supabaseAdmin
+        .from('user_profiles')
+        .select('id, full_name, department, role, shift_name, bar_week')
+        .not('role', 'in', '("owner","manager")')
+        .order('department').order('full_name'),
       supabaseAdmin.from('attendance_records').select('*').eq('shift_date', today),
       supabaseAdmin.from('shift_settings').select('*').order('department').order('shift_name'),
-      supabaseAdmin.from('bar_week_config').select('id, current_week').limit(1).single(),
+      // Last 3 days of records for consecutive absence check
+      supabaseAdmin.from('attendance_records')
+        .select('user_id, shift_date, status')
+        .gte('shift_date', offsetDate(-3))
+        .lt('shift_date', today)
+        .order('shift_date', { ascending: false }),
     ])
-    setUsers(usersR.data ?? [])
+
+    const loadedUsers = usersR.data ?? []
+    setUsers(loadedUsers)
+
     const map = {}
     for (const r of (recsR.data ?? [])) map[r.user_id] = r
     setRecMap(map)
     setShifts(shiftsR.data ?? [])
-    if (weekR.data) { setCurrentWeek(weekR.data.current_week); setWeekCfgId(weekR.data.id) }
+
+    // ── consecutive absence detection ────────────────────────────────────────
+    const recentByUser = {}
+    for (const r of (recentR.data ?? [])) {
+      if (!recentByUser[r.user_id]) recentByUser[r.user_id] = []
+      recentByUser[r.user_id].push(r)
+    }
+    const alerts = []
+    for (const u of loadedUsers) {
+      const recs = (recentByUser[u.id] ?? []).slice(0, 3) // most recent first
+      let streak = 0
+      for (const r of recs) {
+        if (r.status === 'absent') streak++
+        else break
+      }
+      if (streak >= 2) alerts.push({ name: u.full_name, days: streak })
+    }
+    setConsecutiveAlert(alerts)
   }, [today])
 
   useEffect(() => {
@@ -59,7 +90,9 @@ export default function TodayTab() {
 
   // ── derived ──────────────────────────────────────────────────────────────────
 
-  function getShift(dept) { return getShiftForDept(dept, shifts, currentWeek, now) }
+  function getShift(user) {
+    return getShiftForUser(user, shifts, user.bar_week ?? 'A', now)
+  }
 
   function effectiveStatus(userId) {
     const rec = recMap[userId]
@@ -77,7 +110,7 @@ export default function TodayTab() {
     const rec = recMap[userId]
     if (!rec?.clock_in || rec?.clock_out) return false
     const user  = users.find(u => u.id === userId)
-    const shift = getShift(user?.department)
+    const shift = getShift(user)
     if (!shift?.shift_end) return false
     const [eh, em] = shift.shift_end.split(':').map(Number)
     const shiftEnd = new Date(now)
@@ -85,83 +118,81 @@ export default function TodayTab() {
     return now > shiftEnd
   }
 
-  // Departments that have an active shift window right now but 0 present/late staff
+  // Coverage alerts — no active staff during a live shift window
   const coverageAlerts = (() => {
     const alerts = []
     const depts = [...new Set(shifts.map(s => s.department))]
     for (const dept of depts) {
-      const shift = getShift(dept)
-      if (!shift) continue
-      const [sh, sm] = shift.shift_start.split(':').map(Number)
-      const [eh, em] = shift.shift_end.split(':').map(Number)
+      const deptShifts = shifts.filter(s => s.department === dept)
+      if (deptShifts.length === 0) continue
+      const s = deptShifts[0]
+      const [sh, sm] = s.shift_start.split(':').map(Number)
+      const [eh, em] = s.shift_end.split(':').map(Number)
       const nowMins  = now.getHours() * 60 + now.getMinutes()
       if (nowMins < sh * 60 + sm || nowMins > eh * 60 + em) continue
-      const deptUsers  = users.filter(u => u.department === dept)
-      const anyActive  = deptUsers.some(u => ['present', 'late'].includes(effectiveStatus(u.id)))
+      const deptUsers = users.filter(u => u.department === dept)
+      const anyActive = deptUsers.some(u => ['present', 'late'].includes(effectiveStatus(u.id)))
       if (!anyActive && deptUsers.length > 0) alerts.push(dept)
     }
     return alerts
   })()
 
-  const allDepts    = [...new Set(users.map(u => u.department).filter(Boolean))].sort()
-  const shownUsers  = deptFilter ? users.filter(u => u.department === deptFilter) : users
-  const deptGroups  = shownUsers.reduce((acc, u) => {
+  const allDepts   = [...new Set(users.map(u => u.department).filter(Boolean))].sort()
+  const shownUsers = deptFilter ? users.filter(u => u.department === deptFilter) : users
+  const deptGroups = shownUsers.reduce((acc, u) => {
     const d = u.department ?? u.role
     if (!acc[d]) acc[d] = []
     acc[d].push(u)
     return acc
   }, {})
 
-  // Summary counts (across ALL users, regardless of dept filter)
   const counts = users.reduce((acc, u) => {
     const s = effectiveStatus(u.id)
     acc[s] = (acc[s] ?? 0) + 1
     return acc
   }, {})
 
-  // ── bar week toggle ──────────────────────────────────────────────────────────
+  // ── mark all absent ──────────────────────────────────────────────────────────
 
-  async function toggleWeek() {
-    const next = currentWeek === 'A' ? 'B' : 'A'
+  async function handleMarkAllAbsent() {
+    setBusy(true)
+    setConfirmAbsent(false)
     try {
-      if (weekCfgId) {
-        await supabaseAdmin.from('bar_week_config').update({
-          current_week: next,
-          updated_by:   session?.user?.id ?? null,
-          updated_at:   new Date().toISOString(),
-        }).eq('id', weekCfgId)
-      } else {
-        await supabaseAdmin.from('bar_week_config').insert({
-          current_week: next,
-          updated_by:   session?.user?.id ?? null,
-        })
-      }
-      setCurrentWeek(next)
+      const unclockedUsers = users.filter(u => !recMap[u.id])
+      const inserts = unclockedUsers.map(u => ({
+        user_id:    u.id,
+        shift_date: today,
+        clock_in:   null,
+        status:     'absent',
+      }))
+      if (inserts.length === 0) { flash('All staff already have records for today'); return }
+      const { error } = await supabaseAdmin.from('attendance_records').insert(inserts)
+      if (error) throw error
+      flash(`${inserts.length} staff marked absent`)
+      load()
     } catch (err) { flash(err.message, false) }
+    finally { setBusy(false) }
   }
 
-  // ── override / note actions ──────────────────────────────────────────────────
+  // ── override / note ──────────────────────────────────────────────────────────
 
   async function handleOverride() {
     if (!overrideModal) return
     setBusy(true)
     try {
       const { user } = overrideModal
-      const rec = recMap[user.id]
+      const rec   = recMap[user.id]
+      const shift = getShift(user)
       if (rec) {
         const { error } = await supabaseAdmin.from('attendance_records')
           .update({ status: overrideVal }).eq('id', rec.id)
         if (error) throw error
       } else {
-        const shift   = getShift(user.department)
         const clockIn = shift?.shift_start
           ? new Date(`${today}T${shift.shift_start}`).toISOString()
           : new Date(`${today}T08:00:00`).toISOString()
         const { error } = await supabaseAdmin.from('attendance_records').insert({
-          user_id:    user.id,
-          shift_date: today,
-          clock_in:   clockIn,
-          status:     overrideVal,
+          user_id: user.id, shift_date: today, clock_in: clockIn, status: overrideVal,
         })
         if (error) throw error
       }
@@ -177,22 +208,19 @@ export default function TodayTab() {
     setBusy(true)
     try {
       const { user } = noteModal
-      const rec = recMap[user.id]
+      const rec   = recMap[user.id]
+      const shift = getShift(user)
       if (rec) {
         const { error } = await supabaseAdmin.from('attendance_records')
           .update({ notes: noteVal || null }).eq('id', rec.id)
         if (error) throw error
       } else {
-        const shift   = getShift(user.department)
         const clockIn = shift?.shift_start
           ? new Date(`${today}T${shift.shift_start}`).toISOString()
           : new Date(`${today}T08:00:00`).toISOString()
         const { error } = await supabaseAdmin.from('attendance_records').insert({
-          user_id:    user.id,
-          shift_date: today,
-          clock_in:   clockIn,
-          status:     'absent',
-          notes:      noteVal || null,
+          user_id: user.id, shift_date: today, clock_in: clockIn,
+          status: 'absent', notes: noteVal || null,
         })
         if (error) throw error
       }
@@ -214,16 +242,29 @@ export default function TodayTab() {
         <h2 className="text-base font-semibold text-gray-800 mr-auto">
           {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </h2>
-        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
-          <span className="text-xs font-medium text-blue-700">Bar Staff: Week {currentWeek}</span>
+        {afterEleven && (profile?.role === 'owner' || profile?.role === 'manager') && (
           <button
-            onClick={toggleWeek}
-            className="text-xs font-medium text-blue-600 hover:text-blue-800 underline ml-1"
+            onClick={() => setConfirmAbsent(true)}
+            disabled={busy}
+            className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-medium transition-colors disabled:opacity-60"
           >
-            Toggle
+            Mark All Absent
           </button>
-        </div>
+        )}
       </div>
+
+      {/* Consecutive absence alert */}
+      {consecutiveAlert.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-700">
+          ⚠ Consecutive absences:{' '}
+          {consecutiveAlert.map((a, i) => (
+            <span key={a.name}>
+              {i > 0 && ', '}
+              <strong>{a.name}</strong> ({a.days} day{a.days !== 1 ? 's' : ''})
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Coverage alerts */}
       {coverageAlerts.length > 0 && (
@@ -239,11 +280,11 @@ export default function TodayTab() {
       {/* Summary strip */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
         {[
-          { key: 'present',     label: 'Present',       cls: 'bg-green-50 border-green-100 text-green-800',    vCls: 'text-green-700' },
-          { key: 'late',        label: 'Late',           cls: 'bg-amber-50 border-amber-100 text-amber-800',    vCls: 'text-amber-700' },
-          { key: 'absent',      label: 'Absent',         cls: 'bg-red-50 border-red-100 text-red-800',          vCls: 'text-red-700'   },
-          { key: 'unverified',  label: 'Unverified',     cls: 'bg-gray-50 border-gray-200 text-gray-600',       vCls: 'text-gray-700'  },
-          { key: 'not_arrived', label: 'Not Yet Arrived',cls: 'bg-gray-50 border-gray-200 text-gray-500',       vCls: 'text-gray-600'  },
+          { key: 'present',     label: 'Present',        cls: 'bg-green-50 border-green-100 text-green-800',  vCls: 'text-green-700' },
+          { key: 'late',        label: 'Late',            cls: 'bg-amber-50 border-amber-100 text-amber-800',  vCls: 'text-amber-700' },
+          { key: 'absent',      label: 'Absent',          cls: 'bg-red-50 border-red-100 text-red-800',        vCls: 'text-red-700'   },
+          { key: 'unverified',  label: 'Unverified',      cls: 'bg-gray-50 border-gray-200 text-gray-600',     vCls: 'text-gray-700'  },
+          { key: 'not_arrived', label: 'Not Yet Arrived', cls: 'bg-gray-50 border-gray-200 text-gray-500',     vCls: 'text-gray-600'  },
         ].map(({ key, label, cls, vCls }) => (
           <div key={key} className={`border rounded-xl p-3 ${cls}`}>
             <p className="text-xs mb-0.5 opacity-80">{label}</p>
@@ -286,22 +327,25 @@ export default function TodayTab() {
                 </thead>
                 <tbody>
                   {members.map(u => {
-                    const rec      = recMap[u.id]
-                    const shift    = getShift(u.department)
-                    const effStatus = effectiveStatus(u.id)
-                    const overtime  = isOvertime(u.id)
+                    const rec        = recMap[u.id]
+                    const shift      = getShift(u)
+                    const effStatus  = effectiveStatus(u.id)
+                    const overtime   = isOvertime(u.id)
                     const shiftLabel = shift
                       ? `${fmtTime(shift.shift_start)} – ${fmtTime(shift.shift_end)}`
                       : '—'
-                    const brk = rec ? breakMins(rec) : 0
+                    const brk        = rec ? breakMins(rec) : 0
+                    const late       = effStatus === 'late' ? minsLateCalc(rec?.clock_in, shift) : null
+                    const hasConsecutive = consecutiveAlert.some(a => a.name === u.full_name)
 
                     return (
                       <tr key={u.id} className={`border-b border-gray-100 last:border-0 transition-colors ${
                         overtime ? 'bg-amber-50/50' : 'hover:bg-gray-50'
                       }`}>
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          {hasConsecutive && <span className="mr-1 text-red-500" title="Consecutive absences">●</span>}
                           {u.full_name}
-                          {overtime && <span className="ml-1.5 text-xs text-amber-500" title="Overtime (30+ min past shift end)">⏱</span>}
+                          {overtime && <span className="ml-1.5 text-xs text-amber-500" title="Overtime">⏱</span>}
                         </td>
                         <Td>{shiftLabel}</Td>
                         <Td>{rec ? fmtTime(rec.clock_in) : null}</Td>
@@ -312,7 +356,9 @@ export default function TodayTab() {
                             : liveHours(u.id)}
                         </td>
                         <Td>{brk > 0 ? `${brk}m` : null}</Td>
-                        <td className="px-4 py-3"><StatusBadge status={effStatus} /></td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={effStatus} minsLate={late} />
+                        </td>
                         <td className="px-4 py-3 text-sm">
                           {rec ? (
                             rec.within_radius === false
@@ -348,6 +394,28 @@ export default function TodayTab() {
           <p className="text-sm text-gray-400 py-6 text-center">No staff records found</p>
         )}
       </div>
+
+      {/* Mark All Absent confirmation */}
+      {confirmAbsent && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-sm w-full mx-4">
+            <h4 className="text-base font-semibold text-gray-900 mb-3">Mark All Absent?</h4>
+            <p className="text-sm text-gray-600 mb-5">
+              Mark all staff with no clock-in today as Absent? This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={handleMarkAllAbsent} disabled={busy}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                {busy ? 'Marking…' : 'Mark Absent'}
+              </button>
+              <button onClick={() => setConfirmAbsent(false)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Override status modal */}
       {overrideModal && (
@@ -413,4 +481,10 @@ export default function TodayTab() {
       )}
     </div>
   )
+}
+
+function offsetDate(n) {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
 }

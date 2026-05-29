@@ -5,17 +5,44 @@ import { ROLE_LABELS } from '../../lib/roles'
 import { Field, Inp, Sel } from './AdminUI'
 
 const ROLES = Object.keys(ROLE_LABELS)
+const BAR_DEPTS = ['Restaurant Bar', 'Sports Bar']
+
+const BLANK = { full_name: '', email: '', password: '', role: ROLES[0], department: '', shift_name: '', bar_week: '' }
 
 export default function AddUserTab() {
-  const [form,        setForm]        = useState({ full_name: '', email: '', password: '', role: ROLES[0], department: '' })
+  const [form,        setForm]        = useState(BLANK)
   const [formError,   setFormError]   = useState(null)
   const [formBusy,    setFormBusy]    = useState(false)
   const [success,     setSuccess]     = useState(null)
   const [departments, setDepartments] = useState([])
+  const [shiftOptions,setShiftOptions]= useState([])
 
   async function fetchDepartments() {
     const { data } = await supabaseAdmin.from('departments').select('*').order('name')
     if (data) setDepartments(data)
+  }
+
+  async function fetchShifts(dept) {
+    if (!dept) { setShiftOptions([]); return }
+    const { data } = await supabaseAdmin
+      .from('shift_settings')
+      .select('shift_name, shift_start, shift_end, shift_type')
+      .eq('department', dept)
+      .order('shift_name')
+    const opts = data ?? []
+    setShiftOptions(opts)
+    // Auto-select if only one (non-rotating) shift
+    const nonRotating = opts.filter(s => s.shift_type !== 'rotating')
+    if (nonRotating.length === 1) {
+      setForm(f => ({ ...f, shift_name: nonRotating[0].shift_name }))
+    } else {
+      setForm(f => ({ ...f, shift_name: '' }))
+    }
+  }
+
+  function handleDeptChange(dept) {
+    setForm(f => ({ ...f, department: dept, shift_name: '', bar_week: '' }))
+    fetchShifts(dept)
   }
 
   async function handleAddUser(e) {
@@ -24,12 +51,15 @@ export default function AddUserTab() {
     setFormError(null)
     setSuccess(null)
     try {
-      console.log('[handleAddUser] invoking create-user with:', JSON.stringify(form))
-      const { data, error } = await supabase.functions.invoke('create-user', { body: form })
+      const payload = { ...form }
+      if (!payload.shift_name) delete payload.shift_name
+      if (!payload.bar_week)   delete payload.bar_week
+      const { data, error } = await supabase.functions.invoke('create-user', { body: payload })
       if (error) throw error
       if (data?.error) throw new Error(data.error)
       setSuccess({ email: form.email, password: form.password, role: form.role })
-      setForm({ full_name: '', email: '', password: '', role: ROLES[0], department: '' })
+      setForm(BLANK)
+      setShiftOptions([])
     } catch (err) {
       setFormError(err.message)
     } finally {
@@ -38,6 +68,9 @@ export default function AddUserTab() {
   }
 
   useEffect(() => { fetchDepartments() }, [])
+
+  const isBarDept = BAR_DEPTS.includes(form.department)
+  const nonRotatingShifts = shiftOptions.filter(s => s.shift_type !== 'rotating')
 
   return (
     <div className="p-6 space-y-5 max-w-lg">
@@ -52,9 +85,7 @@ export default function AddUserTab() {
           <p className="text-sm text-green-700">
             Password: <span className="font-mono bg-green-100 px-1.5 py-0.5 rounded">{success.password}</span>
           </p>
-          <p className="text-sm text-green-700">
-            Role: {ROLE_LABELS[success.role] ?? success.role}
-          </p>
+          <p className="text-sm text-green-700">Role: {ROLE_LABELS[success.role] ?? success.role}</p>
           <p className="text-xs text-green-600 mt-2">
             Share these credentials securely. The user can change their password after first login.
           </p>
@@ -69,30 +100,19 @@ export default function AddUserTab() {
 
       <form onSubmit={handleAddUser} className="space-y-4">
         <Field label="Full Name *">
-          <Inp
-            required
-            value={form.full_name}
+          <Inp required value={form.full_name}
             onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
-            placeholder="Full name"
-          />
+            placeholder="Full name" />
         </Field>
         <Field label="Email *">
-          <Inp
-            required
-            type="email"
-            value={form.email}
+          <Inp required type="email" value={form.email}
             onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            placeholder="user@woodlandslodge.mw"
-          />
+            placeholder="user@woodlandslodge.mw" />
         </Field>
         <Field label="Temporary Password *">
-          <Inp
-            required
-            minLength={6}
-            value={form.password}
+          <Inp required minLength={6} value={form.password}
             onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-            placeholder="Min 6 characters"
-          />
+            placeholder="Min 6 characters" />
         </Field>
         <Field label="Role *">
           <Sel required value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
@@ -100,14 +120,45 @@ export default function AddUserTab() {
           </Sel>
         </Field>
         <Field label="Department">
-          <Sel value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
+          <Sel value={form.department} onChange={e => handleDeptChange(e.target.value)}>
             <option value="">— None —</option>
             {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
           </Sel>
         </Field>
-        <button
-          type="submit"
-          disabled={formBusy}
+
+        {/* Shift dropdown — shown when department has multiple shifts */}
+        {form.department && nonRotatingShifts.length > 1 && (
+          <Field label="Shift">
+            <Sel value={form.shift_name} onChange={e => setForm(f => ({ ...f, shift_name: e.target.value }))}>
+              <option value="">— Select shift —</option>
+              {nonRotatingShifts.map(s => (
+                <option key={s.shift_name} value={s.shift_name}>
+                  {s.shift_name} ({s.shift_start?.slice(0,5)} – {s.shift_end?.slice(0,5)})
+                </option>
+              ))}
+            </Sel>
+          </Field>
+        )}
+        {form.department && nonRotatingShifts.length === 1 && (
+          <p className="text-xs text-gray-500">
+            Shift: <span className="font-medium text-gray-700">{nonRotatingShifts[0].shift_name}</span>
+            {' '}({nonRotatingShifts[0].shift_start?.slice(0,5)} – {nonRotatingShifts[0].shift_end?.slice(0,5)})
+            <span className="ml-1 text-gray-400">(auto-assigned)</span>
+          </p>
+        )}
+
+        {/* Bar Week — shown for bar departments */}
+        {isBarDept && (
+          <Field label="Bar Week">
+            <Sel value={form.bar_week} onChange={e => setForm(f => ({ ...f, bar_week: e.target.value }))}>
+              <option value="">— Select —</option>
+              <option value="A">Week A</option>
+              <option value="B">Week B</option>
+            </Sel>
+          </Field>
+        )}
+
+        <button type="submit" disabled={formBusy}
           className="bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
           {formBusy ? 'Creating…' : 'Create User'}
         </button>
