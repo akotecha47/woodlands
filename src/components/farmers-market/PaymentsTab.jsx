@@ -4,6 +4,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { FM_PAY_METHODS, FM_PAY_TYPES, fmtDate, fmtMWK, todayStr } from './FarmersMarketUI'
 
+// Visit fees are logged directly on the Market Day tab — exclude them here
+const REG_PAY_TYPES = FM_PAY_TYPES.filter(t => t.value !== 'visit')
+
 export default function PaymentsTab() {
   const { session } = useAuth()
 
@@ -14,7 +17,6 @@ export default function PaymentsTab() {
   const [busy,       setBusy]       = useState(false)
   const flash = useFlash(setToast)
 
-  // Filters for history table
   const [filterHolder, setFilterHolder] = useState('')
   const [filterFrom,   setFilterFrom]   = useState('')
   const [filterTo,     setFilterTo]     = useState('')
@@ -40,6 +42,7 @@ export default function PaymentsTab() {
         .not('status', 'eq', 'inactive').order('stall_number'),
       supabaseAdmin.from('fm_payments')
         .select('*, fm_holders(full_name, stall_number)')
+        .in('payment_type', ['application', 'acceptance'])
         .order('payment_date', { ascending: false })
         .order('created_at', { ascending: false }),
       supabaseAdmin.from('user_profiles').select('id, full_name'),
@@ -58,7 +61,7 @@ export default function PaymentsTab() {
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const monthPayments = payments.filter(p => p.payment_date >= monthStart)
 
-  const monthTotals = FM_PAY_TYPES.reduce((acc, t) => {
+  const monthTotals = REG_PAY_TYPES.reduce((acc, t) => {
     acc[t.value] = monthPayments
       .filter(p => p.payment_type === t.value)
       .reduce((s, p) => s + Number(p.amount), 0)
@@ -90,19 +93,11 @@ export default function PaymentsTab() {
       })
       if (error) throw error
 
-      // Update holder payment flags
       if (form.payment_type === 'application') {
         await supabaseAdmin.from('fm_holders').update({ application_paid: true }).eq('id', form.holder_id)
       }
       if (form.payment_type === 'acceptance') {
         await supabaseAdmin.from('fm_holders').update({ acceptance_paid: true }).eq('id', form.holder_id)
-      }
-      // Sync fee_paid on the matching visit row
-      if (form.payment_type === 'visit') {
-        await supabaseAdmin.from('fm_visits')
-          .update({ fee_paid: true })
-          .eq('holder_id', form.holder_id)
-          .eq('visit_date', form.payment_date)
       }
 
       flash('Payment recorded')
@@ -117,12 +112,12 @@ export default function PaymentsTab() {
       <Toast toast={toast} />
 
       {/* Monthly summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <div className="bg-gray-50 rounded-xl p-4 sm:col-span-1 col-span-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="bg-gray-50 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">Total This Month</p>
           <p className="text-xl font-bold text-gray-900">{fmtMWK(monthGrandTotal)}</p>
         </div>
-        {FM_PAY_TYPES.map(t => (
+        {REG_PAY_TYPES.map(t => (
           <div key={t.value} className="bg-gray-50 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">{t.label}</p>
             <p className="text-lg font-semibold text-gray-900">{fmtMWK(monthTotals[t.value] ?? 0)}</p>
@@ -132,7 +127,8 @@ export default function PaymentsTab() {
 
       {/* Log payment form */}
       <div className="border border-gray-200 rounded-xl p-5 mb-8">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Log Payment</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-1">Log Application or Registration Fee Payment</h3>
+        <p className="text-xs text-gray-400 mb-4">Visit fees are logged on the Market Day tab.</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Holder *">
@@ -146,10 +142,10 @@ export default function PaymentsTab() {
             <Field label="Payment Type *">
               <Sel required value={form.payment_type}
                 onChange={e => {
-                  const found = FM_PAY_TYPES.find(t => t.value === e.target.value)
+                  const found = REG_PAY_TYPES.find(t => t.value === e.target.value)
                   setForm(p => ({ ...p, payment_type: e.target.value, amount: String(found?.amount ?? p.amount) }))
                 }}>
-                {FM_PAY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                {REG_PAY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </Sel>
             </Field>
           </div>
@@ -179,7 +175,7 @@ export default function PaymentsTab() {
           </div>
 
           <div className="flex flex-wrap gap-4 text-xs bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-500">
-            {FM_PAY_TYPES.map(t => (
+            {REG_PAY_TYPES.map(t => (
               <span key={t.value}>
                 {t.label} — <strong className="text-gray-700">{fmtMWK(t.amount)}</strong>
               </span>
@@ -222,7 +218,9 @@ export default function PaymentsTab() {
             Clear
           </button>
         )}
-        <span className="text-xs text-gray-400 self-end pb-1.5 ml-auto">{filtered.length} record{filtered.length !== 1 ? 's' : ''}</span>
+        <span className="text-xs text-gray-400 self-end pb-1.5 ml-auto">
+          {filtered.length} record{filtered.length !== 1 ? 's' : ''}
+        </span>
       </div>
 
       {/* Payment history table */}
@@ -247,7 +245,7 @@ export default function PaymentsTab() {
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.fm_holders?.full_name ?? '—'}</td>
                 <Td>{p.fm_holders?.stall_number}</Td>
                 <td className="px-4 py-3 text-sm text-gray-700">
-                  {FM_PAY_TYPES.find(t => t.value === p.payment_type)?.label ?? p.payment_type}
+                  {REG_PAY_TYPES.find(t => t.value === p.payment_type)?.label ?? p.payment_type}
                 </td>
                 <td className="px-4 py-3 text-sm font-semibold text-gray-900">{fmtMWK(p.amount)}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">

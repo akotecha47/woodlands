@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
-import { fmtDate, fmtMWK, defaultMarketDate, FM_MANAGE_ROLES, todayStr } from './FarmersMarketUI'
+import { fmtDate, fmtMWK, defaultMarketDate, FM_MANAGE_ROLES, FM_PAY_METHODS, todayStr } from './FarmersMarketUI'
 
 const VISIT_FEE = 10000
 
@@ -19,9 +19,12 @@ export default function MarketDayTab() {
   const [marketDate,      setMarketDate]      = useState(defaultMarketDate)
   const [holders,         setHolders]         = useState([])
   const [visitMap,        setVisitMap]        = useState({}) // holder_id → visit row
-  const [feePrompt,       setFeePrompt]       = useState(null) // { holder, visitId }
   const [notesPrompt,     setNotesPrompt]     = useState(null) // { visitId, holderName }
   const [visitNote,       setVisitNote]       = useState('')
+  const [feeModal,        setFeeModal]        = useState(null) // { holder, visitId }
+  const [feeMethod,       setFeeMethod]       = useState('cash')
+  const [feeBusy,         setFeeBusy]         = useState(false)
+  const [removeConfirm,   setRemoveConfirm]   = useState(null) // { holder, visitId }
   const [addModal,        setAddModal]        = useState(false)
   const [conditions,      setConditions]      = useState('')
   const [conditionsId,    setConditionsId]    = useState(null)
@@ -89,15 +92,7 @@ export default function MarketDayTab() {
   // ── check-in ──────────────────────────────────────────────────────────────
 
   async function handleCheckIn(holder) {
-    if (!canCheckIn) return
-    const existing = visitMap[holder.id]
-    if (existing) {
-      try {
-        await supabaseAdmin.from('fm_visits').delete().eq('id', existing.id)
-        setVisitMap(prev => { const next = { ...prev }; delete next[holder.id]; return next })
-      } catch (err) { flash(err.message, false) }
-      return
-    }
+    if (!canCheckIn || visitMap[holder.id]) return
     try {
       const { data, error } = await supabaseAdmin.from('fm_visits').insert({
         holder_id:     holder.id,
@@ -107,37 +102,8 @@ export default function MarketDayTab() {
       }).select().single()
       if (error) throw error
       setVisitMap(prev => ({ ...prev, [holder.id]: data }))
-      setFeePrompt({ holder, visitId: data.id })
-    } catch (err) { flash(err.message, false) }
-  }
-
-  function openNotesPrompt(visitId, holderName) {
-    setFeePrompt(null)
-    setNotesPrompt({ visitId, holderName })
-    setVisitNote('')
-  }
-
-  async function handleConfirmFee() {
-    const { holder, visitId } = feePrompt
-    try {
-      await Promise.all([
-        supabaseAdmin.from('fm_payments').insert({
-          holder_id:      holder.id,
-          payment_type:   'visit',
-          amount:         VISIT_FEE,
-          payment_date:   marketDate,
-          payment_method: 'cash',
-          recorded_by:    session?.user?.id ?? null,
-        }),
-        supabaseAdmin.from('fm_visits').update({ fee_paid: true }).eq('id', visitId),
-      ])
-      flash('Visit fee recorded')
-      setVisitMap(prev =>
-        prev[holder.id]
-          ? { ...prev, [holder.id]: { ...prev[holder.id], fee_paid: true } }
-          : prev
-      )
-      openNotesPrompt(visitId, holder.full_name)
+      setNotesPrompt({ visitId: data.id, holderName: holder.full_name })
+      setVisitNote('')
     } catch (err) { flash(err.message, false) }
   }
 
@@ -152,6 +118,57 @@ export default function MarketDayTab() {
       })
     } catch (err) { flash(err.message, false) }
     setNotesPrompt(null)
+  }
+
+  // ── fee logging ───────────────────────────────────────────────────────────
+
+  async function handleLogFee() {
+    const { holder, visitId } = feeModal
+    setFeeBusy(true)
+    try {
+      await Promise.all([
+        supabaseAdmin.from('fm_payments').insert({
+          holder_id:      holder.id,
+          payment_type:   'visit',
+          amount:         VISIT_FEE,
+          payment_date:   marketDate,
+          payment_method: feeMethod,
+          recorded_by:    session?.user?.id ?? null,
+        }),
+        supabaseAdmin.from('fm_visits').update({ fee_paid: true }).eq('id', visitId),
+      ])
+      setVisitMap(prev =>
+        prev[holder.id]
+          ? { ...prev, [holder.id]: { ...prev[holder.id], fee_paid: true } }
+          : prev
+      )
+      flash('Visit fee recorded')
+      setFeeModal(null)
+    } catch (err) { flash(err.message, false) }
+    finally { setFeeBusy(false) }
+  }
+
+  // ── remove ────────────────────────────────────────────────────────────────
+
+  async function handleRemove() {
+    const { holder, visitId } = removeConfirm
+    setRemoveConfirm(null)
+    try {
+      await Promise.all([
+        supabaseAdmin.from('fm_visits').delete().eq('id', visitId),
+        supabaseAdmin.from('fm_payments')
+          .delete()
+          .eq('holder_id', holder.id)
+          .eq('payment_date', marketDate)
+          .eq('payment_type', 'visit'),
+      ])
+      setVisitMap(prev => {
+        const next = { ...prev }
+        delete next[holder.id]
+        return next
+      })
+      flash(`${holder.full_name} removed from this market day`)
+    } catch (err) { flash(err.message, false) }
   }
 
   async function handleAddFromModal(holder) {
@@ -205,6 +222,7 @@ export default function MarketDayTab() {
   const expected       = checkedInCount * VISIT_FEE
   const outstanding    = expected - collected
   const unaddedHolders = holders.filter(h => !visitMap[h.id])
+  const colSpan        = 6 + (canManage ? 1 : 0)
 
   const sortedHolders = checkedInCount > 0
     ? [...holders].sort((a, b) => {
@@ -306,6 +324,7 @@ export default function MarketDayTab() {
               <Th>Type</Th>
               <Th>Checked In</Th>
               <Th>Fee Paid</Th>
+              {canManage && <th className="w-14" />}
             </tr>
           </thead>
           <tbody>
@@ -327,18 +346,17 @@ export default function MarketDayTab() {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => handleCheckIn(h)}
+                          disabled={checkedIn}
                           className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
                             checkedIn
-                              ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'
+                              ? 'bg-green-100 text-green-700 border-green-200 cursor-default'
                               : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
                           }`}
                         >
                           {checkedIn ? `✓ ${arrTime ?? ''}` : 'Check In'}
                         </button>
                         {visit?.notes && (
-                          <span title={visit.notes} className="text-blue-400 cursor-help text-xs select-none">
-                            📝
-                          </span>
+                          <span title={visit.notes} className="text-blue-400 cursor-help text-xs select-none">📝</span>
                         )}
                       </div>
                     ) : (
@@ -347,26 +365,46 @@ export default function MarketDayTab() {
                           {checkedIn ? `Yes${arrTime ? ` (${arrTime})` : ''}` : 'No'}
                         </span>
                         {visit?.notes && (
-                          <span title={visit.notes} className="text-blue-400 cursor-help text-xs select-none">
-                            📝
-                          </span>
+                          <span title={visit.notes} className="text-blue-400 cursor-help text-xs select-none">📝</span>
                         )}
                       </div>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                      feePaid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {feePaid ? 'Paid' : '—'}
-                    </span>
+                    {feePaid ? (
+                      <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                        ✓ Paid
+                      </span>
+                    ) : checkedIn && canManage ? (
+                      <button
+                        onClick={() => { setFeeModal({ holder: h, visitId: visit.id }); setFeeMethod('cash') }}
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                      >
+                        Log Fee
+                      </button>
+                    ) : (
+                      <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-400">—</span>
+                    )}
                   </td>
+                  {canManage && (
+                    <td className="px-3 py-3 text-center">
+                      {checkedIn && (
+                        <button
+                          onClick={() => setRemoveConfirm({ holder: h, visitId: visit.id })}
+                          className="text-gray-300 hover:text-red-500 transition-colors font-bold leading-none"
+                          title={`Remove ${h.full_name} from this market day`}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               )
             })}
             {holders.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">No active holders</td>
+                <td colSpan={colSpan} className="px-4 py-8 text-center text-sm text-gray-400">No active holders</td>
               </tr>
             )}
           </tbody>
@@ -410,28 +448,42 @@ export default function MarketDayTab() {
         </div>
       )}
 
-      {/* Visit fee prompt */}
-      {feePrompt && (
+      {/* Log fee modal */}
+      {feeModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 shadow-xl max-w-sm w-full mx-4">
-            <h4 className="text-base font-semibold text-gray-900 mb-2">Log Visit Fee Payment?</h4>
-            <p className="text-sm text-gray-700 mb-1">
-              <span className="font-medium">{feePrompt.holder.full_name}</span>
-              {feePrompt.holder.stall_number && ` — Stall ${feePrompt.holder.stall_number}`}
+            <h4 className="text-base font-semibold text-gray-900 mb-1">Log Visit Fee</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              {feeModal.holder.full_name}
+              {feeModal.holder.stall_number && ` — Stall ${feeModal.holder.stall_number}`}
             </p>
-            <p className="text-sm text-gray-500 mb-5">Amount: {fmtMWK(VISIT_FEE)}</p>
+            <div className="bg-gray-50 rounded-lg px-4 py-2.5 mb-4 flex items-center justify-between">
+              <span className="text-sm text-gray-600">Amount</span>
+              <span className="text-sm font-semibold text-gray-900">{fmtMWK(VISIT_FEE)}</span>
+            </div>
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+              <select
+                value={feeMethod}
+                onChange={e => setFeeMethod(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+              >
+                {FM_PAY_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
             <div className="flex gap-3">
               <button
-                onClick={handleConfirmFee}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+                onClick={handleLogFee}
+                disabled={feeBusy}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
               >
-                Confirm
+                {feeBusy ? 'Saving…' : 'Confirm Payment'}
               </button>
               <button
-                onClick={() => openNotesPrompt(feePrompt.visitId, feePrompt.holder.full_name)}
+                onClick={() => setFeeModal(null)}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
               >
-                Skip
+                Cancel
               </button>
             </div>
           </div>
@@ -464,6 +516,35 @@ export default function MarketDayTab() {
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
               >
                 Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove confirmation */}
+      {removeConfirm && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-sm w-full mx-4">
+            <h4 className="text-base font-semibold text-gray-900 mb-2">Remove from market day?</h4>
+            <p className="text-sm text-gray-600 mb-1">
+              Remove <span className="font-medium">{removeConfirm.holder.full_name}</span> from {fmtDate(marketDate)}?
+            </p>
+            <p className="text-xs text-gray-400 mb-5">
+              Any visit fee payment logged for this visit will also be deleted.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleRemove}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+              >
+                Remove
+              </button>
+              <button
+                onClick={() => setRemoveConfirm(null)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </div>
