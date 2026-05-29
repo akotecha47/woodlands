@@ -1,6 +1,6 @@
 // ── constants ──────────────────────────────────────────────────────────────────
 
-export const AT_MANAGE_ROLES = ['owner', 'manager']
+export const AT_MANAGE_ROLES = ['owner', 'manager', 'restaurant_manager']
 
 export const LODGE_LAT = -13.9623
 export const LODGE_LNG =  33.7852

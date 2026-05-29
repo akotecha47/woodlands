@@ -37,7 +37,7 @@ export default function TodayTab() {
 
   const load = useCallback(async () => {
     const [usersR, recsR, shiftsR, weekR] = await Promise.all([
-      supabaseAdmin.from('user_profiles').select('id, full_name, department, role').order('department').order('full_name'),
+      supabaseAdmin.from('user_profiles').select('id, full_name, department, role').not('role', 'in', '("owner","manager")').order('department').order('full_name'),
       supabaseAdmin.from('attendance_records').select('*').eq('shift_date', today),
       supabaseAdmin.from('shift_settings').select('*').order('department').order('shift_name'),
       supabaseAdmin.from('bar_week_config').select('id, current_week').limit(1).single(),
@@ -106,7 +106,7 @@ export default function TodayTab() {
   const allDepts    = [...new Set(users.map(u => u.department).filter(Boolean))].sort()
   const shownUsers  = deptFilter ? users.filter(u => u.department === deptFilter) : users
   const deptGroups  = shownUsers.reduce((acc, u) => {
-    const d = u.department ?? 'Other'
+    const d = u.department ?? u.role
     if (!acc[d]) acc[d] = []
     acc[d].push(u)
     return acc

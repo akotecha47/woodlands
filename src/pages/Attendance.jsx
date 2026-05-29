@@ -4,22 +4,29 @@ import TodayTab      from '../components/attendance/TodayTab'
 import ClockInOutTab from '../components/attendance/ClockInOutTab'
 import HistoryTab    from '../components/attendance/HistoryTab'
 import SettingsTab   from '../components/attendance/SettingsTab'
-import { AT_MANAGE_ROLES } from '../components/attendance/AttendanceUI'
 
 export default function Attendance() {
   const { profile } = useAuth()
-  const canManage   = AT_MANAGE_ROLES.includes(profile?.role)
+  const role = profile?.role
 
-  const TABS = [
-    ...(canManage ? [{ id: 'today',    label: 'Today'    }] : []),
-    { id: 'clock',    label: 'Clock In / Out' },
-    ...(canManage ? [
-      { id: 'history',  label: 'History'  },
-      { id: 'settings', label: 'Settings' },
-    ] : []),
-  ]
+  const TABS = (() => {
+    if (role === 'owner' || role === 'manager') {
+      return [
+        { id: 'today',    label: 'Today'    },
+        { id: 'history',  label: 'History'  },
+        { id: 'settings', label: 'Settings' },
+      ]
+    }
+    if (role === 'restaurant_manager') {
+      return [
+        { id: 'today', label: 'Today'          },
+        { id: 'clock', label: 'Clock In / Out' },
+      ]
+    }
+    return [{ id: 'clock', label: 'Clock In / Out' }]
+  })()
 
-  const [tab, setTab] = useState(canManage ? 'today' : 'clock')
+  const [tab, setTab] = useState(role === 'owner' || role === 'manager' || role === 'restaurant_manager' ? 'today' : 'clock')
 
   return (
     <div className="space-y-5">
