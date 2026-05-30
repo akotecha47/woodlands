@@ -14,7 +14,7 @@ serve(async (req) => {
   try {
     const body = await req.json()
     console.log('[create-user] received body:', JSON.stringify(body))
-    const { email, password, full_name, role, department } = body
+    const { email, password, full_name, role, department, shift_name, bar_week } = body
 
     if (!email || !password || !full_name || !role) {
       console.log('[create-user] validation failed — missing fields:', { email: !!email, password: !!password, full_name: !!full_name, role: !!role })
@@ -54,6 +54,8 @@ serve(async (req) => {
       email,
       role,
       department: department && department.trim() !== '' ? department : null,
+      shift_name: shift_name && shift_name.trim() !== '' ? shift_name : null,
+      bar_week:   bar_week && bar_week.trim() !== '' ? bar_week : null,
       is_active:  true,
     })
     if (profileErr) {
