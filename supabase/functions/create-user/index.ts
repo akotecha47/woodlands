@@ -53,7 +53,7 @@ serve(async (req) => {
       full_name,
       email,
       role,
-      department: department || null,
+      department: department && department.trim() !== '' ? department : null,
       is_active:  true,
     })
     if (profileErr) {
