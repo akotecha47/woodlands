@@ -13,19 +13,14 @@ serve(async (req) => {
 
   try {
     const body = await req.json()
-    console.log('[create-user] received body:', JSON.stringify(body))
     const { email, password, full_name, role, department, shift_name, bar_week } = body
 
     if (!email || !password || !full_name || !role) {
-      console.log('[create-user] validation failed — missing fields:', { email: !!email, password: !!password, full_name: !!full_name, role: !!role })
       return new Response(
         JSON.stringify({ error: 'email, password, full_name, and role are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
-
-    console.log('[create-user] SUPABASE_URL:', Deno.env.get('SUPABASE_URL')?.slice(0, 30))
-    console.log('[create-user] SERVICE_ROLE_KEY length:', Deno.env.get('SERVICE_ROLE_KEY')?.length)
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -33,23 +28,15 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    let authData
-    try {
-      const { data, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-      })
-      console.log('[create-user] auth error:', JSON.stringify(authError))
-      if (authError) throw authError
-      authData = data
-    } catch (authError) {
-      console.log('[create-user] auth error:', JSON.stringify(authError))
-      throw authError
-    }
+    const { data, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    })
+    if (authError) throw authError
 
     const { error: profileErr } = await supabaseAdmin.from('user_profiles').insert({
-      id:         authData.user.id,
+      id:         data.user.id,
       full_name,
       email,
       role,
@@ -59,13 +46,12 @@ serve(async (req) => {
       is_active:  true,
     })
     if (profileErr) {
-      // Roll back the auth user if profile insert fails
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+      await supabaseAdmin.auth.admin.deleteUser(data.user.id)
       throw profileErr
     }
 
     return new Response(
-      JSON.stringify({ user: authData.user }),
+      JSON.stringify({ user: data.user }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err) {
