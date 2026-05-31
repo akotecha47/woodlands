@@ -72,7 +72,6 @@ export default function AddUserTab() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Failed to create user')
       setSuccess({ email: form.email, password: form.password, role: form.role })
-      window.location.reload()
       setForm(BLANK)
       setShiftOptions([])
     } catch (err) {
