@@ -58,9 +58,19 @@ export default function AddUserTab() {
       const payload = { ...form }
       if (!payload.shift_name) delete payload.shift_name
       if (!payload.bar_week)   delete payload.bar_week
-      const { data, error } = await supabase.functions.invoke('create-user', { body: payload })
-      if (error) throw error
-      if (data?.error) throw new Error(data.error)
+      const response = await fetch(
+        'https://gttsjmxltrxxfplqjans.supabase.co/functions/v1/create-user',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      )
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to create user')
       setSuccess({ email: form.email, password: form.password, role: form.role })
       window.location.reload()
       setForm(BLANK)
