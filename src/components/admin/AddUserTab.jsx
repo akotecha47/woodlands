@@ -62,6 +62,7 @@ export default function AddUserTab() {
       if (error) throw error
       if (data?.error) throw new Error(data.error)
       setSuccess({ email: form.email, password: form.password, role: form.role })
+      window.location.reload()
       setForm(BLANK)
       setShiftOptions([])
     } catch (err) {
