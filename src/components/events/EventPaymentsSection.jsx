@@ -86,7 +86,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
       <h3 className="text-base font-semibold text-gray-800 mb-4">Payments</h3>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
         <div className="bg-gray-50 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">Bill Total</p>
           <p className="text-sm font-semibold text-gray-900">{fmtMWK(billTotal)}</p>

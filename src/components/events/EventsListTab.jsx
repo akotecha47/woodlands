@@ -201,7 +201,7 @@ export default function EventsListTab({ onView }) {
       <Toast toast={toast} />
 
       {/* Summary strip */}
-      <div className="grid grid-cols-3 gap-4 p-4 border-b border-gray-200">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border-b border-gray-200">
         <div className="bg-gray-50 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">Events This Month</p>
           <p className="text-2xl font-bold text-gray-900">{totalThisMonth}</p>

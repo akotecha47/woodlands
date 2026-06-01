@@ -273,7 +273,7 @@ export default function HoldersTab() {
       <Toast toast={toast} />
 
       {/* Summary strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <div className="bg-gray-50 rounded-xl p-4 col-span-2 sm:col-span-1">
           <p className="text-xs text-gray-500 mb-1">Active Holders</p>
           <p className="text-2xl font-bold text-gray-900">{activeHolders.length}</p>

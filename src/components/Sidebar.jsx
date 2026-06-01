@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Package, Clock, Calendar, BookOpen, Leaf, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Package, Clock, Calendar, BookOpen, Leaf, Settings, LogOut, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { ROUTE_ACCESS, ROLE_LABELS } from '../lib/roles'
 
@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { path: '/admin',          label: 'Admin',          icon: Settings },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ open, onClose }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const role = profile?.role ?? ''
@@ -28,17 +28,38 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-56 min-h-screen bg-gray-900 text-gray-100 flex flex-col shrink-0">
-      <div className="px-5 py-5 border-b border-gray-700">
+    <aside className={[
+      // Base styles shared between mobile and desktop
+      'w-56 bg-gray-900 text-gray-100 flex flex-col shrink-0 overflow-y-auto',
+      // Mobile: fixed drawer that slides in/out
+      'fixed inset-y-0 left-0 z-30 transition-transform duration-200',
+      // Desktop (md+): back in normal flow, always visible, no transform
+      'md:static md:inset-auto md:z-auto md:translate-x-0 md:min-h-screen',
+      // Slide position — driven by `open` prop on mobile only
+      open ? 'translate-x-0' : '-translate-x-full',
+    ].join(' ')}>
+
+      {/* Header */}
+      <div className="px-5 py-5 border-b border-gray-700 flex items-center justify-between">
         <span className="font-bold text-base text-white tracking-wide">Woodlands</span>
+        {/* Close button — only shown on mobile */}
+        <button
+          onClick={onClose}
+          className="md:hidden text-gray-400 hover:text-white transition-colors"
+          aria-label="Close menu"
+        >
+          <X size={18} />
+        </button>
       </div>
 
+      {/* Nav links */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {visibleItems.map(({ path, label, icon: Icon }) => (
           <NavLink
             key={path}
             to={path}
             end={path === '/'}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive
@@ -53,6 +74,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      {/* Footer */}
       <div className="px-4 py-4 border-t border-gray-700">
         <p className="text-sm font-medium text-white truncate">
           {profile?.full_name ?? '—'}

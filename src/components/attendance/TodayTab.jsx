@@ -278,7 +278,7 @@ export default function TodayTab() {
       )}
 
       {/* Summary strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         {[
           { key: 'present',     label: 'Present',        cls: 'bg-green-50 border-green-100 text-green-800',  vCls: 'text-green-700' },
           { key: 'late',        label: 'Late',            cls: 'bg-amber-50 border-amber-100 text-amber-800',  vCls: 'text-amber-700' },

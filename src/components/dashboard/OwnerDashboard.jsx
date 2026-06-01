@@ -212,7 +212,7 @@ export default function OwnerDashboard() {
       <h1 className="text-lg font-semibold text-gray-900 mb-5">Dashboard</h1>
 
       {/* ── KPI cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 
         <Card label="Today's Attendance" accent="blue">
           <p className="text-3xl font-bold text-gray-900 mb-2">{attendance.total}</p>
