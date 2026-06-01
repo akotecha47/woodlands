@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, AlertCircle, Package, Users, ChevronRight } from 'lucide-react'
+import {
+  AlertTriangle, AlertCircle, Package, Users, ChevronRight,
+  Calendar, Leaf, Search, Bell,
+} from 'lucide-react'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td } from '../admin/AdminUI'
 
 function todayISOStr() {
@@ -34,24 +38,29 @@ function getNextMarketDay() {
   return { date: candidate, daysAway }
 }
 
-function Card({ label, accent = 'gray', children }) {
-  const bg = {
-    gray:   'bg-gray-50   border-transparent',
-    blue:   'bg-blue-50   border-blue-100',
-    amber:  'bg-amber-50  border-amber-200',
-    green:  'bg-green-50  border-green-100',
-    purple: 'bg-purple-50 border-purple-100',
-  }[accent]
+function getInitials(name) {
+  if (!name) return '?'
+  return name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
+}
+
+// White KPI card with a 30 px tinted icon square in the top-left.
+// `valueCls` lets callers shrink the number for longer strings (e.g. date).
+function KpiCard({ Icon, iconBg, iconColor, label, value, valueCls = 'text-2xl', children }) {
   return (
-    <div className={`rounded-xl border p-4 ${bg}`}>
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{label}</p>
-      {children}
+    <div className="bg-white border border-gray-200 rounded-lg p-5">
+      <div className={`w-[30px] h-[30px] rounded-lg flex items-center justify-center mb-4 ${iconBg}`}>
+        <Icon size={15} className={iconColor} />
+      </div>
+      <p className="text-xs font-medium text-gray-400 tracking-wide mb-1">{label}</p>
+      <p className={`${valueCls} font-bold text-gray-900 leading-tight`}>{value}</p>
+      {children && <div className="mt-2">{children}</div>}
     </div>
   )
 }
 
 export default function OwnerDashboard() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
 
   const [attendance,   setAttendance]   = useState(null)
   const [lowStock,     setLowStock]     = useState({ count: 0, departments: [] })
@@ -62,34 +71,28 @@ export default function OwnerDashboard() {
   const [atRiskCount,  setAtRiskCount]  = useState(0)
   const [loading,      setLoading]      = useState(true)
 
-  const today     = todayISOStr()
+  const today    = todayISOStr()
   const marketDay = getNextMarketDay()
+  const initials  = getInitials(profile?.full_name)
 
   useEffect(() => {
     async function load() {
       const [attR, stockR, eventsR, bookingsR, unverifiedR, depositPmtsR, atRiskR] = await Promise.all([
-        // Attendance status breakdown for KPI card
-        // Uses 'date' column (date type, original schema col 001_schema.sql:104)
         supabaseAdmin
           .from('attendance_records')
           .select('status')
           .eq('date', today),
 
-        // Stock levels: quantity lives in current_stock, metadata in stock_items
-        // Fetch department + reorder_level + is_active for filtering and display
         supabaseAdmin
           .from('current_stock')
           .select('quantity, stock_items(id, department, reorder_level, is_active)'),
 
-        // Upcoming non-cancelled events; fetch data (not head-only) so we can
-        // also derive the unpaid-deposit list without a second round-trip
         supabaseAdmin
           .from('events')
           .select('id, title, deposit_amount')
           .gte('event_date', today)
           .neq('status', 'cancelled'),
 
-        // Today's confirmed table bookings for the bottom table
         supabaseAdmin
           .from('table_bookings')
           .select('id, guest_name, booking_time, party_size, status, tables(table_number, location)')
@@ -97,31 +100,22 @@ export default function OwnerDashboard() {
           .eq('status', 'confirmed')
           .order('booking_time'),
 
-        // Unverified clock-ins today: attendance_records has two FKs to user_profiles
-        // (user_id and recorded_by), so we must use the column-name hint !user_id
         supabaseAdmin
           .from('attendance_records')
           .select('id, user_id, user_profiles!user_id(full_name)')
           .eq('status', 'unverified')
           .eq('date', today),
 
-        // All deposit-type payments — used client-side to determine which upcoming
-        // events have already had a deposit paid (event_payments.payment_type added
-        // in 003_events_columns.sql)
         supabaseAdmin
           .from('event_payments')
           .select('event_id')
           .eq('payment_type', 'deposit'),
 
-        // At-risk market holders (status value confirmed in CHECK constraint,
-        // 009_farmers_market.sql)
         supabaseAdmin
           .from('fm_holders')
           .select('id')
           .eq('status', 'at_risk'),
       ])
-
-      // ── KPI cards ─────────────────────────────────────────────────────────────
 
       const recs = attR.data ?? []
       setAttendance({
@@ -142,21 +136,14 @@ export default function OwnerDashboard() {
       setEventCount(allEvents.length)
       setBookings(bookingsR.data ?? [])
 
-      // ── Needs Attention ───────────────────────────────────────────────────────
-
       setUnverified(
-        (unverifiedR.data ?? []).map(r => ({
-          name: r.user_profiles?.full_name ?? 'Unknown staff',
-        }))
+        (unverifiedR.data ?? []).map(r => ({ name: r.user_profiles?.full_name ?? 'Unknown staff' }))
       )
 
       const paidEventIds = new Set((depositPmtsR.data ?? []).map(p => p.event_id))
-      setUnpaidEvents(
-        allEvents.filter(e => Number(e.deposit_amount) > 0 && !paidEventIds.has(e.id))
-      )
+      setUnpaidEvents(allEvents.filter(e => Number(e.deposit_amount) > 0 && !paidEventIds.has(e.id)))
 
       setAtRiskCount((atRiskR.data ?? []).length)
-
       setLoading(false)
     }
     load()
@@ -169,7 +156,6 @@ export default function OwnerDashboard() {
   const mdDaysLabel = daysAway === 0 ? 'Today!' : daysAway === 1 ? 'Tomorrow' : `${daysAway} days away`
   const mdDaysColor = daysAway === 0 ? 'text-green-600' : daysAway <= 7 ? 'text-amber-600' : 'text-gray-500'
 
-  // Build ordered attention list — sources with zero items produce no rows
   const attentionItems = [
     ...unverified.map(u => ({
       key:       `unv-${u.name}`,
@@ -209,117 +195,173 @@ export default function OwnerDashboard() {
 
   return (
     <div className="p-6">
-      <h1 className="text-lg font-semibold text-gray-900 mb-5">Dashboard</h1>
 
-      {/* ── KPI cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* ── Top bar ───────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-7">
+        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
 
-        <Card label="Today's Attendance" accent="blue">
-          <p className="text-3xl font-bold text-gray-900 mb-2">{attendance.total}</p>
-          <div className="flex flex-col gap-0.5 text-xs">
-            <span className="text-green-700">Present: {attendance.present}</span>
-            <span className="text-amber-600">Late: {attendance.late}</span>
-            <span className="text-red-600">Absent: {attendance.absent}</span>
+        <div className="flex items-center gap-2">
+          {/* Search pill — decorative, hidden on very small screens */}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full text-gray-400 text-sm cursor-default select-none">
+            <Search size={13} />
+            <span className="text-xs">Search…</span>
           </div>
-        </Card>
 
-        <Card label="Low Stock Items" accent={lowStock.count > 0 ? 'amber' : 'gray'}>
-          <p className={`text-3xl font-bold mb-2 ${lowStock.count > 0 ? 'text-amber-700' : 'text-gray-900'}`}>
-            {lowStock.count}
-          </p>
-          <p className="text-xs text-gray-500">
-            {lowStock.count === 0 ? 'All items stocked' : 'at or below reorder level'}
-          </p>
-        </Card>
+          {/* Bell with notification dot */}
+          <div className="relative">
+            <button
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+              aria-label="Notifications"
+            >
+              <Bell size={16} />
+            </button>
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full ring-1 ring-white" />
+          </div>
 
-        <Card label="Upcoming Events" accent="green">
-          <p className="text-3xl font-bold text-gray-900 mb-2">{eventCount}</p>
-          <p className="text-xs text-gray-500">from today onwards</p>
-        </Card>
-
-        <Card label="Next Market Day" accent="purple">
-          <p className="text-base font-semibold text-gray-900 mb-1">{mdDateLabel}</p>
-          <p className={`text-xs font-medium ${mdDaysColor}`}>{mdDaysLabel}</p>
-        </Card>
-
-      </div>
-
-      {/* ── Needs Attention ── */}
-      <div className="mb-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-2">Needs Attention</h2>
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          {attentionItems.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-gray-400">
-              All clear — nothing needs attention today.
-            </p>
-          ) : (
-            attentionItems.map(({ key, Icon, iconColor, primary, secondary, link }) => (
-              <button
-                key={key}
-                onClick={() => navigate(link)}
-                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors text-left border-b border-gray-100 last:border-0"
-              >
-                <Icon size={18} className={`${iconColor} shrink-0`} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 leading-snug">{primary}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{secondary}</p>
-                </div>
-                <ChevronRight size={14} className="text-gray-300 shrink-0" />
-              </button>
-            ))
-          )}
+          {/* User avatar with initials */}
+          <div
+            className="w-8 h-8 rounded-full bg-brand-teal flex items-center justify-center text-white text-xs font-bold select-none"
+            title={profile?.full_name ?? ''}
+          >
+            {initials}
+          </div>
         </div>
       </div>
 
-      {/* ── Today's confirmed bookings ── */}
-      <div className="flex items-center gap-2 mb-2">
-        <h2 className="text-sm font-semibold text-gray-700">Today's Confirmed Bookings</h2>
-        {bookings.length > 0 && (
-          <span className="text-xs text-gray-400">
-            {bookings.length} booking{bookings.length !== 1 ? 's' : ''}
-          </span>
-        )}
+      {/* ── KPI cards ─────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+        {/* Attendance — teal icon on teal tint */}
+        <KpiCard
+          Icon={Users}
+          iconBg="bg-brand-teal-tint"
+          iconColor="text-brand-teal"
+          label="Today's Attendance"
+          value={attendance.total}
+        >
+          <div className="flex flex-col gap-0.5 text-xs">
+            <span className="text-green-700">Present: {attendance.present}</span>
+            <span className="text-amber-600">Late:    {attendance.late}</span>
+            <span className="text-red-600">Absent:  {attendance.absent}</span>
+          </div>
+        </KpiCard>
+
+        {/* Low stock — amber icon on amber tint */}
+        <KpiCard
+          Icon={Package}
+          iconBg="bg-amber-50"
+          iconColor="text-amber-500"
+          label="Low Stock Items"
+          value={lowStock.count}
+        >
+          <p className={`text-xs ${lowStock.count > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+            {lowStock.count === 0 ? 'All items stocked' : 'at or below reorder level'}
+          </p>
+        </KpiCard>
+
+        {/* Events — navy icon on navy tint */}
+        <KpiCard
+          Icon={Calendar}
+          iconBg="bg-brand-navy-tint"
+          iconColor="text-brand-navy"
+          label="Upcoming Events"
+          value={eventCount}
+        >
+          <p className="text-xs text-gray-400">from today onwards</p>
+        </KpiCard>
+
+        {/* Market day — green icon on green tint; date is longer so shrink value */}
+        <KpiCard
+          Icon={Leaf}
+          iconBg="bg-green-50"
+          iconColor="text-green-600"
+          label="Next Market Day"
+          value={mdDateLabel}
+          valueCls="text-base"
+        >
+          <p className={`text-xs font-medium ${mdDaysColor}`}>{mdDaysLabel}</p>
+        </KpiCard>
+
       </div>
 
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <Th>Time</Th>
-              <Th>Guest Name</Th>
-              <Th>Party Size</Th>
-              <Th>Table</Th>
-              <Th>Status</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {bookings.map(b => (
-              <tr key={b.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                <Td>{fmtTime(b.booking_time)}</Td>
-                <td className="px-4 py-3 text-sm font-medium text-gray-900">{b.guest_name}</td>
-                <Td>{b.party_size}</Td>
-                <Td>
-                  {b.tables
-                    ? `${b.tables.table_number}${b.tables.location ? ` · ${b.tables.location}` : ''}`
-                    : '—'}
-                </Td>
-                <td className="px-4 py-3">
-                  <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
-                    Confirmed
-                  </span>
-                </td>
+      {/* ── Needs Attention ───────────────────────────────────────────────────── */}
+      <section className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6">
+        <div className="px-5 py-3.5 border-b border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-900">Needs Attention</h2>
+        </div>
+        {attentionItems.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-gray-400 text-center">
+            All clear — nothing needs attention today.
+          </p>
+        ) : (
+          attentionItems.map(({ key, Icon, iconColor, primary, secondary, link }) => (
+            <button
+              key={key}
+              onClick={() => navigate(link)}
+              className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 transition-colors text-left border-b border-gray-100 last:border-0"
+            >
+              <Icon size={16} className={`${iconColor} shrink-0`} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 leading-snug">{primary}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{secondary}</p>
+              </div>
+              <ChevronRight size={14} className="text-gray-300 shrink-0" />
+            </button>
+          ))
+        )}
+      </section>
+
+      {/* ── Today's confirmed bookings ────────────────────────────────────────── */}
+      <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-900">Today's Confirmed Bookings</h2>
+          {bookings.length > 0 && (
+            <span className="text-xs text-gray-400">
+              {bookings.length} booking{bookings.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <Th>Time</Th>
+                <Th>Guest Name</Th>
+                <Th>Party Size</Th>
+                <Th>Table</Th>
+                <Th>Status</Th>
               </tr>
-            ))}
-            {bookings.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">
-                  No confirmed bookings for today
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {bookings.map(b => (
+                <tr key={b.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <Td>{fmtTime(b.booking_time)}</Td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{b.guest_name}</td>
+                  <Td>{b.party_size}</Td>
+                  <Td>
+                    {b.tables
+                      ? `${b.tables.table_number}${b.tables.location ? ` · ${b.tables.location}` : ''}`
+                      : '—'}
+                  </Td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                      Confirmed
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {bookings.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">
+                    No confirmed bookings for today
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
     </div>
   )
 }
