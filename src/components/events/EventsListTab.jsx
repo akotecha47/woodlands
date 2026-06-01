@@ -222,7 +222,7 @@ export default function EventsListTab({ onView }) {
           <button key={f.value} onClick={() => setStatusFilter(f.value)}
             className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
               statusFilter === f.value
-                ? 'border-green-600 text-green-700'
+                ? 'border-brand-teal text-brand-teal'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}>
             {f.label}

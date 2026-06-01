@@ -29,23 +29,21 @@ export default function Sidebar({ open, onClose }) {
 
   return (
     <aside className={[
-      // Base styles shared between mobile and desktop
-      'w-56 bg-gray-900 text-gray-100 flex flex-col shrink-0 overflow-y-auto',
-      // Mobile: fixed drawer that slides in/out
+      // Base
+      'w-56 bg-brand-navy text-white flex flex-col shrink-0 overflow-y-auto',
+      // Mobile: fixed drawer
       'fixed inset-y-0 left-0 z-30 transition-transform duration-200',
-      // Desktop (md+): back in normal flow, always visible, no transform
+      // Desktop: back in flow, always visible
       'md:static md:inset-auto md:z-auto md:translate-x-0 md:min-h-screen',
-      // Slide position — driven by `open` prop on mobile only
       open ? 'translate-x-0' : '-translate-x-full',
     ].join(' ')}>
 
       {/* Header */}
-      <div className="px-5 py-5 border-b border-gray-700 flex items-center justify-between">
+      <div className="px-5 py-5 border-b border-white/10 flex items-center justify-between">
         <span className="font-bold text-base text-white tracking-wide">Woodlands</span>
-        {/* Close button — only shown on mobile */}
         <button
           onClick={onClose}
-          className="md:hidden text-gray-400 hover:text-white transition-colors"
+          className="md:hidden text-white/50 hover:text-white transition-colors"
           aria-label="Close menu"
         >
           <X size={18} />
@@ -63,8 +61,8 @@ export default function Sidebar({ open, onClose }) {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-green-600 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'bg-brand-teal text-white'
+                  : 'text-white/70 hover:bg-white/10 hover:text-white'
               }`
             }
           >
@@ -75,16 +73,16 @@ export default function Sidebar({ open, onClose }) {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-700">
+      <div className="px-4 py-4 border-t border-white/10">
         <p className="text-sm font-medium text-white truncate">
           {profile?.full_name ?? '—'}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-white/50 mt-0.5">
           {ROLE_LABELS[role] ?? role}
         </p>
         <button
           onClick={handleSignOut}
-          className="mt-3 flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+          className="mt-3 flex items-center gap-1.5 text-xs text-white/50 hover:text-white transition-colors"
         >
           <LogOut size={13} />
           Sign out
