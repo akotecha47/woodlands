@@ -44,7 +44,7 @@ export default function ClockInOutTab() {
       supabaseAdmin.from('attendance_records')
         .select('*')
         .eq('user_id', session.user.id)
-        .eq('shift_date', today)
+        .eq('date', today)
         .maybeSingle(),
       supabaseAdmin.from('shift_settings').select('*'),
     ])
@@ -87,7 +87,7 @@ export default function ClockInOutTab() {
       .from('attendance_records')
       .select('id')
       .eq('user_id', session.user.id)
-      .eq('shift_date', today)
+      .eq('date', today)
       .maybeSingle()
 
     if (existing) {
@@ -127,7 +127,7 @@ export default function ClockInOutTab() {
     try {
       const { data, error } = await supabaseAdmin.from('attendance_records').insert({
         user_id:       session.user.id,
-        shift_date:    today,
+        date:          today,
         clock_in:      new Date().toISOString(),
         clock_in_lat:  lat,
         clock_in_lng:  lng,
