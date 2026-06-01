@@ -270,7 +270,7 @@ export default function TodayTab() {
       {coverageAlerts.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {coverageAlerts.map(dept => (
-            <span key={dept} className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-lg">
+            <span key={dept} className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-md">
               ⚠ {dept}: no coverage
             </span>
           ))}
@@ -370,7 +370,7 @@ export default function TodayTab() {
                           <div className="flex gap-1.5">
                             <button
                               onClick={() => { setOverrideModal({ user: u, record: rec }); setOverrideVal(effStatus === 'not_arrived' ? 'absent' : effStatus) }}
-                              className="text-xs font-medium px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors"
+                              className="text-xs font-medium px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
                             >
                               Override
                             </button>

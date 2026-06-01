@@ -40,7 +40,7 @@ export default function Sidebar({ open, onClose }) {
 
       {/* Header */}
       <div className="px-5 py-5 border-b border-white/10 flex items-center justify-between">
-        <span className="font-bold text-base text-white tracking-wide">Woodlands</span>
+        <span className="font-brand font-bold text-base text-white tracking-wide">Woodlands</span>
         <button
           onClick={onClose}
           className="md:hidden text-white/50 hover:text-white transition-colors"

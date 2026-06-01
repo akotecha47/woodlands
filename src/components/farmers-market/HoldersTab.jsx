@@ -568,7 +568,7 @@ export default function HoldersTab() {
                 onClick={executeConfirm}
                 className={`flex-1 font-medium py-2 rounded-lg text-sm transition-colors text-white ${
                   confirmAction.type === 'approve'
-                    ? 'bg-blue-600 hover:bg-blue-700'
+                    ? 'bg-brand-teal hover:bg-brand-teal-dark'
                     : 'bg-red-600 hover:bg-red-700'
                 }`}
               >

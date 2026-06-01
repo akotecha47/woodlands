@@ -178,7 +178,7 @@ export default function SettingsTab() {
                   <td className="px-2 py-2">
                     <div className="flex gap-1.5">
                       <button onClick={() => startEdit(row)}
-                        className="text-xs font-medium px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded transition-colors">
+                        className="text-xs font-medium px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors">
                         Edit
                       </button>
                       <button onClick={() => deleteShift(row.id)}

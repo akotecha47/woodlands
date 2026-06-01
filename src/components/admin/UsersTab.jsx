@@ -137,7 +137,7 @@ export default function UsersTab() {
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => openEdit(u)}
-                        className="px-3 py-1 text-xs font-medium rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors">
+                        className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
                         Edit
                       </button>
                       <button

@@ -191,7 +191,7 @@ export default function AllBookingsTab() {
                     <div className="flex gap-1.5 flex-wrap">
                       <button
                         onClick={() => openEdit(b)}
-                        className="text-xs font-medium px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors"
+                        className="text-xs font-medium px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
                       >
                         Edit
                       </button>

@@ -198,7 +198,7 @@ export default function OwnerDashboard() {
 
       {/* ── Top bar ───────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-7">
-        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="font-brand text-xl font-bold text-gray-900">Dashboard</h1>
 
         <div className="flex items-center gap-2">
           {/* Search pill — decorative, hidden on very small screens */}

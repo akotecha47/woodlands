@@ -16,7 +16,7 @@ export default function FarmersMarket() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-semibold text-gray-900">Farmers Market</h1>
+      <h1 className="font-brand text-2xl font-semibold text-gray-900">Farmers Market</h1>
 
       <div className="flex gap-1 overflow-x-auto bg-gray-100 p-1 rounded-xl w-fit max-w-full">
         {TABS.map(t => (

@@ -177,7 +177,7 @@ export default function TodayTab() {
                           <>
                             <button
                               onClick={() => updateStatus(b.id, 'confirmed')}
-                              className="text-xs font-medium px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                              className="text-xs font-medium px-2.5 py-1 bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors"
                             >
                               Confirm
                             </button>

@@ -177,7 +177,7 @@ export default function RequisitionsTab() {
                       <div className="flex gap-1.5">
                         {r.status === 'pending' && <>
                           <button onClick={() => handleApprove(r)}
-                            className="px-2.5 py-1 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                            className="px-2.5 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
                             Approve
                           </button>
                           <button onClick={() => handleReject(r)}
