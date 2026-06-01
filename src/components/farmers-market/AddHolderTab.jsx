@@ -13,7 +13,7 @@ const BLANK = {
 
 export default function AddHolderTab({ onCreated }) {
   const { profile, session } = useAuth()
-  const canAdd = ['owner', 'manager'].includes(profile?.role)
+  const canAdd = ['owner', 'manager', 'farmers_market_admin'].includes(profile?.role)
 
   const [form,       setForm]       = useState(BLANK)
   const [stallError, setStallError] = useState('')

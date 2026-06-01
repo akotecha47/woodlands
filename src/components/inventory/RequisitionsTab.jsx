@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Sel, Th, Td, Toast, useFlash, fieldCls } from '../admin/AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, EmptyRow, TdBold, ReqStatusBadge, shiftStock, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
 
 const MANAGERS = ['owner', 'manager']
