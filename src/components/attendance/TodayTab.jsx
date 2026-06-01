@@ -298,7 +298,7 @@ export default function TodayTab() {
         <select
           value={deptFilter}
           onChange={e => setDeptFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
         >
           <option value="">All departments</option>
           {allDepts.map(d => <option key={d} value={d}>{d}</option>)}
@@ -429,7 +429,7 @@ export default function TodayTab() {
             <select
               value={overrideVal}
               onChange={e => setOverrideVal(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 mb-4"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal mb-4"
             >
               {ALL_STATUSES.map(s => (
                 <option key={s} value={s}>{STATUS_CFG[s].label}</option>
@@ -437,7 +437,7 @@ export default function TodayTab() {
             </select>
             <div className="flex gap-3">
               <button onClick={handleOverride} disabled={busy}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
                 {busy ? 'Saving…' : 'Apply'}
               </button>
               <button onClick={() => setOverrideModal(null)}
@@ -463,12 +463,12 @@ export default function TodayTab() {
               value={noteVal}
               onChange={e => setNoteVal(e.target.value)}
               placeholder="Notes for today's attendance record…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none mb-4"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none mb-4"
               autoFocus
             />
             <div className="flex gap-3">
               <button onClick={handleSaveNote} disabled={busy}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
                 {busy ? 'Saving…' : 'Save Note'}
               </button>
               <button onClick={() => setNoteModal(null)}

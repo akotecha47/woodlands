@@ -194,7 +194,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
                 value={form.notes} onChange={f('notes')} />
             </Field>
             <button type="submit" disabled={busy}
-              className="bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
               {busy ? 'Recording…' : 'Record Payment'}
             </button>
           </form>

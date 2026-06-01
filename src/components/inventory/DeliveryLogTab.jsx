@@ -54,16 +54,16 @@ export default function DeliveryLogTab() {
         <select
           value={itemFilter}
           onChange={e => setItemFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
         >
           <option value="">All Items</option>
           {items.map(i => <option key={i.id} value={i.id}>{i.name} — {i.sku}</option>)}
         </select>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
         <span className="text-sm text-gray-400">to</span>
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
         {hasFilter && (
           <button
             onClick={() => { setItemFilter(''); setDateFrom(''); setDateTo('') }}

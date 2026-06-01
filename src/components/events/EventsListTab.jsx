@@ -237,7 +237,7 @@ export default function EventsListTab({ onView }) {
           <select
             value={depositFilter}
             onChange={e => setDepositFilter(e.target.value)}
-            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-600">
+            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-teal">
             <option value="all">All</option>
             <option value="paid">Paid</option>
             <option value="unpaid">Unpaid</option>
@@ -248,7 +248,7 @@ export default function EventsListTab({ onView }) {
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value)}
-            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-600">
+            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-teal">
             <option value="date">Date</option>
             <option value="deposit">Deposit Status</option>
             <option value="guests">Guest Count</option>
@@ -420,7 +420,7 @@ export default function EventsListTab({ onView }) {
                   Cancel
                 </button>
                 <button type="submit" disabled={editBusy}
-                  className="px-4 py-2 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-60">
+                  className="px-4 py-2 text-sm font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg disabled:opacity-60">
                   {editBusy ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>

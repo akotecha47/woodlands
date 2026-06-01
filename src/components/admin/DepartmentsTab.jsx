@@ -61,7 +61,7 @@ export default function DepartmentsTab() {
 
       <form onSubmit={addDepartment} className="flex gap-2">
         <input
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
           placeholder="New department name"
           value={deptInput}
           onChange={e => setDeptInput(e.target.value)}
@@ -69,7 +69,7 @@ export default function DepartmentsTab() {
         <button
           type="submit"
           disabled={deptBusy || !deptInput.trim()}
-          className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60 whitespace-nowrap">
+          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60 whitespace-nowrap">
           Add
         </button>
       </form>
@@ -80,13 +80,13 @@ export default function DepartmentsTab() {
             {editingDept?.id === d.id ? (
               <>
                 <input
-                  className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                  className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   value={editingDept.name}
                   onChange={e => setEditingDept(ed => ({ ...ed, name: e.target.value }))}
                   onKeyDown={e => { if (e.key === 'Enter') saveDeptRename(); if (e.key === 'Escape') setEditingDept(null) }}
                   autoFocus
                 />
-                <button onClick={saveDeptRename} className="px-3 py-1 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">Save</button>
+                <button onClick={saveDeptRename} className="px-3 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">Save</button>
                 <button onClick={() => setEditingDept(null)} className="px-3 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">Cancel</button>
               </>
             ) : (

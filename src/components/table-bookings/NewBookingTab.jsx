@@ -120,7 +120,7 @@ export default function NewBookingTab() {
         </div>
 
         <Field label="Phone *">
-          <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-green-600">
+          <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
             <PhoneInput
               international defaultCountry="MW"
               value={form.guest_phone}
@@ -175,7 +175,7 @@ export default function NewBookingTab() {
         </div>
 
         <button type="submit" disabled={busy}
-          className="bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
           {busy ? 'Creating…' : 'Create Booking'}
         </button>
       </form>

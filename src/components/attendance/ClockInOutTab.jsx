@@ -226,7 +226,7 @@ export default function ClockInOutTab() {
           <button
             onClick={handleClockIn}
             disabled={busy}
-            className="w-full max-w-xs bg-green-600 hover:bg-green-700 text-white font-semibold text-lg py-4 rounded-2xl transition-colors disabled:opacity-60 shadow-sm"
+            className="w-full max-w-xs bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold text-lg py-4 rounded-2xl transition-colors disabled:opacity-60 shadow-sm"
           >
             {busy ? 'Clocking in…' : '🟢 Clock In'}
           </button>

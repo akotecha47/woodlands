@@ -165,7 +165,7 @@ export default function CheckIn() {
             <button
               onClick={handleCheckIn}
               disabled={busy}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3.5 rounded-xl text-base transition-colors disabled:opacity-60"
+              className="w-full bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold py-3.5 rounded-xl text-base transition-colors disabled:opacity-60"
             >
               {busy ? 'Checking in…' : 'Check In'}
             </button>

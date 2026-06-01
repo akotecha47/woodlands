@@ -146,7 +146,7 @@ export default function UsersTab() {
                         className={`px-3 py-1 text-xs font-medium rounded-lg disabled:opacity-60 transition-colors ${
                           u.is_active !== false
                             ? 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'
-                            : 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200'
+                            : 'bg-brand-teal/5 hover:bg-brand-teal/10 text-brand-teal border border-brand-teal/20'
                         }`}>
                         {busy ? '…' : u.is_active !== false ? 'Deactivate' : 'Reactivate'}
                       </button>
@@ -180,7 +180,7 @@ export default function UsersTab() {
                   type="text"
                   value={editForm.full_name}
                   onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                 />
               </div>
 
@@ -189,7 +189,7 @@ export default function UsersTab() {
                 <select
                   value={editForm.department}
                   onChange={e => handleEditDeptChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                 >
                   <option value="">— None —</option>
                   {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
@@ -203,7 +203,7 @@ export default function UsersTab() {
                   <select
                     value={editForm.shift_name}
                     onChange={e => setEditForm(f => ({ ...f, shift_name: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   >
                     <option value="">— Select shift —</option>
                     {nonRotatingShifts.map(s => (
@@ -228,7 +228,7 @@ export default function UsersTab() {
                   <select
                     value={editForm.bar_week}
                     onChange={e => setEditForm(f => ({ ...f, bar_week: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   >
                     <option value="">— Select —</option>
                     <option value="A">Week A</option>
@@ -242,7 +242,7 @@ export default function UsersTab() {
               <button
                 onClick={handleSaveEdit}
                 disabled={!!busyId}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
                 {busyId ? 'Saving…' : 'Save'}
               </button>
               <button onClick={() => setEditUser(null)}

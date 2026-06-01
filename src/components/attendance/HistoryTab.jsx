@@ -130,7 +130,7 @@ export default function HistoryTab() {
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Staff</label>
           <select value={filterStaff} onChange={e => setFilterStaff(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 w-44">
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal w-44">
             <option value="">All staff</option>
             {staffList.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
           </select>
@@ -138,7 +138,7 @@ export default function HistoryTab() {
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
           <select value={filterDept} onChange={e => setFilterDept(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal">
             <option value="">All departments</option>
             {allDepts.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
@@ -146,7 +146,7 @@ export default function HistoryTab() {
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal">
             <option value="">All statuses</option>
             {ALL_STATUSES.map(s => <option key={s} value={s}>{STATUS_CFG[s].label}</option>)}
           </select>
@@ -154,12 +154,12 @@ export default function HistoryTab() {
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
           <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
           <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
         </div>
         {(filterStaff || filterDept || filterStatus) && (
           <button
@@ -179,7 +179,7 @@ export default function HistoryTab() {
           onClick={() => setWeeklyView(v => !v)}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
             weeklyView
-              ? 'bg-green-600 text-white border-green-600'
+              ? 'bg-brand-teal text-white border-brand-teal'
               : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
           }`}
         >

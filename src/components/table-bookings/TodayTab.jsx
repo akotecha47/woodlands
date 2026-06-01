@@ -92,13 +92,13 @@ export default function TodayTab() {
           <label className="text-sm font-medium text-gray-700">Date</label>
           <input
             type="date" value={date} onChange={e => setDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
           />
         </div>
         {canManage && (
           <button
             onClick={() => setWalkIn(true)}
-            className="ml-auto bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
+            className="ml-auto bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
           >
             + Walk In
           </button>
@@ -193,7 +193,7 @@ export default function TodayTab() {
                           <>
                             <button
                               onClick={() => updateStatus(b.id, 'seated')}
-                              className="text-xs font-medium px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                              className="text-xs font-medium px-2.5 py-1 bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors"
                             >
                               Seat
                             </button>
@@ -252,12 +252,12 @@ export default function TodayTab() {
                   required type="text" value={walkInForm.guest_name}
                   onChange={e => setWalkInForm(p => ({ ...p, guest_name: e.target.value }))}
                   placeholder="Full name"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-                <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-green-600">
+                <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
                   <PhoneInput
                     international defaultCountry="MW"
                     value={walkInForm.guest_phone}
@@ -272,7 +272,7 @@ export default function TodayTab() {
                   <input
                     required type="number" min="1" value={walkInForm.party_size}
                     onChange={e => setWalkInForm(p => ({ ...p, party_size: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   />
                 </div>
                 <div>
@@ -280,7 +280,7 @@ export default function TodayTab() {
                   <select
                     value={walkInForm.table_id}
                     onChange={e => setWalkInForm(p => ({ ...p, table_id: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   >
                     <option value="">No table</option>
                     {walkInTables.map(t => (
@@ -294,7 +294,7 @@ export default function TodayTab() {
               <div className="flex gap-3 pt-1">
                 <button
                   type="submit" disabled={walkInBusy}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
+                  className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
                 >
                   {walkInBusy ? 'Seating…' : 'Seat Guest'}
                 </button>

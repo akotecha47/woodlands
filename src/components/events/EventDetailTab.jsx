@@ -147,7 +147,7 @@ export default function EventDetailTab({ eventId, onBack }) {
             )}
             {event.status === 'in_progress' && (
               <button onClick={() => changeStatus('completed')}
-                className="px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg">
+                className="px-3 py-1.5 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg">
                 Complete Event
               </button>
             )}
@@ -224,7 +224,7 @@ export default function EventDetailTab({ eventId, onBack }) {
                           type="checkbox"
                           checked={task.is_complete}
                           onChange={e => toggleTask(task, e.target.checked)}
-                          className="mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-600 cursor-pointer shrink-0"
+                          className="mt-0.5 rounded border-gray-300 text-green-600 focus:ring-brand-teal cursor-pointer shrink-0"
                         />
                         <div className="min-w-0">
                           <p className={`text-sm leading-snug ${task.is_complete ? 'line-through text-gray-400' : 'text-gray-800'}`}>

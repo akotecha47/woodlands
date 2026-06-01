@@ -253,7 +253,7 @@ export default function MarketDayTab() {
             type="date"
             value={marketDate}
             onChange={e => setMarketDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
           />
           <div className="flex items-center gap-1.5 ml-1">
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${live ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
@@ -266,7 +266,7 @@ export default function MarketDayTab() {
           {canManage && (
             <button
               onClick={() => setAddModal(true)}
-              className="bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
+              className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
             >
               + Add Holder
             </button>
@@ -292,7 +292,7 @@ export default function MarketDayTab() {
             onChange={e => handleConditionsChange(e.target.value)}
             disabled={!canManage || isPast}
             placeholder={canManage && !isPast ? 'Describe conditions for this market day…' : 'No conditions recorded'}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
           />
         </div>
       )}
@@ -471,7 +471,7 @@ export default function MarketDayTab() {
                 step="any"
                 value={feeAmount}
                 onChange={e => setFeeAmount(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
               />
             </div>
             <div className="mb-5">
@@ -479,7 +479,7 @@ export default function MarketDayTab() {
               <select
                 value={feeMethod}
                 onChange={e => setFeeMethod(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
               >
                 {FM_PAY_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
@@ -488,7 +488,7 @@ export default function MarketDayTab() {
               <button
                 onClick={handleLogFee}
                 disabled={feeBusy}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
+                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
               >
                 {feeBusy ? 'Saving…' : 'Confirm Payment'}
               </button>
@@ -514,13 +514,13 @@ export default function MarketDayTab() {
               value={visitNote}
               onChange={e => setVisitNote(e.target.value)}
               placeholder="e.g. late arrival, low stock, paid in advance…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none mb-4"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none mb-4"
               autoFocus
             />
             <div className="flex gap-3">
               <button
                 onClick={handleSaveNote}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors"
               >
                 Save
               </button>

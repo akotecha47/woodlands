@@ -131,7 +131,7 @@ export default function RequisitionsTab() {
           </Field>
           <Field label="Quantity *">
             <input type="number" required min="0.01" step="any"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
               value={form.quantity}
               onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
           </Field>
@@ -141,7 +141,7 @@ export default function RequisitionsTab() {
               onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
           </Field>
           <button type="submit" disabled={busy}
-            className="bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+            className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
             {busy ? 'Submitting…' : 'Submit Requisition'}
           </button>
         </form>
@@ -187,7 +187,7 @@ export default function RequisitionsTab() {
                         </>}
                         {r.status === 'approved' && (
                           <button onClick={() => handleFulfil(r)}
-                            className="px-2.5 py-1 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
+                            className="px-2.5 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
                             Fulfil
                           </button>
                         )}

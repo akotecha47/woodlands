@@ -137,7 +137,7 @@ export default function EventBillSection({ eventId, items, canManage, onRefresh 
                 value={form.amount} onChange={f('amount')} />
             </Field>
             <button type="submit" disabled={busy}
-              className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
               {busy ? 'Adding…' : 'Add Item'}
             </button>
           </form>

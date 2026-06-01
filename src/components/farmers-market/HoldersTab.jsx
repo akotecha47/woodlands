@@ -610,7 +610,7 @@ export default function HoldersTab() {
                 </Field>
               </div>
               <Field label="Phone *">
-                <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-green-600">
+                <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
                   <PhoneInput
                     international
                     defaultCountry="MW"
@@ -638,7 +638,7 @@ export default function HoldersTab() {
               </Field>
               <div className="flex gap-3 pt-1">
                 <button type="submit" disabled={busy}
-                  className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                  className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
                   {busy ? 'Saving…' : 'Save Changes'}
                 </button>
                 <button type="button" onClick={() => setEditHolder(null)}
@@ -676,7 +676,7 @@ export default function HoldersTab() {
             <div className="flex gap-2 mt-4">
               <button
                 onClick={handleDownloadQr}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors"
               >
                 Download QR
               </button>

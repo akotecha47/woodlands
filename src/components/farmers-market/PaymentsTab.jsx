@@ -193,7 +193,7 @@ export default function PaymentsTab() {
           </div>
 
           <button type="submit" disabled={busy}
-            className="bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+            className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
             {busy ? 'Recording…' : 'Record Payment'}
           </button>
         </form>
@@ -206,7 +206,7 @@ export default function PaymentsTab() {
           <select
             value={filterHolder}
             onChange={e => setFilterHolder(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
           >
             <option value="">All holders</option>
             {holders.map(h => <option key={h.id} value={h.id}>{h.stall_number} — {h.full_name}</option>)}
@@ -215,12 +215,12 @@ export default function PaymentsTab() {
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
           <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
           <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
         </div>
         {(filterHolder || filterFrom || filterTo) && (
           <button onClick={() => { setFilterHolder(''); setFilterFrom(''); setFilterTo('') }}

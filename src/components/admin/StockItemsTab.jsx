@@ -143,7 +143,7 @@ export default function StockItemsTab() {
           <button
             type="submit"
             disabled={stockBusy}
-            className="bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+            className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
             {stockBusy ? 'Adding…' : 'Add Item'}
           </button>
           <span className="text-xs text-gray-400">SKU auto-generated on save</span>
@@ -201,7 +201,7 @@ export default function StockItemsTab() {
                         <>
                           <button
                             onClick={saveStockEdit}
-                            className="px-3 py-1 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
+                            className="px-3 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
                             Save
                           </button>
                           <button
@@ -223,7 +223,7 @@ export default function StockItemsTab() {
                             className={`px-3 py-1 text-xs font-medium rounded-lg disabled:opacity-60 transition-colors ${
                               item.is_active
                                 ? 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'
-                                : 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200'
+                                : 'bg-brand-teal/5 hover:bg-brand-teal/10 text-brand-teal border border-brand-teal/20'
                             }`}>
                             {busy ? '…' : item.is_active ? 'Deactivate' : 'Reactivate'}
                           </button>
