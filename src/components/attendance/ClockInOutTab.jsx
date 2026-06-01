@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Toast, useFlash } from '../admin/AdminUI'
 import {
   LODGE_LAT, LODGE_LNG, RADIUS_M,
-  haversineM, getPosition, todayStr, fmtTime, fmtDuration,
+  haversineM, getPosition, fmtTime, fmtDuration,
   breakMins, netMins, getShiftForUser, isLate,
 } from './AttendanceUI'
 
@@ -33,7 +33,7 @@ export default function ClockInOutTab() {
   const [toast,       setToast]       = useState(null)
   const flash = useFlash(setToast)
 
-  const today = todayStr()
+  const today = new Date().toISOString().split('T')[0]
 
   // ── data ──────────────────────────────────────────────────────────────────────
 
