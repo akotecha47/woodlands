@@ -1,1 +1,24 @@
 @import "tailwindcss";
+
+@theme {
+  /* ── Brand palette ──────────────────────────────────────────────────────────
+     Only brand-* keys are added here. Tailwind's default colour scales
+     (green, amber, red, etc.) are untouched — they continue to serve
+     success / warning / danger semantics across the app.                       */
+  --color-brand-teal:       #1988A3;
+  --color-brand-teal-dark:  #13708A;
+  --color-brand-teal-tint:  #E6F2F5;
+  --color-brand-navy:       #06476B;
+  --color-brand-navy-tint:  #E6EEF3;
+
+  /* ── Border radius ──────────────────────────────────────────────────────────
+     Overrides Tailwind v4 defaults: lg 8px → 10px, xl 12px → 14px.
+     Components using rounded-lg / rounded-xl will reflect the new values;
+     all other sizes (sm, md, 2xl, full) stay at their Tailwind defaults.      */
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* ── Typography ─────────────────────────────────────────────────────────────
+     font-brand utility class — available but not applied until later passes.  */
+  --font-brand: 'Cherla', system-ui, sans-serif;
+}
