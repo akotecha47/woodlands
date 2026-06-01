@@ -3,6 +3,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import { RequireAuth, GuardedPage } from './components/RouteGuard'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import Dashboard     from './pages/Dashboard'
 import Inventory     from './pages/Inventory'
 import Attendance    from './pages/Attendance'
 import TableBookings from './pages/TableBookings'
@@ -34,6 +35,7 @@ export default function App() {
       <Routes>
         <Route path="/login"   element={<Login />} />
         <Route path="/checkin" element={<CheckIn />} />
+        <Route path="/dashboard"      element={<Protected><Dashboard /></Protected>} />
         <Route path="/"               element={<Protected><Inventory /></Protected>} />
         <Route path="/attendance"     element={<Protected><Attendance /></Protected>} />
         <Route path="/events"         element={<Protected><Events /></Protected>} />

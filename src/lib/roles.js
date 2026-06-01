@@ -7,6 +7,7 @@ export const ALL_STAFF_ROLES = [
 ]
 
 export const ROUTE_ACCESS = {
+  '/dashboard':      ['owner', 'manager'],
   '/':               ['owner', 'manager', 'store_supervisor', 'bar1', 'bar2'],
   '/attendance':     ALL_STAFF_ROLES,
   '/events':         ['owner', 'manager'],
@@ -32,8 +33,8 @@ export const ROLE_LABELS = {
 }
 
 export function getDefaultRoute(role) {
-  const inventoryRoles = ['owner', 'manager', 'store_supervisor', 'bar1', 'bar2']
-  if (inventoryRoles.includes(role)) return '/'
+  if (['owner', 'manager'].includes(role)) return '/dashboard'
+  if (['store_supervisor', 'bar1', 'bar2'].includes(role)) return '/'
   if (['restaurant_manager', 'head_waiter', 'waiter'].includes(role)) return '/table-bookings'
   if (role === 'farmers_market_admin') return '/farmers-market'
   return '/attendance'

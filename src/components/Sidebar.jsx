@@ -1,9 +1,10 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Package, Clock, Calendar, BookOpen, Leaf, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Package, Clock, Calendar, BookOpen, Leaf, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { ROUTE_ACCESS, ROLE_LABELS } from '../lib/roles'
 
 const NAV_ITEMS = [
+  { path: '/dashboard',      label: 'Dashboard',      icon: LayoutDashboard },
   { path: '/',               label: 'Inventory',      icon: Package  },
   { path: '/attendance',     label: 'Attendance',     icon: Clock    },
   { path: '/events',         label: 'Events',         icon: Calendar },
