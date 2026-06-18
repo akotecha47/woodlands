@@ -13,6 +13,8 @@ export const FM_PAY_TYPES = [
   { value: 'application', label: 'Application Fee',  amount: 10000 },
   { value: 'acceptance',  label: 'Registration Fee', amount: 20000 },
   { value: 'visit',       label: 'Visit Fee',        amount: 10000 },
+  { value: 'id_card',     label: 'ID Card'                         },
+  { value: 'reprint',     label: 'Reprint'                         },
 ]
 
 export const HOLDER_STATUS_CFG = {

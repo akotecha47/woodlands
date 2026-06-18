@@ -4,6 +4,7 @@ import { QRCodeCanvas } from 'qrcode.react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { FM_FEES } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
@@ -27,7 +28,7 @@ const BLANK_EDIT = {
 }
 
 export default function HoldersTab() {
-  const { profile } = useAuth()
+  const { profile, session } = useAuth()
   const canManage = ['owner', 'manager'].includes(profile?.role)
 
   const [holders,          setHolders]          = useState([])
@@ -36,12 +37,18 @@ export default function HoldersTab() {
   const [expandedId,       setExpandedId]        = useState(null)
   const [expandedPayments, setExpandedPayments]  = useState([])
   const [expandedVisits,   setExpandedVisits]    = useState([])
+  const [expandedIdCards,  setExpandedIdCards]   = useState([])
+  const [expandedItems,    setExpandedItems]     = useState([])
   const [editHolder,       setEditHolder]        = useState(null)
   const [editForm,         setEditForm]          = useState(BLANK_EDIT)
   const [confirmAction,    setConfirmAction]     = useState(null) // { type: 'approve'|'deactivate', holder }
+  const [cardConfirm,      setCardConfirm]       = useState(null) // { type: 'issue'|'reprint', holder, cardNum, fee, cardId? }
+  const [removeItemId,     setRemoveItemId]      = useState(null)
+  const [newItemText,      setNewItemText]       = useState('')
   const [qrHolder,         setQrHolder]          = useState(null)
   const [lastMarketDay,    setLastMarketDay]      = useState(null) // { date, attended, collected, noShows }
   const [busy,             setBusy]              = useState(false)
+  const [itemBusy,         setItemBusy]          = useState(false)
   const [toast,            setToast]             = useState(null)
   const flash     = useFlash(setToast)
   const qrWrapRef = useRef(null)
@@ -166,15 +173,25 @@ export default function HoldersTab() {
       setExpandedId(null)
       setExpandedPayments([])
       setExpandedVisits([])
+      setExpandedIdCards([])
+      setExpandedItems([])
+      setNewItemText('')
+      setRemoveItemId(null)
       return
     }
     setExpandedId(holder.id)
-    const [pR, vR] = await Promise.all([
+    setNewItemText('')
+    setRemoveItemId(null)
+    const [pR, vR, idR, itR] = await Promise.all([
       supabaseAdmin.from('fm_payments').select('*').eq('holder_id', holder.id).order('payment_date', { ascending: false }),
       supabaseAdmin.from('fm_visits').select('*').eq('holder_id', holder.id),
+      supabaseAdmin.from('fm_id_cards').select('*').eq('holder_id', holder.id).order('card_number'),
+      supabaseAdmin.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at'),
     ])
     setExpandedPayments(pR.data ?? [])
     setExpandedVisits(vR.data ?? [])
+    setExpandedIdCards(idR.data ?? [])
+    setExpandedItems(itR.data ?? [])
   }
 
   function buildVisitHistory(holder) {
@@ -267,6 +284,88 @@ export default function HoldersTab() {
   }
 
   const ef = field => e => setEditForm(p => ({ ...p, [field]: e.target.value }))
+
+  // ── ID card actions ────────────────────────────────────────────────────────
+
+  async function executeCardConfirm() {
+    const { type, holder, cardNum, fee, cardId } = cardConfirm
+    setCardConfirm(null)
+    setBusy(true)
+    const today = new Date().toISOString().slice(0, 10)
+    try {
+      if (type === 'issue') {
+        const { error: cardErr } = await supabaseAdmin.from('fm_id_cards').insert({
+          holder_id:   holder.id,
+          card_number: cardNum,
+          card_fee:    fee,
+          status:      'active',
+          issued_by:   session?.user?.id ?? null,
+        })
+        if (cardErr) throw cardErr
+        const { error: payErr } = await supabaseAdmin.from('fm_payments').insert({
+          holder_id:      holder.id,
+          payment_type:   'id_card',
+          amount:         fee,
+          payment_date:   today,
+          payment_method: 'cash',
+          recorded_by:    session?.user?.id ?? null,
+        })
+        if (payErr) throw payErr
+        flash(`Card #${cardNum} issued`)
+      } else {
+        const { error: repErr } = await supabaseAdmin.from('fm_id_cards').update({ status: 'reprinted' }).eq('id', cardId)
+        if (repErr) throw repErr
+        const { error: payErr } = await supabaseAdmin.from('fm_payments').insert({
+          holder_id:      holder.id,
+          payment_type:   'reprint',
+          amount:         FM_FEES.reprint,
+          payment_date:   today,
+          payment_method: 'cash',
+          recorded_by:    session?.user?.id ?? null,
+        })
+        if (payErr) throw payErr
+        flash(`Card #${cardNum} marked as reprinted`)
+      }
+      const [pR, idR, itR] = await Promise.all([
+        supabaseAdmin.from('fm_payments').select('*').eq('holder_id', holder.id).order('payment_date', { ascending: false }),
+        supabaseAdmin.from('fm_id_cards').select('*').eq('holder_id', holder.id).order('card_number'),
+        supabaseAdmin.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at'),
+      ])
+      setExpandedPayments(pR.data ?? [])
+      setExpandedIdCards(idR.data ?? [])
+      setExpandedItems(itR.data ?? [])
+    } catch (err) { flash(err.message, false) }
+    finally { setBusy(false) }
+  }
+
+  // ── approved item actions ──────────────────────────────────────────────────
+
+  async function handleAddItem(holder) {
+    const name = newItemText.trim()
+    if (!name) return
+    setItemBusy(true)
+    try {
+      const { error } = await supabaseAdmin.from('fm_approved_items').insert({
+        holder_id: holder.id,
+        item_name: name,
+        added_by:  session?.user?.id ?? null,
+      })
+      if (error) throw error
+      setNewItemText('')
+      const { data } = await supabaseAdmin.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at')
+      setExpandedItems(data ?? [])
+    } catch (err) { flash(err.message, false) }
+    finally { setItemBusy(false) }
+  }
+
+  async function doRemoveItem(itemId) {
+    setRemoveItemId(null)
+    try {
+      const { error } = await supabaseAdmin.from('fm_approved_items').delete().eq('id', itemId)
+      if (error) throw error
+      setExpandedItems(prev => prev.filter(i => i.id !== itemId))
+    } catch (err) { flash(err.message, false) }
+  }
 
   return (
     <div className="p-6">
@@ -536,6 +635,116 @@ export default function HoldersTab() {
                           })()}
                         </div>
                       </div>
+
+                      {/* ID Cards + Approved Items */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+
+                        {/* ID Cards */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">ID Cards</p>
+                          {expandedIdCards.length === 0 ? (
+                            <p className="text-sm text-gray-400 mb-3">No ID cards issued</p>
+                          ) : (
+                            <table className="w-full text-sm mb-3">
+                              <thead>
+                                <tr className="border-b border-gray-200">
+                                  {['Card #', 'Fee', 'Status', 'Issued'].map(c => (
+                                    <th key={c} className="text-left pb-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase">{c}</th>
+                                  ))}
+                                  {canManage && <th />}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {expandedIdCards.map(c => (
+                                  <tr key={c.id} className="border-t border-gray-100">
+                                    <td className="py-1.5 pr-3 text-gray-700 font-medium">Card {c.card_number}</td>
+                                    <td className="py-1.5 pr-3 text-gray-700">{fmtMWK(c.card_fee)}</td>
+                                    <td className="py-1.5 pr-3">
+                                      <span className={`text-xs font-medium ${
+                                        c.status === 'active'    ? 'text-green-600' :
+                                        c.status === 'reprinted' ? 'text-amber-600' : 'text-gray-400'
+                                      }`}>
+                                        {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                                      </span>
+                                    </td>
+                                    <td className="py-1.5 pr-3 text-gray-600">{fmtDate(c.issued_at)}</td>
+                                    {canManage && (
+                                      <td className="py-1.5">
+                                        {c.status === 'active' && (
+                                          <button
+                                            onClick={() => setCardConfirm({ type: 'reprint', holder: h, cardNum: c.card_number, fee: FM_FEES.reprint, cardId: c.id })}
+                                            className="text-xs px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded transition-colors"
+                                          >
+                                            Reprint
+                                          </button>
+                                        )}
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                          {canManage && (() => {
+                            const nextNum = expandedIdCards.filter(c => c.status !== 'cancelled').length + 1
+                            const issueFee = nextNum <= 2 ? FM_FEES.id_card_standard : FM_FEES.id_card_extra
+                            return (
+                              <button
+                                onClick={() => setCardConfirm({ type: 'issue', holder: h, cardNum: nextNum, fee: issueFee })}
+                                className="text-xs px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors"
+                              >
+                                Issue New Card
+                              </button>
+                            )
+                          })()}
+                        </div>
+
+                        {/* Approved Items */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Approved Items to Sell</p>
+                          {expandedItems.length === 0 ? (
+                            <p className="text-sm text-gray-400 mb-3">No approved items yet. Add what this business is permitted to sell.</p>
+                          ) : (
+                            <ul className="space-y-1.5 mb-3">
+                              {expandedItems.map(item => (
+                                <li key={item.id} className="flex items-center justify-between gap-2">
+                                  <span className="text-sm text-gray-700">{item.item_name}</span>
+                                  {canManage && (
+                                    removeItemId === item.id ? (
+                                      <span className="flex gap-1.5 items-center shrink-0">
+                                        <button onClick={() => doRemoveItem(item.id)} className="text-xs text-red-600 hover:text-red-800 font-medium">Confirm</button>
+                                        <button onClick={() => setRemoveItemId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                                      </span>
+                                    ) : (
+                                      <button onClick={() => setRemoveItemId(item.id)} className="text-xs text-gray-400 hover:text-red-500 transition-colors shrink-0 leading-none">✕</button>
+                                    )
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {canManage && (
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={newItemText}
+                                onChange={e => setNewItemText(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter' && newItemText.trim()) handleAddItem(h) }}
+                                placeholder="Item name"
+                                className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal min-w-0"
+                              />
+                              <button
+                                onClick={() => handleAddItem(h)}
+                                disabled={!newItemText.trim() || itemBusy}
+                                className="text-xs px-3 py-1.5 bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors disabled:opacity-40 whitespace-nowrap"
+                              >
+                                Add Item
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -647,6 +856,38 @@ export default function HoldersTab() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ID Card confirmation modal */}
+      {cardConfirm && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-sm w-full mx-4">
+            <h4 className="text-base font-semibold text-gray-900 mb-2">
+              {cardConfirm.type === 'issue' ? 'Issue ID Card' : 'Reprint ID Card'}
+            </h4>
+            <p className="text-sm text-gray-600 mb-5">
+              {cardConfirm.type === 'issue'
+                ? `Issue Card #${cardConfirm.cardNum} for ${cardConfirm.holder.full_name}? Fee: ${fmtMWK(cardConfirm.fee)}`
+                : `Reprint Card #${cardConfirm.cardNum}? A fee of ${fmtMWK(FM_FEES.reprint)} applies.`
+              }
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={executeCardConfirm}
+                disabled={busy}
+                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setCardConfirm(null)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

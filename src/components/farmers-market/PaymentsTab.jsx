@@ -15,6 +15,8 @@ const PAY_TYPE_LABELS = {
   application: 'Application Fee',
   acceptance:  'Registration Fee',
   visit:       'Visit Fee',
+  id_card:     'ID Card',
+  reprint:     'Reprint',
 }
 
 export default function PaymentsTab() {
