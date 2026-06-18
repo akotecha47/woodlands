@@ -8,7 +8,7 @@ import { FM_FEES } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
-  STALL_TYPES, FM_PAY_TYPES, HOLDER_STATUS_CFG,
+  STALL_TYPES, FM_PAY_TYPES, FM_PAY_METHODS, HOLDER_STATUS_CFG,
   fmtDate, fmtMWK,
   getLastNMarketDays, getMarketDaysSince,
   HolderStatusBadge, PaidIcon,
@@ -43,6 +43,8 @@ export default function HoldersTab() {
   const [editForm,         setEditForm]          = useState(BLANK_EDIT)
   const [confirmAction,    setConfirmAction]     = useState(null) // { type: 'approve'|'deactivate', holder }
   const [cardConfirm,      setCardConfirm]       = useState(null) // { type: 'issue'|'reprint', holder, cardNum, fee, cardId? }
+  const [cardPayMethod,    setCardPayMethod]     = useState('cash')
+  const [cardPayRef,       setCardPayRef]        = useState('')
   const [removeItemId,     setRemoveItemId]      = useState(null)
   const [newItemText,      setNewItemText]       = useState('')
   const [qrHolder,         setQrHolder]          = useState(null)
@@ -287,8 +289,16 @@ export default function HoldersTab() {
 
   // ── ID card actions ────────────────────────────────────────────────────────
 
+  function openCardConfirm(config) {
+    setCardConfirm(config)
+    setCardPayMethod('cash')
+    setCardPayRef('')
+  }
+
   async function executeCardConfirm() {
     const { type, holder, cardNum, fee, cardId } = cardConfirm
+    const method    = cardPayMethod
+    const reference = cardPayRef.trim() || null
     setCardConfirm(null)
     setBusy(true)
     const today = new Date().toISOString().slice(0, 10)
@@ -307,7 +317,8 @@ export default function HoldersTab() {
           payment_type:   'id_card',
           amount:         fee,
           payment_date:   today,
-          payment_method: 'cash',
+          payment_method: method,
+          reference,
           recorded_by:    session?.user?.id ?? null,
         })
         if (payErr) throw payErr
@@ -320,7 +331,8 @@ export default function HoldersTab() {
           payment_type:   'reprint',
           amount:         FM_FEES.reprint,
           payment_date:   today,
-          payment_method: 'cash',
+          payment_method: method,
+          reference,
           recorded_by:    session?.user?.id ?? null,
         })
         if (payErr) throw payErr
@@ -672,7 +684,7 @@ export default function HoldersTab() {
                                       <td className="py-1.5">
                                         {c.status === 'active' && (
                                           <button
-                                            onClick={() => setCardConfirm({ type: 'reprint', holder: h, cardNum: c.card_number, fee: FM_FEES.reprint, cardId: c.id })}
+                                            onClick={() => openCardConfirm({ type: 'reprint', holder: h, cardNum: c.card_number, fee: FM_FEES.reprint, cardId: c.id })}
                                             className="text-xs px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded transition-colors"
                                           >
                                             Reprint
@@ -690,7 +702,7 @@ export default function HoldersTab() {
                             const issueFee = nextNum <= 2 ? FM_FEES.id_card_standard : FM_FEES.id_card_extra
                             return (
                               <button
-                                onClick={() => setCardConfirm({ type: 'issue', holder: h, cardNum: nextNum, fee: issueFee })}
+                                onClick={() => openCardConfirm({ type: 'issue', holder: h, cardNum: nextNum, fee: issueFee })}
                                 className="text-xs px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors"
                               >
                                 Issue New Card
@@ -867,12 +879,36 @@ export default function HoldersTab() {
             <h4 className="text-base font-semibold text-gray-900 mb-2">
               {cardConfirm.type === 'issue' ? 'Issue ID Card' : 'Reprint ID Card'}
             </h4>
-            <p className="text-sm text-gray-600 mb-5">
+            <p className="text-sm text-gray-600 mb-4">
               {cardConfirm.type === 'issue'
                 ? `Issue Card #${cardConfirm.cardNum} for ${cardConfirm.holder.full_name}? Fee: ${fmtMWK(cardConfirm.fee)}`
                 : `Reprint Card #${cardConfirm.cardNum}? A fee of ${fmtMWK(FM_FEES.reprint)} applies.`
               }
             </p>
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Payment Method</label>
+                <select
+                  value={cardPayMethod}
+                  onChange={e => setCardPayMethod(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                >
+                  {FM_PAY_METHODS.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Reference <span className="font-normal text-gray-400">(optional)</span></label>
+                <input
+                  type="text"
+                  value={cardPayRef}
+                  onChange={e => setCardPayRef(e.target.value)}
+                  placeholder="Receipt / transaction ref"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                />
+              </div>
+            </div>
             <div className="flex gap-3">
               <button
                 onClick={executeCardConfirm}
