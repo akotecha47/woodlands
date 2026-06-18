@@ -48,12 +48,28 @@ export function getLastSaturdayOfMonth(year, month) {
   return toDateStr(lastDay)
 }
 
-export function defaultMarketDate() {
-  const now = new Date()
-  return getLastSaturdayOfMonth(now.getFullYear(), now.getMonth())
+// Returns the market day date string for the given month, or null if December (no market)
+export function getMarketDayForMonth(year, month) {
+  if (month === 11) return null
+  return getLastSaturdayOfMonth(year, month)
 }
 
-// Returns array of the last n last-Saturdays-of-month that are <= today
+// Returns true if dateStr (defaults to today) is the last Saturday of a non-December month
+export function isMarketDay(dateStr = null) {
+  const d  = dateStr ? new Date(dateStr + 'T12:00:00') : new Date()
+  const md = getMarketDayForMonth(d.getFullYear(), d.getMonth())
+  if (!md) return false
+  return toDateStr(d) === md
+}
+
+export function defaultMarketDate() {
+  const now   = new Date()
+  // If December, fall back to November — there is no December market day
+  const month = now.getMonth() === 11 ? 10 : now.getMonth()
+  return getLastSaturdayOfMonth(now.getFullYear(), month)
+}
+
+// Returns array of the last n market days (last Saturday of non-December month) that are <= today
 export function getLastNMarketDays(n) {
   const result = []
   const today  = new Date()
@@ -61,8 +77,10 @@ export function getLastNMarketDays(n) {
   let month = today.getMonth()
   let safety = 0
   while (result.length < n && safety < 36) {
-    const dateStr = getLastSaturdayOfMonth(year, month)
-    if (new Date(dateStr + 'T12:00:00') <= today) result.push(dateStr)
+    if (month !== 11) {
+      const dateStr = getLastSaturdayOfMonth(year, month)
+      if (new Date(dateStr + 'T12:00:00') <= today) result.push(dateStr)
+    }
     month--
     if (month < 0) { month = 11; year-- }
     safety++
@@ -70,7 +88,7 @@ export function getLastNMarketDays(n) {
   return result
 }
 
-// Returns all last-Saturdays-of-month from sinceTs onwards up to today, newest first
+// Returns all market days (non-December) from sinceTs onwards up to today, newest first
 export function getMarketDaysSince(sinceTs) {
   if (!sinceTs) return []
   const result = []
@@ -80,10 +98,12 @@ export function getMarketDaysSince(sinceTs) {
   let month = since.getMonth()
   let safety = 0
   while (safety < 120) {
-    const dateStr = getLastSaturdayOfMonth(year, month)
-    const d = new Date(dateStr + 'T12:00:00')
-    if (d > today) break
-    if (d >= since) result.push(dateStr)
+    if (month !== 11) {
+      const dateStr = getLastSaturdayOfMonth(year, month)
+      const d = new Date(dateStr + 'T12:00:00')
+      if (d > today) break
+      if (d >= since) result.push(dateStr)
+    }
     month++
     if (month > 11) { month = 0; year++ }
     safety++
