@@ -13,7 +13,7 @@ const BLANK = {
 
 export default function AddHolderTab({ onCreated }) {
   const { profile, session } = useAuth()
-  const canAdd = ['owner', 'manager', 'farmers_market_admin'].includes(profile?.role)
+  const canAdd = ['owner', 'manager'].includes(profile?.role)
 
   const [form,       setForm]       = useState(BLANK)
   const [stallError, setStallError] = useState('')
@@ -46,7 +46,7 @@ export default function AddHolderTab({ onCreated }) {
         .not('status', 'eq', 'inactive')
         .maybeSingle()
       if (taken) {
-        setStallError('Stall number is already in use by an active holder')
+        setStallError('Stall number is already in use by an active business')
         setBusy(false)
         return
       }
@@ -69,7 +69,7 @@ export default function AddHolderTab({ onCreated }) {
           ? new Error('Stall number is already in use')
           : error
       }
-      flash('Holder added')
+      flash('Business added')
       setForm(BLANK)
       onCreated?.()
     } catch (err) { flash(err.message, false) }
@@ -79,7 +79,7 @@ export default function AddHolderTab({ onCreated }) {
   return (
     <div className="p-6 max-w-xl">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800 mb-5">Add Holder</h2>
+      <h2 className="text-base font-semibold text-gray-800 mb-5">Add Business</h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
@@ -127,18 +127,18 @@ export default function AddHolderTab({ onCreated }) {
 
         <Field label="Notes">
           <textarea rows={3} className={`${fieldCls} resize-none`}
-            placeholder="Any notes about this holder…"
+            placeholder="Any notes about this business…"
             value={form.notes} onChange={f('notes')} />
         </Field>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-xs text-blue-700">
-          Holder will be created with status <strong>Pending Review</strong> until approved by a manager.
+          Business will be created with status <strong>Pending Review</strong> until approved by a manager.
           Application fee of <strong>MWK 10,000</strong> must be logged separately in the Payments tab.
         </div>
 
         <button type="submit" disabled={busy}
           className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
-          {busy ? 'Adding…' : 'Add Holder'}
+          {busy ? 'Adding…' : 'Add Business'}
         </button>
       </form>
     </div>

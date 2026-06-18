@@ -24,7 +24,7 @@ export const HOLDER_STATUS_CFG = {
 }
 
 // Roles allowed to check in on market day
-export const FM_MANAGE_ROLES = ['owner', 'manager', 'farmers_market_admin']
+export const FM_MANAGE_ROLES = ['owner', 'manager']
 
 // ── date helpers ───────────────────────────────────────────────────────────────
 

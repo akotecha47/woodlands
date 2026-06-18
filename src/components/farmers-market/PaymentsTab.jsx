@@ -141,9 +141,9 @@ export default function PaymentsTab() {
         <p className="text-xs text-gray-400 mb-4">Visit fees are logged on the Market Day tab.</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Holder *">
+            <Field label="Business *">
               <Sel required value={form.holder_id} onChange={f('holder_id')}>
-                <option value="">Select holder…</option>
+                <option value="">Select business…</option>
                 {holders.map(h => (
                   <option key={h.id} value={h.id}>{h.stall_number} — {h.full_name}</option>
                 ))}
@@ -202,13 +202,13 @@ export default function PaymentsTab() {
       {/* History filters */}
       <div className="flex flex-wrap gap-3 mb-4 items-end">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Filter by Holder</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Filter by Business</label>
           <select
             value={filterHolder}
             onChange={e => setFilterHolder(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
           >
-            <option value="">All holders</option>
+            <option value="">All businesses</option>
             {holders.map(h => <option key={h.id} value={h.id}>{h.stall_number} — {h.full_name}</option>)}
           </select>
         </div>
@@ -239,7 +239,7 @@ export default function PaymentsTab() {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <Th>Date</Th>
-              <Th>Holder</Th>
+              <Th>Business</Th>
               <Th>Stall No</Th>
               <Th>Type</Th>
               <Th>Amount</Th>

@@ -5,10 +5,10 @@ import AddHolderTab from '../components/farmers-market/AddHolderTab'
 import PaymentsTab  from '../components/farmers-market/PaymentsTab'
 
 const TABS = [
-  { id: 'market',   label: 'Market Day' },
-  { id: 'holders',  label: 'Holders'    },
-  { id: 'add',      label: 'Add Holder' },
-  { id: 'payments', label: 'Payments'   },
+  { id: 'market',   label: 'Market Day'    },
+  { id: 'holders',  label: 'Businesses'    },
+  { id: 'add',      label: 'Add Business'  },
+  { id: 'payments', label: 'Payments'      },
 ]
 
 export default function FarmersMarket() {

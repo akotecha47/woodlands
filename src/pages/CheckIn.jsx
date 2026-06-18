@@ -96,8 +96,8 @@ export default function CheckIn() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 max-w-sm w-full text-center">
           <p className="text-4xl mb-3">🔍</p>
-          <h1 className="text-lg font-semibold text-gray-900 mb-2">Holder not found</h1>
-          <p className="text-sm text-gray-500">This QR code is invalid or the holder account is inactive.</p>
+          <h1 className="text-lg font-semibold text-gray-900 mb-2">Business not found</h1>
+          <p className="text-sm text-gray-500">This QR code is invalid or the business account is inactive.</p>
         </div>
       </div>
     )

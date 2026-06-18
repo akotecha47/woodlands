@@ -259,7 +259,7 @@ export default function HoldersTab() {
           ? new Error('Stall number is already in use')
           : error
       }
-      flash('Holder updated')
+      flash('Business updated')
       setEditHolder(null)
       load()
     } catch (err) { flash(err.message, false) }
@@ -275,7 +275,7 @@ export default function HoldersTab() {
       {/* Summary strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <div className="bg-gray-50 rounded-xl p-4 col-span-2 sm:col-span-1">
-          <p className="text-xs text-gray-500 mb-1">Active Holders</p>
+          <p className="text-xs text-gray-500 mb-1">Active Businesses</p>
           <p className="text-2xl font-bold text-gray-900">{activeHolders.length}</p>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5">
             {stallTypeBreakdown.map(s => (
@@ -293,7 +293,7 @@ export default function HoldersTab() {
           {atRiskHolders.length > 0 && <p className="text-xs text-red-600 mt-0.5">requires follow-up</p>}
         </div>
         <div className="bg-gray-50 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">Total Holders</p>
+          <p className="text-xs text-gray-500 mb-1">Total Businesses</p>
           <p className="text-2xl font-bold text-gray-900">{holders.length}</p>
         </div>
       </div>
@@ -307,7 +307,7 @@ export default function HoldersTab() {
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <p className="text-2xl font-bold text-gray-900">{lastMarketDay.attended}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Vendors attended</p>
+              <p className="text-xs text-gray-500 mt-0.5">Businesses attended</p>
             </div>
             <div>
               <p className="text-xl font-bold text-gray-900">{fmtMWK(lastMarketDay.collected)}</p>
@@ -327,7 +327,7 @@ export default function HoldersTab() {
       {atRiskHolders.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
           <p className="text-sm font-semibold text-red-800 mb-3">
-            {atRiskHolders.length} holder{atRiskHolders.length !== 1 ? 's' : ''} flagged as at risk — follow up required
+            {atRiskHolders.length} business{atRiskHolders.length !== 1 ? 'es' : ''} flagged as at risk — follow up required
           </p>
           <div className="flex flex-wrap gap-2">
             {atRiskHolders.map(h => (
@@ -543,7 +543,7 @@ export default function HoldersTab() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-sm text-gray-400">No holders found</td>
+                <td colSpan={12} className="px-4 py-8 text-center text-sm text-gray-400">No businesses found</td>
               </tr>
             )}
           </tbody>
@@ -555,11 +555,11 @@ export default function HoldersTab() {
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 shadow-xl max-w-sm w-full mx-4">
             <h4 className="text-base font-semibold text-gray-900 mb-2">
-              {confirmAction.type === 'approve' ? 'Approve Holder' : 'Deactivate Holder'}
+              {confirmAction.type === 'approve' ? 'Approve Business' : 'Deactivate Business'}
             </h4>
             <p className="text-sm text-gray-600 mb-5">
               {confirmAction.type === 'approve'
-                ? `Approve ${confirmAction.holder.full_name} as an active market holder?`
+                ? `Approve ${confirmAction.holder.full_name} as an active market business?`
                 : `Deactivate ${confirmAction.holder.full_name}? They will no longer appear on market day check-in.`
               }
             </p>
@@ -589,7 +589,7 @@ export default function HoldersTab() {
       {editHolder && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h4 className="text-base font-semibold text-gray-900 mb-4">Edit Holder</h4>
+            <h4 className="text-base font-semibold text-gray-900 mb-4">Edit Business</h4>
             <form onSubmit={handleEditSave} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Full Name *">
@@ -656,7 +656,7 @@ export default function HoldersTab() {
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 shadow-xl max-w-xs w-full mx-4 text-center">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-base font-semibold text-gray-900">Holder QR Code</h4>
+              <h4 className="text-base font-semibold text-gray-900">Business QR Code</h4>
               <button onClick={() => setQrHolder(null)} className="text-gray-400 hover:text-gray-600 leading-none">✕</button>
             </div>
             <div id="qr-print-target" className="flex flex-col items-center gap-2 py-2">
