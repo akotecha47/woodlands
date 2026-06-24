@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
-import { fmtDate, fmtMWK, defaultMarketDate, FM_MANAGE_ROLES, FM_PAY_METHODS, todayStr } from './FarmersMarketUI'
+import { fmtDate, fmtMWK, defaultMarketDate, FM_MANAGE_ROLES, FM_PAY_METHODS, todayStr, isMarketDay, getMarketDayForMonth } from './FarmersMarketUI'
 
 const VISIT_FEE = 10000
 
@@ -223,6 +223,12 @@ export default function MarketDayTab() {
 
   const today          = todayStr()
   const isPast         = marketDate < today
+  const isDecemberDate = new Date(marketDate + 'T12:00:00').getMonth() === 11
+  const validMarketDay = isMarketDay(marketDate)
+  const isToday        = marketDate === today
+  const nextMarketDay  = isDecemberDate
+    ? getMarketDayForMonth(new Date(marketDate + 'T12:00:00').getFullYear() + 1, 0)
+    : null
   const checkedInCount = Object.keys(visitMap).filter(id => holders.some(h => h.id === id)).length
   const collected      = Object.values(visitMap).filter(v => v.fee_paid).length * VISIT_FEE
   const expected       = checkedInCount * VISIT_FEE
@@ -255,15 +261,22 @@ export default function MarketDayTab() {
             onChange={e => setMarketDate(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
           />
-          <div className="flex items-center gap-1.5 ml-1">
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${live ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
-            <span className={`text-xs font-medium ${live ? 'text-green-600' : 'text-gray-400'}`}>
-              {live ? 'Live' : 'Connecting…'}
-            </span>
-          </div>
+          {validMarketDay && isToday ? (
+            <div className="flex items-center gap-1.5 ml-1">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${live ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+              <span className={`text-xs font-medium ${live ? 'text-green-600' : 'text-gray-400'}`}>
+                {live ? 'Live' : 'Connecting…'}
+              </span>
+            </div>
+          ) : validMarketDay ? (
+            <div className="flex items-center gap-1.5 ml-1">
+              <span className="w-2 h-2 rounded-full flex-shrink-0 bg-blue-400" />
+              <span className="text-xs font-medium text-blue-600">Scheduled</span>
+            </div>
+          ) : null}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {canManage && (
+          {canManage && !isDecemberDate && (
             <button
               onClick={() => setAddModal(true)}
               className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
@@ -319,7 +332,24 @@ export default function MarketDayTab() {
         </div>
       )}
 
-      {/* Holders table */}
+      {/* Non-valid, non-December amber note */}
+      {!isDecemberDate && !validMarketDay && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Not a scheduled market day (markets run on the last Saturday of each month).
+        </div>
+      )}
+
+      {/* Holders table or December empty state */}
+      {isDecemberDate ? (
+        <div className="rounded-xl border border-gray-200 px-6 py-12 text-center">
+          <p className="text-sm font-medium text-gray-700">No market in December.</p>
+          {nextMarketDay && (
+            <p className="mt-1 text-xs text-gray-500">
+              Next market day: <span className="font-medium">{fmtDate(nextMarketDay)}</span>
+            </p>
+          )}
+        </div>
+      ) : (
       <div className="overflow-x-auto border border-gray-200 rounded-xl">
         <table className="w-full">
           <thead>
@@ -416,6 +446,7 @@ export default function MarketDayTab() {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* ── Modals ───────────────────────────────────────────────────────── */}
 
