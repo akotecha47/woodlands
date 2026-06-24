@@ -281,7 +281,7 @@ export default function MarketDayTab() {
               onClick={() => setAddModal(true)}
               className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
             >
-              + Add Holder
+              + Add Business
             </button>
           )}
           <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
@@ -455,11 +455,11 @@ export default function MarketDayTab() {
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 shadow-xl max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-base font-semibold text-gray-900">Add Holder to {fmtDate(marketDate)}</h4>
+              <h4 className="text-base font-semibold text-gray-900">Add Business to {fmtDate(marketDate)}</h4>
               <button onClick={() => setAddModal(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
             </div>
             {unaddedHolders.length === 0 ? (
-              <p className="text-sm text-gray-400 py-4 text-center">All active holders are already on the list.</p>
+              <p className="text-sm text-gray-400 py-4 text-center">All active businesses are already on the list.</p>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
                 {unaddedHolders.map(h => (

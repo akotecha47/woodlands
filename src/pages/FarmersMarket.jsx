@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import MarketDayTab from '../components/farmers-market/MarketDayTab'
-import HoldersTab   from '../components/farmers-market/HoldersTab'
-import AddHolderTab from '../components/farmers-market/AddHolderTab'
-import PaymentsTab  from '../components/farmers-market/PaymentsTab'
+import MarketDayTab       from '../components/farmers-market/MarketDayTab'
+import HoldersTab         from '../components/farmers-market/HoldersTab'
+import AddHolderTab       from '../components/farmers-market/AddHolderTab'
+import PaymentsTab        from '../components/farmers-market/PaymentsTab'
+import MonthlyMessagesTab from '../components/farmers-market/MonthlyMessagesTab'
 
 const TABS = [
   { id: 'market',   label: 'Market Day'    },
   { id: 'holders',  label: 'Businesses'    },
   { id: 'add',      label: 'Add Business'  },
+  { id: 'messages', label: 'Messages'      },
   { id: 'payments', label: 'Payments'      },
 ]
 
@@ -33,6 +35,7 @@ export default function FarmersMarket() {
         {tab === 'market'   && <MarketDayTab />}
         {tab === 'holders'  && <HoldersTab />}
         {tab === 'add'      && <AddHolderTab onCreated={() => setTab('holders')} />}
+        {tab === 'messages' && <MonthlyMessagesTab />}
         {tab === 'payments' && <PaymentsTab />}
       </div>
     </div>
