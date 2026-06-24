@@ -10,6 +10,7 @@ import {
 } from './EventsUI'
 import EventBillSection    from './EventBillSection'
 import EventPaymentsSection from './EventPaymentsSection'
+import EventSetupSection    from './EventSetupSection'
 
 export default function EventDetailTab({ eventId, onBack }) {
   const { profile, session } = useAuth()
@@ -260,6 +261,13 @@ export default function EventDetailTab({ eventId, onBack }) {
           </div>
         )
       )}
+
+      {/* Setup Details */}
+      <EventSetupSection
+        eventId={eventId}
+        canManage={canManage}
+        onRefresh={load}
+      />
 
       {/* Bill */}
       <EventBillSection

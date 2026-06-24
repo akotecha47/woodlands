@@ -11,6 +11,24 @@ export const EVENT_TYPES = [
   { value: 'other',          label: 'Other'         },
 ]
 
+export const SERVICE_STYLES = [
+  { value: 'buffet',               label: 'Buffet'               },
+  { value: 'plated_table_service', label: 'Plated Table Service' },
+  { value: 'cocktail',             label: 'Cocktail Reception'   },
+  { value: 'family_style',         label: 'Family Style'         },
+  { value: 'other',                label: 'Other'                },
+]
+
+export const CONFERENCE_SETUPS = [
+  { value: 'not_applicable', label: 'Not Applicable' },
+  { value: 'classroom',      label: 'Classroom'      },
+  { value: 'theatre',        label: 'Theatre'        },
+  { value: 'boardroom',      label: 'Boardroom'      },
+  { value: 'u_shape',        label: 'U-Shape'        },
+  { value: 'cabaret',        label: 'Cabaret'        },
+  { value: 'other',          label: 'Other'          },
+]
+
 export const VENUES = ['Main Hall', 'Garden', 'Pool Deck', 'Restaurant', 'Other']
 
 export const PAY_METHODS = [
