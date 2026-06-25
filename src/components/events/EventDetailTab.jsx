@@ -12,6 +12,7 @@ import EventBillSection    from './EventBillSection'
 import EventPaymentsSection from './EventPaymentsSection'
 import EventSetupSection    from './EventSetupSection'
 import EventStaffSection    from './EventStaffSection'
+import EventStockSection    from './EventStockSection'
 
 export default function EventDetailTab({ eventId, onBack }) {
   const { profile, session } = useAuth()
@@ -59,6 +60,52 @@ export default function EventDetailTab({ eventId, onBack }) {
 
   useEffect(() => { load() }, [eventId])
 
+  async function handleStockOnStatusChange(newStatus) {
+    if (newStatus === 'confirmed') {
+      const { data: pending } = await supabaseAdmin
+        .from('event_stock_allocations')
+        .select('id, stock_item_id, allocated_qty')
+        .eq('event_id', eventId)
+        .eq('status', 'pending')
+      for (const alloc of (pending ?? [])) {
+        const { data: item } = await supabaseAdmin
+          .from('stock_items').select('quantity').eq('id', alloc.stock_item_id).single()
+        const available = item?.quantity ?? 0
+        if (available < alloc.allocated_qty) {
+          flash('Warning: insufficient stock for some items — check inventory', false)
+        }
+        await supabaseAdmin.from('stock_items')
+          .update({ quantity: Math.max(0, available - alloc.allocated_qty) })
+          .eq('id', alloc.stock_item_id)
+        await supabaseAdmin.from('event_stock_allocations')
+          .update({ status: 'deducted', deducted_at: new Date().toISOString() })
+          .eq('id', alloc.id)
+      }
+    } else if (newStatus === 'cancelled') {
+      // Return stock for deducted allocations
+      const { data: deducted } = await supabaseAdmin
+        .from('event_stock_allocations')
+        .select('id, stock_item_id, allocated_qty')
+        .eq('event_id', eventId)
+        .eq('status', 'deducted')
+      for (const alloc of (deducted ?? [])) {
+        const { data: item } = await supabaseAdmin
+          .from('stock_items').select('quantity').eq('id', alloc.stock_item_id).single()
+        await supabaseAdmin.from('stock_items')
+          .update({ quantity: (item?.quantity ?? 0) + alloc.allocated_qty })
+          .eq('id', alloc.stock_item_id)
+        await supabaseAdmin.from('event_stock_allocations')
+          .update({ status: 'returned', cleared_at: new Date().toISOString() })
+          .eq('id', alloc.id)
+      }
+      // Cancel pending allocations that were never deducted
+      await supabaseAdmin.from('event_stock_allocations')
+        .update({ status: 'cancelled' })
+        .eq('event_id', eventId)
+        .eq('status', 'pending')
+    }
+  }
+
   async function changeStatus(newStatus) {
     try {
       if (newStatus === 'confirmed' && checklists.length === 0) {
@@ -68,6 +115,7 @@ export default function EventDetailTab({ eventId, onBack }) {
         .update({ status: newStatus, updated_at: new Date().toISOString() })
         .eq('id', eventId)
       if (error) throw error
+      await handleStockOnStatusChange(newStatus)
       // Update event state immediately so buttons reflect the new status before the full reload
       setEvent(prev => ({ ...prev, status: newStatus }))
       flash(`Status → ${STATUS_CFG[newStatus]?.label ?? newStatus}`)
@@ -273,6 +321,14 @@ export default function EventDetailTab({ eventId, onBack }) {
       {/* Assigned Staff */}
       <EventStaffSection
         eventId={eventId}
+        canManage={canManage}
+        onRefresh={load}
+      />
+
+      {/* Stock Allocations */}
+      <EventStockSection
+        eventId={eventId}
+        eventStatus={event.status}
         canManage={canManage}
         onRefresh={load}
       />
