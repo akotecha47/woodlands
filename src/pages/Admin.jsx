@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import StaffTab       from '../components/admin/StaffTab'
 import UsersTab       from '../components/admin/UsersTab'
 import AddUserTab     from '../components/admin/AddUserTab'
 import DepartmentsTab from '../components/admin/DepartmentsTab'
 import StockItemsTab  from '../components/admin/StockItemsTab'
 
 const TABS = [
+  { id: 'staff',       label: 'Staff',        Component: StaffTab       },
   { id: 'users',       label: 'Users',        Component: UsersTab       },
   { id: 'add_user',    label: 'Add User',     Component: AddUserTab     },
   { id: 'departments', label: 'Departments',  Component: DepartmentsTab },
@@ -12,7 +14,7 @@ const TABS = [
 ]
 
 export default function Admin() {
-  const [tab, setTab] = useState('users')
+  const [tab, setTab] = useState('staff')
   const { Component } = TABS.find(t => t.id === tab)
 
   return (

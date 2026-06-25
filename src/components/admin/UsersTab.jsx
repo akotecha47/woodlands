@@ -3,12 +3,10 @@ import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { ROLE_LABELS } from '../../lib/roles'
 import { Th, Td, fmtDate, Toast, useFlash } from './AdminUI'
 
-const BAR_ROLES = ['bar1', 'bar2']
-
 export default function UsersTab() {
   const [users,       setUsers]       = useState([])
   const [busyId,      setBusyId]      = useState(null)
-  const [editUser,    setEditUser]    = useState(null)  // user being edited
+  const [editUser,    setEditUser]    = useState(null)
   const [editForm,    setEditForm]    = useState({})
   const [shiftOpts,   setShiftOpts]   = useState([])
   const [departments, setDepartments] = useState([])
@@ -38,32 +36,26 @@ export default function UsersTab() {
   function openEdit(u) {
     setEditUser(u)
     setEditForm({
-      full_name:  u.full_name ?? '',
+      full_name:  u.full_name  ?? '',
       department: u.department ?? '',
       shift_name: u.shift_name ?? '',
-      bar_week:   u.bar_week ?? '',
     })
     fetchShifts(u.department)
   }
 
   function handleEditDeptChange(dept) {
-    setEditForm(f => ({ ...f, department: dept, shift_name: '', bar_week: '' }))
+    setEditForm(f => ({ ...f, department: dept, shift_name: '' }))
     fetchShifts(dept)
   }
 
   async function handleSaveEdit() {
     if (!editUser) return
-    if (BAR_ROLES.includes(editUser.role) && !editForm.bar_week) {
-      flash('Bar Week is required for bar roles.', false)
-      return
-    }
     setBusyId(editUser.id)
     try {
       const patch = {
         full_name:  editForm.full_name  || null,
         department: editForm.department || null,
         shift_name: editForm.shift_name || null,
-        bar_week:   editForm.bar_week   || null,
         updated_at: new Date().toISOString(),
       }
       const { error } = await supabaseAdmin
@@ -93,12 +85,11 @@ export default function UsersTab() {
   useEffect(() => { fetchUsers(); fetchDepartments() }, [])
 
   const nonRotatingShifts = shiftOpts.filter(s => s.shift_type !== 'rotating')
-  const isBarRole = BAR_ROLES.includes(editUser?.role)
 
   return (
     <div className="p-6 space-y-4">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800">System Users</h2>
+      <h2 className="text-base font-semibold text-gray-800">System Users (4)</h2>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -108,7 +99,6 @@ export default function UsersTab() {
               <Th>Role</Th>
               <Th>Department</Th>
               <Th>Shift</Th>
-              <Th>Bar Wk</Th>
               <Th>Status</Th>
               <Th>Created</Th>
               <Th>Actions</Th>
@@ -124,7 +114,6 @@ export default function UsersTab() {
                   <Td>{ROLE_LABELS[u.role] ?? u.role}</Td>
                   <Td>{u.department}</Td>
                   <Td>{u.shift_name}</Td>
-                  <Td>{u.bar_week}</Td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                       u.is_active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
@@ -157,7 +146,7 @@ export default function UsersTab() {
             })}
             {users.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-400">No users found</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">No users found</td>
               </tr>
             )}
           </tbody>
@@ -219,22 +208,6 @@ export default function UsersTab() {
                   Shift: <span className="font-medium text-gray-700">{nonRotatingShifts[0].shift_name}</span>
                   <span className="ml-1 text-gray-400">(auto-assigned)</span>
                 </p>
-              )}
-
-              {/* Bar Week selector — required for bar1/bar2 roles */}
-              {isBarRole && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Bar Week</label>
-                  <select
-                    value={editForm.bar_week}
-                    onChange={e => setEditForm(f => ({ ...f, bar_week: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
-                  >
-                    <option value="">— Select —</option>
-                    <option value="A">Week A</option>
-                    <option value="B">Week B</option>
-                  </select>
-                </div>
               )}
             </div>
 

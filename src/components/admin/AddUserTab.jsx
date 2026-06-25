@@ -5,9 +5,8 @@ import { ROLE_LABELS } from '../../lib/roles'
 import { Field, Inp, Sel } from './AdminUI'
 
 const ROLES = Object.keys(ROLE_LABELS)
-const BAR_ROLES = ['bar1', 'bar2']
 
-const BLANK = { full_name: '', email: '', password: '', role: ROLES[0], department: '', shift_name: '', bar_week: '' }
+const BLANK = { full_name: '', email: '', password: '', role: ROLES[0], department: '', shift_name: '' }
 
 export default function AddUserTab() {
   const [form,        setForm]        = useState(BLANK)
@@ -41,23 +40,18 @@ export default function AddUserTab() {
   }
 
   function handleDeptChange(dept) {
-    setForm(f => ({ ...f, department: dept, shift_name: '', bar_week: '' }))
+    setForm(f => ({ ...f, department: dept, shift_name: '' }))
     fetchShifts(dept)
   }
 
   async function handleAddUser(e) {
     e.preventDefault()
-    if (BAR_ROLES.includes(form.role) && !form.bar_week) {
-      setFormError('Bar Week is required for bar roles.')
-      return
-    }
     setFormBusy(true)
     setFormError(null)
     setSuccess(null)
     try {
       const payload = { ...form }
       if (!payload.shift_name) delete payload.shift_name
-      if (!payload.bar_week)   delete payload.bar_week
       const response = await fetch(
         'https://gttsjmxltrxxfplqjans.supabase.co/functions/v1/create-user',
         {
@@ -83,7 +77,6 @@ export default function AddUserTab() {
 
   useEffect(() => { fetchDepartments() }, [])
 
-  const isBarRole = BAR_ROLES.includes(form.role)
   const nonRotatingShifts = shiftOptions.filter(s => s.shift_type !== 'rotating')
 
   return (
@@ -129,10 +122,7 @@ export default function AddUserTab() {
             placeholder="Min 6 characters" />
         </Field>
         <Field label="Role *">
-          <Sel required value={form.role} onChange={e => {
-            const role = e.target.value
-            setForm(f => ({ ...f, role, bar_week: BAR_ROLES.includes(role) ? f.bar_week : '' }))
-          }}>
+          <Sel required value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
             {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
           </Sel>
         </Field>
@@ -162,22 +152,6 @@ export default function AddUserTab() {
             {' '}({nonRotatingShifts[0].shift_start?.slice(0,5)} – {nonRotatingShifts[0].shift_end?.slice(0,5)})
             <span className="ml-1 text-gray-400">(auto-assigned)</span>
           </p>
-        )}
-
-        {/* Bar Week — required for bar1/bar2 roles */}
-        {isBarRole && (
-          <Field label="Bar Week *">
-            <Sel
-              required
-              value={form.bar_week}
-              onChange={e => setForm(f => ({ ...f, bar_week: e.target.value }))}
-              className={!form.bar_week ? 'border-red-300' : ''}
-            >
-              <option value="">— Select —</option>
-              <option value="A">Week A</option>
-              <option value="B">Week B</option>
-            </Sel>
-          </Field>
         )}
 
         <button type="submit" disabled={formBusy}
