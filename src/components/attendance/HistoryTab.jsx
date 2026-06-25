@@ -5,7 +5,7 @@ import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
   AT_MANAGE_ROLES, STATUS_CFG, ALL_STATUSES,
   todayStr, fmtDate, fmtTime, fmtDuration, fmtLate,
-  breakMins, netMins, getShiftForUser, minsLateCalc,
+  breakMins, netMins, getShiftForDept, minsLateCalc,
   AccessDenied, StatusBadge,
 } from './AttendanceUI'
 
@@ -62,32 +62,32 @@ export default function HistoryTab() {
   const flash = useFlash(setToast)
 
   async function load() {
-    const [recsR, usersR, shiftsR, deptsR] = await Promise.all([
+    const [recsR, usersR, shiftsR] = await Promise.all([
       supabaseAdmin.from('attendance_records')
         .select('*')
         .gte('shift_date', filterFrom)
         .lte('shift_date', filterTo)
+        .not('staff_id', 'is', null)
         .order('shift_date', { ascending: false })
         .order('clock_in',   { ascending: false }),
-      // Exclude owner/manager — same staff list as Today tab
-      supabaseAdmin.from('user_profiles')
-        .select('id, full_name, department, shift_name, bar_week')
-        .not('role', 'in', '("owner","manager")')
+      supabaseAdmin.from('staff')
+        .select('id, full_name, department, position')
+        .eq('is_active', true)
         .order('full_name'),
       supabaseAdmin.from('shift_settings').select('*'),
-      supabaseAdmin.from('departments').select('name').order('name'),
     ])
 
+    const staffData = usersR.data ?? []
     const um = {}
-    for (const u of (usersR.data ?? [])) um[u.id] = u
+    for (const u of staffData) um[u.id] = u
     setUserMap(um)
-    setStaffList(usersR.data ?? [])
+    setStaffList(staffData)
     setShifts(shiftsR.data ?? [])
-    setAllDepts((deptsR.data ?? []).map(d => d.name))
+    setAllDepts([...new Set(staffData.map(u => u.department).filter(Boolean))].sort())
 
     let recs = recsR.data ?? []
-    if (filterStaff)  recs = recs.filter(r => r.user_id === filterStaff)
-    if (filterDept)   recs = recs.filter(r => um[r.user_id]?.department === filterDept)
+    if (filterStaff)  recs = recs.filter(r => r.staff_id === filterStaff)
+    if (filterDept)   recs = recs.filter(r => um[r.staff_id]?.department === filterDept)
     if (filterStatus) recs = recs.filter(r => r.status === filterStatus)
     setRecords(recs)
   }
@@ -104,18 +104,18 @@ export default function HistoryTab() {
   }, {})
 
   // ── Weekly summary view ──────────────────────────────────────────────────────
-  // Group by (user_id, iso_week_monday) → one row per person per week
+  // Group by (staff_id, iso_week_monday) → one row per person per week
 
   const weeklySummaryRows = (() => {
     const buckets = {}
     for (const r of records) {
       const wk  = weekMonday(r.shift_date)
-      const key = `${r.user_id}::${wk}`
-      if (!buckets[key]) buckets[key] = { user_id: r.user_id, wk, recs: [] }
+      const key = `${r.staff_id}::${wk}`
+      if (!buckets[key]) buckets[key] = { staff_id: r.staff_id, wk, recs: [] }
       buckets[key].recs.push(r)
     }
     return Object.values(buckets).sort((a, b) =>
-      b.wk.localeCompare(a.wk) || (userMap[a.user_id]?.full_name ?? '').localeCompare(userMap[b.user_id]?.full_name ?? '')
+      b.wk.localeCompare(a.wk) || (userMap[a.staff_id]?.full_name ?? '').localeCompare(userMap[b.staff_id]?.full_name ?? '')
     )
   })()
 
@@ -211,15 +211,15 @@ export default function HistoryTab() {
               </tr>
             </thead>
             <tbody>
-              {weeklySummaryRows.map(({ user_id, wk, recs: wkRecs }) => {
-                const user    = userMap[user_id]
+              {weeklySummaryRows.map(({ staff_id, wk, recs: wkRecs }) => {
+                const user    = userMap[staff_id]
                 const present = wkRecs.filter(r => r.status === 'present').length
                 const late    = wkRecs.filter(r => r.status === 'late').length
                 const absent  = wkRecs.filter(r => r.status === 'absent').length
                 const totalMins = wkRecs.map(r => netMins(r) ?? 0).reduce((s, v) => s + v, 0)
                 const avgIn   = avgTime(wkRecs.map(r => r.clock_in))
                 return (
-                  <tr key={`${user_id}::${wk}`} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                  <tr key={`${staff_id}::${wk}`} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{user?.full_name ?? '—'}</td>
                     <Td>{user?.department ?? '—'}</Td>
                     <Td>{weekLabel(wk)}</Td>
@@ -269,14 +269,14 @@ export default function HistoryTab() {
                     </thead>
                     <tbody>
                       {wkRecords.map(r => {
-                        const user      = userMap[r.user_id]
-                        const shift     = getShiftForUser(user, shifts, user?.bar_week ?? 'A')
+                        const user       = userMap[r.staff_id]
+                        const shift      = getShiftForDept(user?.department, shifts, 'A')
                         const shiftLabel = shift
                           ? `${fmtTime(shift.shift_start)} – ${fmtTime(shift.shift_end)}`
                           : '—'
-                        const brk       = breakMins(r)
-                        const net       = netMins(r)
-                        const late      = r.status === 'late' ? minsLateCalc(r.clock_in, shift) : null
+                        const brk        = breakMins(r)
+                        const net        = netMins(r)
+                        const late       = r.status === 'late' ? minsLateCalc(r.clock_in, shift) : null
                         return (
                           <tr key={r.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                             <Td>{fmtDate(r.shift_date)}</Td>

@@ -151,8 +151,8 @@ export function EmptyRow({ cols, msg = 'No records found' }) {
 
 export async function fetchAllActiveStaff() {
   const { data } = await supabaseAdmin
-    .from('user_profiles')
-    .select('id, full_name')
+    .from('staff')
+    .select('id, full_name, department, position')
     .eq('is_active', true)
     .order('full_name')
   return data ?? []

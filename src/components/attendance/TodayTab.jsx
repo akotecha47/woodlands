@@ -5,7 +5,7 @@ import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
   AT_MANAGE_ROLES, STATUS_CFG, ALL_STATUSES,
   todayStr, fmtDate, fmtTime, fmtDuration,
-  breakMins, netMins, getShiftForUser, minsLateCalc,
+  breakMins, netMins, getShiftForDept, minsLateCalc,
   AccessDenied, StatusBadge,
 } from './AttendanceUI'
 
@@ -17,7 +17,7 @@ export default function TodayTab() {
 
   if (!canManage) return <AccessDenied />
 
-  const [users,           setUsers]           = useState([])
+  const [staffList,       setStaffList]       = useState([])
   const [recMap,          setRecMap]          = useState({})
   const [shifts,          setShifts]          = useState([])
   const [deptFilter,      setDeptFilter]      = useState('')
@@ -27,7 +27,7 @@ export default function TodayTab() {
   const [noteModal,       setNoteModal]       = useState(null)
   const [noteVal,         setNoteVal]         = useState('')
   const [confirmAbsent,   setConfirmAbsent]   = useState(false)
-  const [consecutiveAlert,setConsecutiveAlert]= useState([]) // [{ name, days }]
+  const [consecutiveAlert,setConsecutiveAlert]= useState([])
   const [busy,            setBusy]            = useState(false)
   const [toast,           setToast]           = useState(null)
   const flash = useFlash(setToast)
@@ -40,37 +40,42 @@ export default function TodayTab() {
   const load = useCallback(async () => {
     const [usersR, recsR, shiftsR, recentR] = await Promise.all([
       supabaseAdmin
-        .from('user_profiles')
-        .select('id, full_name, department, role, shift_name, bar_week')
-        .not('role', 'in', '("owner","manager")')
+        .from('staff')
+        .select('id, full_name, department, position, shift_start, shift_end, is_active')
+        .eq('is_active', true)
         .order('department').order('full_name'),
-      supabaseAdmin.from('attendance_records').select('*').eq('shift_date', today),
+      supabaseAdmin.from('attendance_records').select('*')
+        .eq('shift_date', today)
+        .not('staff_id', 'is', null),
       supabaseAdmin.from('shift_settings').select('*').order('department').order('shift_name'),
-      // Last 3 days of records for consecutive absence check
       supabaseAdmin.from('attendance_records')
-        .select('user_id, shift_date, status')
+        .select('staff_id, shift_date, status')
         .gte('shift_date', offsetDate(-3))
         .lt('shift_date', today)
+        .not('staff_id', 'is', null)
         .order('shift_date', { ascending: false }),
     ])
 
-    const loadedUsers = usersR.data ?? []
-    setUsers(loadedUsers)
+    const loaded = usersR.data ?? []
+    setStaffList(loaded)
 
     const map = {}
-    for (const r of (recsR.data ?? [])) map[r.user_id] = r
+    for (const r of (recsR.data ?? [])) {
+      if (r.staff_id) map[r.staff_id] = r
+    }
     setRecMap(map)
     setShifts(shiftsR.data ?? [])
 
     // ── consecutive absence detection ────────────────────────────────────────
-    const recentByUser = {}
+    const recentByStaff = {}
     for (const r of (recentR.data ?? [])) {
-      if (!recentByUser[r.user_id]) recentByUser[r.user_id] = []
-      recentByUser[r.user_id].push(r)
+      if (!r.staff_id) continue
+      if (!recentByStaff[r.staff_id]) recentByStaff[r.staff_id] = []
+      recentByStaff[r.staff_id].push(r)
     }
     const alerts = []
-    for (const u of loadedUsers) {
-      const recs = (recentByUser[u.id] ?? []).slice(0, 3) // most recent first
+    for (const u of loaded) {
+      const recs = (recentByStaff[u.id] ?? []).slice(0, 3)
       let streak = 0
       for (const r of recs) {
         if (r.status === 'absent') streak++
@@ -91,25 +96,25 @@ export default function TodayTab() {
   // ── derived ──────────────────────────────────────────────────────────────────
 
   function getShift(user) {
-    return getShiftForUser(user, shifts, user.bar_week ?? 'A', now)
+    return getShiftForDept(user.department, shifts, 'A', now)
   }
 
-  function effectiveStatus(userId) {
-    const rec = recMap[userId]
+  function effectiveStatus(staffId) {
+    const rec = recMap[staffId]
     if (rec) return rec.status
     return now.getHours() < ELEVEN ? 'not_arrived' : 'absent'
   }
 
-  function liveHours(userId) {
-    const rec = recMap[userId]
+  function liveHours(staffId) {
+    const rec = recMap[staffId]
     if (!rec) return '—'
     return fmtDuration(netMins(rec, now))
   }
 
-  function isOvertime(userId) {
-    const rec = recMap[userId]
+  function isOvertime(staffId) {
+    const rec = recMap[staffId]
     if (!rec?.clock_in || rec?.clock_out) return false
-    const user  = users.find(u => u.id === userId)
+    const user  = staffList.find(u => u.id === staffId)
     const shift = getShift(user)
     if (!shift?.shift_end) return false
     const [eh, em] = shift.shift_end.split(':').map(Number)
@@ -130,23 +135,23 @@ export default function TodayTab() {
       const [eh, em] = s.shift_end.split(':').map(Number)
       const nowMins  = now.getHours() * 60 + now.getMinutes()
       if (nowMins < sh * 60 + sm || nowMins > eh * 60 + em) continue
-      const deptUsers = users.filter(u => u.department === dept)
-      const anyActive = deptUsers.some(u => ['present', 'late'].includes(effectiveStatus(u.id)))
-      if (!anyActive && deptUsers.length > 0) alerts.push(dept)
+      const deptStaff = staffList.filter(u => u.department === dept)
+      const anyActive = deptStaff.some(u => ['present', 'late'].includes(effectiveStatus(u.id)))
+      if (!anyActive && deptStaff.length > 0) alerts.push(dept)
     }
     return alerts
   })()
 
-  const allDepts   = [...new Set(users.map(u => u.department).filter(Boolean))].sort()
-  const shownUsers = deptFilter ? users.filter(u => u.department === deptFilter) : users
+  const allDepts   = [...new Set(staffList.map(u => u.department).filter(Boolean))].sort()
+  const shownUsers = deptFilter ? staffList.filter(u => u.department === deptFilter) : staffList
   const deptGroups = shownUsers.reduce((acc, u) => {
-    const d = u.department ?? u.role
+    const d = u.department ?? 'Unknown'
     if (!acc[d]) acc[d] = []
     acc[d].push(u)
     return acc
   }, {})
 
-  const counts = users.reduce((acc, u) => {
+  const counts = staffList.reduce((acc, u) => {
     const s = effectiveStatus(u.id)
     acc[s] = (acc[s] ?? 0) + 1
     return acc
@@ -158,9 +163,9 @@ export default function TodayTab() {
     setBusy(true)
     setConfirmAbsent(false)
     try {
-      const unclockedUsers = users.filter(u => !recMap[u.id])
-      const inserts = unclockedUsers.map(u => ({
-        user_id:    u.id,
+      const unclockedStaff = staffList.filter(u => !recMap[u.id])
+      const inserts = unclockedStaff.map(u => ({
+        staff_id:   u.id,
         shift_date: today,
         clock_in:   null,
         status:     'absent',
@@ -192,7 +197,7 @@ export default function TodayTab() {
           ? new Date(`${today}T${shift.shift_start}`).toISOString()
           : new Date(`${today}T08:00:00`).toISOString()
         const { error } = await supabaseAdmin.from('attendance_records').insert({
-          user_id: user.id, shift_date: today, clock_in: clockIn, status: overrideVal,
+          staff_id: user.id, shift_date: today, clock_in: clockIn, status: overrideVal,
         })
         if (error) throw error
       }
@@ -219,7 +224,7 @@ export default function TodayTab() {
           ? new Date(`${today}T${shift.shift_start}`).toISOString()
           : new Date(`${today}T08:00:00`).toISOString()
         const { error } = await supabaseAdmin.from('attendance_records').insert({
-          user_id: user.id, shift_date: today, clock_in: clockIn,
+          staff_id: user.id, shift_date: today, clock_in: clockIn,
           status: 'absent', notes: noteVal || null,
         })
         if (error) throw error
