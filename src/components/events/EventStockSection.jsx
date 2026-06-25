@@ -28,7 +28,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
   async function loadAllocations() {
     const { data } = await supabaseAdmin
       .from('event_stock_allocations')
-      .select('*, stock_items(id, name, sku, unit, department, quantity)')
+      .select('*, stock_items(id, name, sku, unit, department)')
       .eq('event_id', eventId)
       .order('created_at')
     const rows = data ?? []
@@ -44,7 +44,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
   async function loadStockItems() {
     const { data } = await supabaseAdmin
       .from('stock_items')
-      .select('id, name, sku, unit, department, quantity')
+      .select('id, name, sku, unit, department, current_stock(quantity)')
       .eq('is_active', true)
       .order('department').order('name')
     setStockItems(data ?? [])
@@ -65,8 +65,9 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
     const qty = Number(form.quantity)
     if (!form.stock_item_id)  { flash('Select a stock item', false); return }
     if (!qty || qty <= 0)     { flash('Quantity must be greater than 0', false); return }
-    if (selectedItem && qty > selectedItem.quantity) {
-      flash(`Only ${selectedItem.quantity} ${selectedItem.unit} available`, false)
+    const avail = selectedItem?.current_stock?.[0]?.quantity ?? 0
+    if (selectedItem && qty > avail) {
+      flash(`Only ${avail} ${selectedItem.unit} available`, false)
       return
     }
     setBusy(true)
@@ -114,12 +115,12 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
         const consumed = Number(clearanceForm[a.id] ?? 0)
         const returned = Math.max(0, a.allocated_qty - consumed)
         // Return surplus to stock
-        const { data: item } = await supabaseAdmin
-          .from('stock_items').select('quantity').eq('id', a.stock_item_id).single()
-        if (item) {
-          await supabaseAdmin.from('stock_items')
-            .update({ quantity: (item.quantity ?? 0) + returned })
-            .eq('id', a.stock_item_id)
+        const { data: cs } = await supabaseAdmin
+          .from('current_stock').select('quantity').eq('stock_item_id', a.stock_item_id).single()
+        if (cs) {
+          await supabaseAdmin.from('current_stock')
+            .update({ quantity: (cs.quantity ?? 0) + returned, last_updated: new Date().toISOString() })
+            .eq('stock_item_id', a.stock_item_id)
         }
         // Mark cleared
         await supabaseAdmin.from('event_stock_allocations').update({
@@ -216,7 +217,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                 <option value="">— Select item —</option>
                 {availableItems.map(s => (
                   <option key={s.id} value={s.id}>
-                    {s.name} — {s.sku} ({s.department}) · {s.quantity} {s.unit} available
+                    {s.name} — {s.sku} ({s.department}) · {s.current_stock?.[0]?.quantity ?? 0} {s.unit} available
                   </option>
                 ))}
               </Sel>
@@ -241,9 +242,9 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                 </Field>
               )}
             </div>
-            {selectedItem && form.quantity && Number(form.quantity) > selectedItem.quantity && (
+            {selectedItem && form.quantity && Number(form.quantity) > (selectedItem.current_stock?.[0]?.quantity ?? 0) && (
               <p className="text-xs text-red-600">
-                Only {selectedItem.quantity} {selectedItem.unit} available
+                Only {selectedItem.current_stock?.[0]?.quantity ?? 0} {selectedItem.unit} available
               </p>
             )}
             <button type="submit" disabled={busy}

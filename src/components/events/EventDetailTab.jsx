@@ -68,15 +68,15 @@ export default function EventDetailTab({ eventId, onBack }) {
         .eq('event_id', eventId)
         .eq('status', 'pending')
       for (const alloc of (pending ?? [])) {
-        const { data: item } = await supabaseAdmin
-          .from('stock_items').select('quantity').eq('id', alloc.stock_item_id).single()
-        const available = item?.quantity ?? 0
+        const { data: cs } = await supabaseAdmin
+          .from('current_stock').select('quantity').eq('stock_item_id', alloc.stock_item_id).single()
+        const available = cs?.quantity ?? 0
         if (available < alloc.allocated_qty) {
           flash('Warning: insufficient stock for some items — check inventory', false)
         }
-        await supabaseAdmin.from('stock_items')
-          .update({ quantity: Math.max(0, available - alloc.allocated_qty) })
-          .eq('id', alloc.stock_item_id)
+        await supabaseAdmin.from('current_stock')
+          .update({ quantity: Math.max(0, available - alloc.allocated_qty), last_updated: new Date().toISOString() })
+          .eq('stock_item_id', alloc.stock_item_id)
         await supabaseAdmin.from('event_stock_allocations')
           .update({ status: 'deducted', deducted_at: new Date().toISOString() })
           .eq('id', alloc.id)
@@ -89,11 +89,11 @@ export default function EventDetailTab({ eventId, onBack }) {
         .eq('event_id', eventId)
         .eq('status', 'deducted')
       for (const alloc of (deducted ?? [])) {
-        const { data: item } = await supabaseAdmin
-          .from('stock_items').select('quantity').eq('id', alloc.stock_item_id).single()
-        await supabaseAdmin.from('stock_items')
-          .update({ quantity: (item?.quantity ?? 0) + alloc.allocated_qty })
-          .eq('id', alloc.stock_item_id)
+        const { data: cs } = await supabaseAdmin
+          .from('current_stock').select('quantity').eq('stock_item_id', alloc.stock_item_id).single()
+        await supabaseAdmin.from('current_stock')
+          .update({ quantity: (cs?.quantity ?? 0) + alloc.allocated_qty, last_updated: new Date().toISOString() })
+          .eq('stock_item_id', alloc.stock_item_id)
         await supabaseAdmin.from('event_stock_allocations')
           .update({ status: 'returned', cleared_at: new Date().toISOString() })
           .eq('id', alloc.id)
