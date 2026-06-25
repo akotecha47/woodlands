@@ -11,6 +11,7 @@ import {
 import EventBillSection    from './EventBillSection'
 import EventPaymentsSection from './EventPaymentsSection'
 import EventSetupSection    from './EventSetupSection'
+import EventStaffSection    from './EventStaffSection'
 
 export default function EventDetailTab({ eventId, onBack }) {
   const { profile, session } = useAuth()
@@ -264,6 +265,13 @@ export default function EventDetailTab({ eventId, onBack }) {
 
       {/* Setup Details */}
       <EventSetupSection
+        eventId={eventId}
+        canManage={canManage}
+        onRefresh={load}
+      />
+
+      {/* Assigned Staff */}
+      <EventStaffSection
         eventId={eventId}
         canManage={canManage}
         onRefresh={load}
