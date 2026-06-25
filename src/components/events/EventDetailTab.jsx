@@ -23,6 +23,7 @@ export default function EventDetailTab({ eventId, onBack }) {
   const [billItems,  setBillItems]  = useState([])
   const [userMap,    setUserMap]    = useState({})
   const [loading,    setLoading]    = useState(true)
+  const [statusBusy, setStatusBusy] = useState(false)
   const [toast,      setToast]      = useState(null)
   const flash = useFlash(setToast)
 
@@ -117,6 +118,8 @@ export default function EventDetailTab({ eventId, onBack }) {
   }
 
   async function changeStatus(newStatus) {
+    if (statusBusy) return
+    setStatusBusy(true)
     try {
       if (newStatus === 'confirmed' && checklists.length === 0) {
         await generateBEO(eventId)
@@ -131,6 +134,7 @@ export default function EventDetailTab({ eventId, onBack }) {
       flash(`Status → ${STATUS_CFG[newStatus]?.label ?? newStatus}`)
       load()
     } catch (err) { flash(err.message, false) }
+    finally { setStatusBusy(false) }
   }
 
   async function toggleTask(task, checked) {
@@ -194,26 +198,26 @@ export default function EventDetailTab({ eventId, onBack }) {
         {canManage && (
           <div className="flex gap-2 flex-wrap">
             {event.status === 'enquiry' && (
-              <button onClick={() => changeStatus('confirmed')}
-                className="px-3 py-1.5 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg">
+              <button onClick={() => changeStatus('confirmed')} disabled={statusBusy}
+                className="px-3 py-1.5 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg disabled:opacity-60">
                 Confirm Event
               </button>
             )}
             {event.status === 'confirmed' && (
-              <button onClick={() => changeStatus('in_progress')}
-                className="px-3 py-1.5 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg">
+              <button onClick={() => changeStatus('in_progress')} disabled={statusBusy}
+                className="px-3 py-1.5 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-60">
                 Start Event
               </button>
             )}
             {event.status === 'in_progress' && (
-              <button onClick={() => changeStatus('completed')}
-                className="px-3 py-1.5 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg">
+              <button onClick={() => changeStatus('completed')} disabled={statusBusy}
+                className="px-3 py-1.5 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg disabled:opacity-60">
                 Complete Event
               </button>
             )}
             {!['completed', 'cancelled'].includes(event.status) && (
-              <button onClick={() => changeStatus('cancelled')}
-                className="px-3 py-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg">
+              <button onClick={() => changeStatus('cancelled')} disabled={statusBusy}
+                className="px-3 py-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-60">
                 Cancel Event
               </button>
             )}
