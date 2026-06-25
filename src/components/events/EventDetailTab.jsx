@@ -62,47 +62,57 @@ export default function EventDetailTab({ eventId, onBack }) {
 
   async function handleStockOnStatusChange(newStatus) {
     if (newStatus === 'confirmed') {
-      const { data: pending } = await supabaseAdmin
+      const { data: pending, error: pendingErr } = await supabaseAdmin
         .from('event_stock_allocations')
         .select('id, stock_item_id, allocated_qty')
         .eq('event_id', eventId)
         .eq('status', 'pending')
+      if (pendingErr) throw pendingErr
       for (const alloc of (pending ?? [])) {
         const { data: cs } = await supabaseAdmin
           .from('current_stock').select('quantity').eq('stock_item_id', alloc.stock_item_id).single()
-        const available = cs?.quantity ?? 0
-        if (available < alloc.allocated_qty) {
+        const newQty = Math.max(0, (cs?.quantity ?? 0) - alloc.allocated_qty)
+        if ((cs?.quantity ?? 0) < alloc.allocated_qty) {
           flash('Warning: insufficient stock for some items — check inventory', false)
         }
-        await supabaseAdmin.from('current_stock')
-          .update({ quantity: Math.max(0, available - alloc.allocated_qty), last_updated: new Date().toISOString() })
+        const { error: csErr } = await supabaseAdmin
+          .from('current_stock')
+          .update({ quantity: newQty, last_updated: new Date().toISOString() })
           .eq('stock_item_id', alloc.stock_item_id)
-        await supabaseAdmin.from('event_stock_allocations')
+        if (csErr) throw csErr
+        const { error: allocErr } = await supabaseAdmin
+          .from('event_stock_allocations')
           .update({ status: 'deducted', deducted_at: new Date().toISOString() })
           .eq('id', alloc.id)
+        if (allocErr) throw allocErr
       }
     } else if (newStatus === 'cancelled') {
-      // Return stock for deducted allocations
-      const { data: deducted } = await supabaseAdmin
+      const { data: deducted, error: deductedErr } = await supabaseAdmin
         .from('event_stock_allocations')
         .select('id, stock_item_id, allocated_qty')
         .eq('event_id', eventId)
         .eq('status', 'deducted')
+      if (deductedErr) throw deductedErr
       for (const alloc of (deducted ?? [])) {
         const { data: cs } = await supabaseAdmin
           .from('current_stock').select('quantity').eq('stock_item_id', alloc.stock_item_id).single()
-        await supabaseAdmin.from('current_stock')
+        const { error: csErr } = await supabaseAdmin
+          .from('current_stock')
           .update({ quantity: (cs?.quantity ?? 0) + alloc.allocated_qty, last_updated: new Date().toISOString() })
           .eq('stock_item_id', alloc.stock_item_id)
-        await supabaseAdmin.from('event_stock_allocations')
+        if (csErr) throw csErr
+        const { error: allocErr } = await supabaseAdmin
+          .from('event_stock_allocations')
           .update({ status: 'returned', cleared_at: new Date().toISOString() })
           .eq('id', alloc.id)
+        if (allocErr) throw allocErr
       }
-      // Cancel pending allocations that were never deducted
-      await supabaseAdmin.from('event_stock_allocations')
+      const { error: cancelErr } = await supabaseAdmin
+        .from('event_stock_allocations')
         .update({ status: 'cancelled' })
         .eq('event_id', eventId)
         .eq('status', 'pending')
+      if (cancelErr) throw cancelErr
     }
   }
 
