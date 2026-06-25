@@ -55,6 +55,8 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
 
   async function handleAddPayment(e) {
     e.preventDefault()
+    if (!form.received_by) { flash('Select who received the payment', false); return }
+    if (!form.reference.trim()) { flash('Reference is required', false); return }
     setBusy(true)
     try {
       const { error } = await supabaseAdmin.from('event_payments').insert({
@@ -63,9 +65,9 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
         amount:         Number(form.amount),
         payment_date:   form.payment_date,
         payment_method: form.payment_method,
-        reference:      form.reference || null,
+        reference:      form.reference.trim(),
         notes:          form.notes || null,
-        received_by:    form.received_by || null,
+        received_by:    form.received_by,
         created_at:     new Date().toISOString(),
       })
       if (error) throw error
@@ -196,11 +198,11 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Reference">
-                <Inp placeholder="Receipt / transaction ref" value={form.reference} onChange={f('reference')} />
+              <Field label="Reference *">
+                <Inp required placeholder="Receipt / transaction ref (required)" value={form.reference} onChange={f('reference')} />
               </Field>
-              <Field label="Received By">
-                <Sel value={form.received_by} onChange={f('received_by')}>
+              <Field label="Received By *">
+                <Sel required value={form.received_by} onChange={f('received_by')}>
                   <option value="">Select staff member…</option>
                   {staff.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                 </Sel>

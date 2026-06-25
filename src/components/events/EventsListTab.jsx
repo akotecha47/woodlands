@@ -9,6 +9,15 @@ import {
   EventStatusBadge, EmptyRow, todayStr,
 } from './EventsUI'
 
+function parseEventDate(val) {
+  if (!val) return null
+  if (val instanceof Date) return new Date(val.getFullYear(), val.getMonth(), val.getDate(), 12, 0, 0)
+  const s = String(val).slice(0, 10)
+  const [y, m, d] = s.split('-').map(Number)
+  if (!y || !m || !d) return null
+  return new Date(y, m - 1, d, 12, 0, 0)
+}
+
 const STATUS_FILTERS = [
   { value: 'all',         label: 'All'         },
   { value: 'enquiry',     label: 'Enquiry'     },
@@ -21,8 +30,8 @@ const STATUS_FILTERS = [
 function rowHighlight(ev) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const evDate    = new Date(ev.event_date + 'T12:00:00')
-  const daysUntil = (evDate - today) / 86400000
+  const evDate    = parseEventDate(ev.event_date)
+  const daysUntil = evDate ? (evDate - today) / 86400000 : -1
   const soonAlert    = daysUntil >= 0 && daysUntil <= 7 && ev.status !== 'cancelled'
   const depositAlert = ev.status === 'confirmed' && !ev.deposit_paid
   return soonAlert || depositAlert
@@ -37,8 +46,11 @@ function applySort(events, sortBy) {
 
   if (sortBy === 'date') {
     return arr.sort((a, b) => {
-      const da = new Date(a.event_date + 'T12:00:00')
-      const db = new Date(b.event_date + 'T12:00:00')
+      const da = parseEventDate(a.event_date)
+      const db = parseEventDate(b.event_date)
+      if (!da && !db) return 0
+      if (!da) return 1
+      if (!db) return -1
       const aFut = da >= today
       const bFut = db >= today
       if (aFut !== bFut) return aFut ? -1 : 1
@@ -54,7 +66,12 @@ function applySort(events, sortBy) {
   if (sortBy === 'deposit') {
     return arr.sort((a, b) => {
       if (a.deposit_paid !== b.deposit_paid) return a.deposit_paid ? 1 : -1
-      return new Date(a.event_date + 'T12:00:00') - new Date(b.event_date + 'T12:00:00')
+      const da = parseEventDate(a.event_date)
+      const db = parseEventDate(b.event_date)
+      if (!da && !db) return 0
+      if (!da) return 1
+      if (!db) return -1
+      return da - db
     })
   }
 
@@ -114,8 +131,8 @@ export default function EventsListTab({ onView }) {
   const next7      = new Date(today.getTime() + 7 * 86400000)
 
   const totalThisMonth = events.filter(ev => {
-    const d = new Date(ev.event_date + 'T12:00:00')
-    return d >= monthStart && d <= monthEnd && ev.status !== 'cancelled'
+    const d = parseEventDate(ev.event_date)
+    return d && d >= monthStart && d <= monthEnd && ev.status !== 'cancelled'
   }).length
 
   const confirmedUnpaid = events.filter(ev =>
@@ -123,8 +140,8 @@ export default function EventsListTab({ onView }) {
   ).length
 
   const inNext7Days = events.filter(ev => {
-    const d = new Date(ev.event_date + 'T12:00:00')
-    return d >= today && d <= next7 && ev.status !== 'cancelled'
+    const d = parseEventDate(ev.event_date)
+    return d && d >= today && d <= next7 && ev.status !== 'cancelled'
   }).length
 
   // ── Filter + sort ───────────────────────────────────────────────
