@@ -1,39 +1,26 @@
-// All roles that can log in to the system
 export const ALL_STAFF_ROLES = [
-  'owner', 'manager', 'restaurant_manager', 'store_supervisor',
-  'bar1', 'bar2',
-  'waiter', 'head_waiter', 'kitchen_staff',
-  'housekeeping', 'grounds', 'security',
+  'owner', 'manager', 'kitchen_manager', 'restaurant_manager',
 ]
 
 export const ROUTE_ACCESS = {
-  '/dashboard':      ['owner', 'manager'],
-  '/':               ['owner', 'manager', 'store_supervisor', 'bar1', 'bar2'],
-  '/attendance':     ALL_STAFF_ROLES,
+  '/dashboard':      ['owner', 'manager', 'kitchen_manager', 'restaurant_manager'],
+  '/inventory':      ['owner', 'manager', 'kitchen_manager', 'restaurant_manager'],
+  '/attendance':     ['owner', 'manager'],
   '/events':         ['owner', 'manager'],
-  '/table-bookings': ['owner', 'manager', 'restaurant_manager', 'bar1', 'bar2', 'head_waiter', 'waiter'],
+  '/table-bookings': ['owner', 'manager', 'restaurant_manager'],
   '/farmers-market': ['owner', 'manager'],
   '/admin':          ['owner'],
 }
 
 export const ROLE_LABELS = {
-  owner:                'Owner',
-  manager:              'Manager',
-  store_supervisor:     'Store Supervisor',
-  bar1:                 'Bar 1',
-  bar2:                 'Bar 2',
-  restaurant_manager:   'Restaurant Manager',
-  waiter:               'Waiter',
-  head_waiter:          'Head Waiter',
-  kitchen_staff:        'Kitchen Staff',
-  housekeeping:         'Housekeeping',
-  grounds:              'Grounds',
-  security:             'Security',
+  owner:              'Owner',
+  manager:            'Manager',
+  kitchen_manager:    'Kitchen Manager',
+  restaurant_manager: 'Restaurant Manager',
 }
 
 export function getDefaultRoute(role) {
-  if (['owner', 'manager'].includes(role)) return '/dashboard'
-  if (['store_supervisor', 'bar1', 'bar2'].includes(role)) return '/'
-  if (['restaurant_manager', 'head_waiter', 'waiter'].includes(role)) return '/table-bookings'
-  return '/attendance'
+  if (['owner', 'manager', 'kitchen_manager'].includes(role)) return '/dashboard'
+  if (role === 'restaurant_manager') return '/table-bookings'
+  return '/dashboard'
 }
