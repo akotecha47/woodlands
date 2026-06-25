@@ -42,12 +42,19 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
   }
 
   async function loadStockItems() {
-    const { data } = await supabaseAdmin
-      .from('stock_items')
-      .select('id, name, sku, unit, department, current_stock(quantity)')
-      .eq('is_active', true)
-      .order('department').order('name')
-    setStockItems(data ?? [])
+    const [itemsR, stockR] = await Promise.all([
+      supabaseAdmin
+        .from('stock_items')
+        .select('id, name, sku, unit, department')
+        .eq('is_active', true)
+        .order('department').order('name'),
+      supabaseAdmin
+        .from('current_stock')
+        .select('stock_item_id, quantity'),
+    ])
+    const qtyMap = {}
+    for (const row of (stockR.data ?? [])) qtyMap[row.stock_item_id] = row.quantity
+    setStockItems((itemsR.data ?? []).map(item => ({ ...item, quantity: qtyMap[item.id] ?? 0 })))
   }
 
   useEffect(() => {
@@ -65,7 +72,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
     const qty = Number(form.quantity)
     if (!form.stock_item_id)  { flash('Select a stock item', false); return }
     if (!qty || qty <= 0)     { flash('Quantity must be greater than 0', false); return }
-    const avail = selectedItem?.current_stock?.[0]?.quantity ?? 0
+    const avail = selectedItem?.quantity ?? 0
     if (selectedItem && qty > avail) {
       flash(`Only ${avail} ${selectedItem.unit} available`, false)
       return
@@ -217,7 +224,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                 <option value="">— Select item —</option>
                 {availableItems.map(s => (
                   <option key={s.id} value={s.id}>
-                    {s.name} — {s.sku} ({s.department}) · {s.current_stock?.[0]?.quantity ?? 0} {s.unit} available
+                    {s.name} — {s.sku} ({s.department}) · {s.quantity} {s.unit} available
                   </option>
                 ))}
               </Sel>
@@ -242,9 +249,9 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                 </Field>
               )}
             </div>
-            {selectedItem && form.quantity && Number(form.quantity) > (selectedItem.current_stock?.[0]?.quantity ?? 0) && (
+            {selectedItem && form.quantity && Number(form.quantity) > selectedItem.quantity && (
               <p className="text-xs text-red-600">
-                Only {selectedItem.current_stock?.[0]?.quantity ?? 0} {selectedItem.unit} available
+                Only {selectedItem.quantity} {selectedItem.unit} available
               </p>
             )}
             <button type="submit" disabled={busy}
