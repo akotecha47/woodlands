@@ -47,8 +47,11 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
     .filter(p => p.payment_type === 'refund')
     .reduce((s, p) => s + Number(p.amount), 0)
 
-  const totalPaid  = totalReceived - totalRefunded
-  const balanceDue = Math.max(0, Number(billTotal || 0) - totalPaid)
+  const totalPaid    = totalReceived - totalRefunded
+  const billTotalNum = Number(billTotal || 0)
+  const difference   = billTotalNum - totalPaid
+  const balanceState = difference > 0 ? 'owed' : difference < 0 ? 'credit' : 'settled'
+  const absDiff      = Math.abs(difference)
 
   async function handleAddPayment(e) {
     e.preventDefault()
@@ -98,13 +101,27 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
             <p className="text-xs text-red-500 mt-0.5">incl. {fmtMWK(totalRefunded)} refunded</p>
           )}
         </div>
-        <div className={`rounded-xl p-4 ${balanceDue > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
-          <p className="text-xs text-gray-500 mb-1">Balance Due</p>
-          <p className={`text-sm font-semibold ${balanceDue > 0 ? 'text-red-700' : 'text-green-700'}`}>
-            {fmtMWK(balanceDue)}
+        <div className={`rounded-xl p-4 ${
+          balanceState === 'owed' ? 'bg-red-50' :
+          balanceState === 'credit' ? 'bg-amber-50' : 'bg-green-50'
+        }`}>
+          <p className="text-xs text-gray-500 mb-1">
+            {balanceState === 'credit' ? 'Credit Owed to Client' : 'Balance Due'}
           </p>
-          {balanceDue > 0 && (
+          <p className={`text-sm font-semibold ${
+            balanceState === 'owed' ? 'text-red-700' :
+            balanceState === 'credit' ? 'text-amber-700' : 'text-green-700'
+          }`}>
+            {fmtMWK(absDiff)}
+          </p>
+          {balanceState === 'owed' && (
             <p className="text-xs text-red-500 mt-0.5">Outstanding</p>
+          )}
+          {balanceState === 'credit' && (
+            <p className="text-xs text-amber-600 mt-0.5">Client has overpaid — process refund or apply credit</p>
+          )}
+          {balanceState === 'settled' && (
+            <p className="text-xs text-green-600 mt-0.5">Settled</p>
           )}
         </div>
       </div>
