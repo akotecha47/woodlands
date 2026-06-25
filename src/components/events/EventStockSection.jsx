@@ -79,13 +79,37 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
     }
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('event_stock_allocations').insert({
-        event_id:      eventId,
-        stock_item_id: form.stock_item_id,
-        allocated_qty: qty,
-        created_by:    session?.user?.id ?? null,
-      })
+      const { data: newAlloc, error } = await supabaseAdmin
+        .from('event_stock_allocations')
+        .insert({
+          event_id:      eventId,
+          stock_item_id: form.stock_item_id,
+          allocated_qty: qty,
+          created_by:    session?.user?.id ?? null,
+        })
+        .select()
+        .single()
       if (error) throw error
+
+      if (eventStatus === 'confirmed') {
+        const { data: cs } = await supabaseAdmin
+          .from('current_stock').select('quantity').eq('stock_item_id', form.stock_item_id).single()
+        const newQty = Math.max(0, (cs?.quantity ?? 0) - qty)
+        const { error: csErr } = await supabaseAdmin
+          .from('current_stock')
+          .update({ quantity: newQty, last_updated: new Date().toISOString() })
+          .eq('stock_item_id', form.stock_item_id)
+        if (csErr) throw csErr
+        const { error: allocErr } = await supabaseAdmin
+          .from('event_stock_allocations')
+          .update({ status: 'deducted', deducted_at: new Date().toISOString() })
+          .eq('id', newAlloc.id)
+        if (allocErr) throw allocErr
+        flash('Stock allocated and deducted from inventory')
+      } else {
+        flash('Stock allocated')
+      }
+
       setForm(BLANK)
       loadAllocations()
       onRefresh()
