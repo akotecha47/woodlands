@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, fmtDate, Toast, useFlash, Field, Inp, fieldCls } from './AdminUI'
 
@@ -31,7 +31,7 @@ export default function StaffTab() {
   const flash = useFlash(setToast)
 
   async function fetchStaff() {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('staff')
       .select('*')
       .order('department').order('full_name')
@@ -80,11 +80,11 @@ export default function StaffTab() {
       if (isAdding) {
         patch.hire_date = editForm.hire_date || null
         patch.is_active = true
-        const { error } = await supabaseAdmin.from('staff').insert(patch)
+        const { error } = await supabase.from('staff').insert(patch)
         if (error) throw error
         flash('Staff member added')
       } else {
-        const { error } = await supabaseAdmin.from('staff').update(patch).eq('id', editRec.id)
+        const { error } = await supabase.from('staff').update(patch).eq('id', editRec.id)
         if (error) throw error
         flash('Staff record updated')
       }
@@ -98,7 +98,7 @@ export default function StaffTab() {
     setBusyId(s.id)
     setConfirmDeact(null)
     try {
-      const { error } = await supabaseAdmin.from('staff')
+      const { error } = await supabase.from('staff')
         .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq('id', s.id)
       if (error) throw error
@@ -111,7 +111,7 @@ export default function StaffTab() {
   async function handleReactivate(s) {
     setBusyId(s.id)
     try {
-      const { error } = await supabaseAdmin.from('staff')
+      const { error } = await supabase.from('staff')
         .update({ is_active: true, updated_at: new Date().toISOString() })
         .eq('id', s.id)
       if (error) throw error

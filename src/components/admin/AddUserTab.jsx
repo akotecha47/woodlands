@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { ROLE_LABELS } from '../../lib/roles'
 import { Field, Inp, Sel } from './AdminUI'
 
@@ -17,13 +16,13 @@ export default function AddUserTab() {
   const [shiftOptions,setShiftOptions]= useState([])
 
   async function fetchDepartments() {
-    const { data } = await supabaseAdmin.from('departments').select('*').order('name')
+    const { data } = await supabase.from('departments').select('*').order('name')
     if (data) setDepartments(data)
   }
 
   async function fetchShifts(dept) {
     if (!dept) { setShiftOptions([]); return }
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('shift_settings')
       .select('shift_name, shift_start, shift_end, shift_type')
       .eq('department', dept)

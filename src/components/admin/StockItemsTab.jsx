@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { UNITS } from '../../lib/constants'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from './AdminUI'
 
@@ -33,12 +33,12 @@ export default function StockItemsTab() {
   const flash = useFlash(setToast)
 
   async function fetchStockItems() {
-    const { data } = await supabaseAdmin.from('stock_items').select('*').order('name')
+    const { data } = await supabase.from('stock_items').select('*').order('name')
     if (data) setStockItems(data)
   }
 
   async function fetchDepartments() {
-    const { data } = await supabaseAdmin.from('departments').select('*').order('name')
+    const { data } = await supabase.from('departments').select('*').order('name')
     if (data) setDepartments(data)
   }
 
@@ -47,12 +47,12 @@ export default function StockItemsTab() {
     setStockBusy(true)
     try {
       const dept = stockForm.department || null
-      let countQuery = supabaseAdmin.from('stock_items').select('*', { count: 'exact', head: true })
+      let countQuery = supabase.from('stock_items').select('*', { count: 'exact', head: true })
       countQuery = dept ? countQuery.eq('department', dept) : countQuery.is('department', null)
       const { count } = await countQuery
       const sku = `${deptCode(dept)}-${String((count ?? 0) + 1).padStart(3, '0')}`
 
-      const { error } = await supabaseAdmin.from('stock_items').insert({
+      const { error } = await supabase.from('stock_items').insert({
         name: stockForm.name.trim(),
         sku,
         unit: stockForm.unit,
@@ -70,7 +70,7 @@ export default function StockItemsTab() {
   async function toggleStockActive(item) {
     setBusyId(item.id)
     try {
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from('stock_items')
         .update({ is_active: !item.is_active })
         .eq('id', item.id)
@@ -85,7 +85,7 @@ export default function StockItemsTab() {
     const { id, name, unit, reorder_level } = editingStock
     if (!name.trim()) return
     try {
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from('stock_items')
         .update({ name: name.trim(), unit, reorder_level: Number(reorder_level) })
         .eq('id', id)

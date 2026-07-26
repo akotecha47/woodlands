@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { ROLE_LABELS } from '../../lib/roles'
 import { Th, Td, fmtDate, Toast, useFlash } from './AdminUI'
 
@@ -14,18 +14,18 @@ export default function UsersTab() {
   const flash = useFlash(setToast)
 
   async function fetchUsers() {
-    const { data } = await supabaseAdmin.from('user_profiles').select('*').order('full_name')
+    const { data } = await supabase.from('user_profiles').select('*').order('full_name')
     if (data) setUsers(data)
   }
 
   async function fetchDepartments() {
-    const { data } = await supabaseAdmin.from('departments').select('*').order('name')
+    const { data } = await supabase.from('departments').select('*').order('name')
     if (data) setDepartments(data)
   }
 
   async function fetchShifts(dept) {
     if (!dept) { setShiftOpts([]); return }
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('shift_settings')
       .select('shift_name, shift_start, shift_end, shift_type')
       .eq('department', dept)
@@ -58,7 +58,7 @@ export default function UsersTab() {
         shift_name: editForm.shift_name || null,
         updated_at: new Date().toISOString(),
       }
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from('user_profiles').update(patch).eq('id', editUser.id)
       if (error) throw error
       flash(`${editForm.full_name || editUser.full_name} updated`)
@@ -71,7 +71,7 @@ export default function UsersTab() {
   async function toggleActive(user) {
     setBusyId(user.id)
     try {
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from('user_profiles')
         .update({ is_active: !user.is_active, updated_at: new Date().toISOString() })
         .eq('id', user.id)

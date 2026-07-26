@@ -4,7 +4,7 @@ import {
   AlertTriangle, AlertCircle, Package, Users, ChevronRight,
   Calendar, Leaf, Search, Bell,
 } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td } from '../admin/AdminUI'
 
@@ -78,40 +78,40 @@ export default function OwnerDashboard() {
   useEffect(() => {
     async function load() {
       const [attR, stockR, eventsR, bookingsR, unverifiedR, depositPmtsR, atRiskR] = await Promise.all([
-        supabaseAdmin
+        supabase
           .from('attendance_records')
           .select('status')
           .eq('date', today),
 
-        supabaseAdmin
+        supabase
           .from('current_stock')
           .select('quantity, stock_items(id, department, reorder_level, is_active)'),
 
-        supabaseAdmin
+        supabase
           .from('events')
           .select('id, title, deposit_amount')
           .gte('event_date', today)
           .neq('status', 'cancelled'),
 
-        supabaseAdmin
+        supabase
           .from('table_bookings')
           .select('id, guest_name, booking_time, party_size, status, tables(table_number, location)')
           .eq('booking_date', today)
           .eq('status', 'confirmed')
           .order('booking_time'),
 
-        supabaseAdmin
+        supabase
           .from('attendance_records')
           .select('id, user_id, user_profiles!user_id(full_name)')
           .eq('status', 'unverified')
           .eq('date', today),
 
-        supabaseAdmin
+        supabase
           .from('event_payments')
           .select('event_id')
           .eq('payment_type', 'deposit'),
 
-        supabaseAdmin
+        supabase
           .from('fm_holders')
           .select('id')
           .eq('status', 'at_risk'),
