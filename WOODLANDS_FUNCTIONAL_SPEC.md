@@ -1,4 +1,12 @@
-# Woodlands Lodge — System Audit
+# WOODLANDS FUNCTIONAL SPEC
+
+*Module-by-module inventory of screens, fields, and business rules. Written 31 May 2026. Renamed from `SYSTEM_AUDIT.md` on 26 July 2026 — this is a functional spec, not a security audit. For audits see `WOODLANDS_AUDIT.md` (4 July 2026) and `WOODLANDS_AUDIT_2.md` (26 July 2026).*
+
+> **Stale section flagged:** the "Route Access Control" table near the top lists seven roles (store_supervisor, bar1, bar2, head_waiter, waiter, farmers_market_admin) that do not exist. The authoritative role list is in `src/lib/roles.js` (four roles: owner, manager, kitchen_manager, restaurant_manager). Refresh this table at Sprint E fit-and-finish.
+
+---
+
+## Woodlands Lodge — System Audit
 
 ## Route Access Control
 
