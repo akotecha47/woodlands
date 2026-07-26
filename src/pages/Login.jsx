@@ -1,13 +1,16 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { getDefaultRoute } from '../lib/roles'
+import { DEACTIVATED_MESSAGE } from '../components/RouteGuard'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState(null)
+  // Set when GuardedPage bounced a deactivated user back here.
+  const [error, setError] = useState(location.state?.message ?? null)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e) {
@@ -24,9 +27,18 @@ export default function Login() {
 
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('role')
+      .select('role, is_active')
       .eq('id', data.user.id)
       .single()
+
+    // Stop a deactivated account at the door rather than letting it hold a
+    // live session and bounce off GuardedPage on every navigation.
+    if (profile?.is_active === false) {
+      await supabase.auth.signOut()
+      setError(DEACTIVATED_MESSAGE)
+      setLoading(false)
+      return
+    }
 
     navigate(getDefaultRoute(profile?.role), { replace: true })
   }
