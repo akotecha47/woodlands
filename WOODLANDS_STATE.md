@@ -34,7 +34,7 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 ## STAGE
 
-**5 — HARDEN.** Sprint A complete (26 July 2026). Sprint B is the next scheduled work.
+**5 — HARDEN.** Sprint B complete (26 July 2026). Sprint C is the next scheduled work.
 
 ---
 
@@ -62,6 +62,14 @@ Per WOODLANDS_AUDIT_2.md (26 July 2026):
 - AUDIT_2 §2.2 corrections (source vs live-DB reality): events, event_payments and user_profiles already had partial policies; table_bookings was the only genuinely-zero case; event_checklists, shift_settings, tables had unreachable policies due to missing GRANTs (now granted).
 - **New finding, LIVE PRODUCTION BUG:** `fm_market_days` table does not exist in the DB at all. MarketDayTab.jsx reads/writes it on every render. Farmers Market monthly notes are broken in production. Sprint D must CREATE this table (not just its policies).
 
+**Updated post-Sprint B (26 July 2026):**
+- **The service role key is out of the browser and rotated.** AUDIT_2 §2.1, §2.1b and §2.4 (all CRITICAL) are closed. Verified on a clean rebuild, not assumed from source: the old key literal returns **0 matches in `dist/`** and **0 files anywhere in the working tree**; the bundle contains exactly **one JWT, `role=anon`**; zero occurrences of `service_role` or `sb_secret`. `src/lib/supabaseAdmin.js` is deleted, `VITE_SUPABASE_SERVICE_ROLE_KEY` is gone from `.env.local`, and the hardcoded literal is stripped from `scripts/seed-attendance.mjs` (now throws if `SUPABASE_SERVICE_KEY` is unset). Key rotated via the new API keys route, so the anon key and live sessions were unaffected.
+- **All 36 files migrated off `supabaseAdmin`.** 35 to the anon client, plus CheckIn.jsx to a new `public-checkin` Edge Function. Access control now genuinely lives in RLS rather than in JSX.
+- **`src/lib/standards.md` rewritten** (AUDIT_2 §4.3, the root cause). It now mandates the anon client and Edge Functions and explicitly forbids `supabaseAdmin`, `VITE_SUPABASE_SERVICE_ROLE_KEY` and any `service_role` usage in browser bundles, pointing at Standard §2.1/§2.2/§2.4/§2.6.
+- **Migration 022 was far larger than the sprint brief anticipated.** It expected occasional policy patching; a live query found **14 tables** unusable by the anon client, 11 of them missing `authenticated` DML grants entirely. A grant is checked *before* a policy, so those tables had correct-looking SELECT policies that could never run — invisible while the browser held a service-role client. Events, Farmers Market and Inventory would have failed on every read and write.
+- **Zero `anon` policies exist in this database, deliberately.** Public `/checkin` reaches `fm_holders`/`fm_visits` only through the Edge Function, which keeps holder PII off a public read policy.
+- **New finding, pre-existing since 28 May:** Event Add Payment has never worked. `event_payments.received_by` FKs to `auth.users(id)` while the dropdown populates from `staff`. Not a Sprint B regression (confirmed by `git blame`) — constraints are enforced regardless of which key issues the insert. Sprint C.
+
 See `WOODLANDS_AUDIT_2.md` for full findings and file/line references.
 
 Standing rules from CLAUDE.md (rewritten 26 July to match code):
@@ -76,7 +84,7 @@ Standing rules from CLAUDE.md (rewritten 26 July to match code):
 - **Full working system delivered no different from a paying client.**
 - **Handover-track** — meeting with Dhiren showing a proper working version of his system. Post-meeting: he decides if he wants to proceed to formal handover.
 - **Testimonial + referrals** post-handover. Nothing specific discussed yet.
-- **Post-Sprint-A restore point (still current):** Supabase automatic backup, 26 July 2026 02:30:54 UTC. Take a NEW manual backup before Sprint B begins.
+- **Restore point:** Supabase automatic backup, 26 July 2026 02:30:54 UTC — still the most recent known point. **No fresh manual backup was taken before Sprint B**; Aman's call, on the basis that backups live on Supabase rather than locally. That timestamp predates migrations 021 and 022, both of which are idempotent and in git and so replayable; data written after it is not covered. **Take a manual snapshot before Sprint C** — it touches money and quantity logic.
 
 ---
 
@@ -93,7 +101,8 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 ## OPEN QUALITY ITEMS / KNOWN GAPS
 
 - Both audit files now tracked and committed (`WOODLANDS_AUDIT.md` 4 July, `WOODLANDS_AUDIT_2.md` 26 July). AUDIT_2 supersedes for finding status; both retained side-by-side for the diff.
-- Full four-role walkthrough by role (owner / manager / kitchen_manager / restaurant_manager) — status TO CONFIRM after Sprint B.
+- Full four-role walkthrough by role (owner / manager / kitchen_manager / restaurant_manager) + deactivated user — partially done during the Sprint B smoke test, which surfaced the Add Payment FK bug. Not yet a systematic pass; still TO CONFIRM.
+- **Inventory module has had no runtime exercise at all.** All seven files were migrated to the anon client, but the module is unreachable (`ROUTE_ACCESS` keys `/inventory`, route is mounted at `/`). Its policies and grants are untested against a real session until the Sprint E route fix.
 - `npm audit` returned malformed registry response during AUDIT_2 — dependency CVE status UNVERIFIED, re-run pending.
 
 ---
@@ -105,7 +114,7 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 **Revised sequence (Sprint A–F, per audit's dependency graph):**
 
 - **Sprint A — Foundations. ✅ DONE 26 July 2026.** Commits `6b56bdd`, `8a22e1c`, `aabb620`. Migration `021_sprint_a_policies.sql` applied to the live DB and verified by `pg_policies` query; `create-user` Edge Function authenticated and redeployed; `is_active` enforced in RouteGuard and Login. Build clean. Additive only — nothing dropped except the stale `004` blanket policy on `staff`, which was in scope. Per-role login testing outstanding (Dhiren-facing, Sprint F).
-- **Sprint B — Rewrite `src/lib/standards.md`, then strip the key.** Rewrite the superseded standards file first so future sessions don't regress. Migrate 36 files off `supabaseAdmin` (CheckIn.jsx first). Rotate service_role key. Strip hardcoded key from seed script. Verify by grep of fresh `dist/`.
+- **Sprint B — Strip the service role key. ✅ DONE 26 July 2026.** Commits `d88387b` (standards.md rewrite), `e7b9df0` (CheckIn → `public-checkin` Edge Function), `516cd2a` (migration `022`, 14 tables), `6cb8e25`/`155461b`/`78300f0`/`ce1e06e`/`4cda9c4`/`e59c400` (35 files, six module commits), `22a3a89` (key rotation + cleanup). Verified by grep and JWT decode of a fresh `dist/`: zero service_role, one anon JWT. Migration `022` applied via SQL, not `db push`.
 - **Sprint C — Money and quantity guards.** Fix stock clamp (fail-not-warn); persist deducted quantity; atomic stock operations; CHECK constraints on `amount` columns; attendance UTC date boundary + `shift_date` fix.
 - **Sprint D — Schema reconciliation.** Ghost tables → migrations; `returned_qty` column; drop dead tables; renumber duplicate `008`; verify DB rebuildable from files alone.
 - **Sprint E — Fit and finish.** `/inventory` route fix; delete dead `store_supervisor` gates; password reset flow; un-hardcode project URL; refresh WOODLANDS_FUNCTIONAL_SPEC.md route table.
@@ -115,7 +124,12 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 
 ## NEXT ACTION
 
-Per-role login walkthrough of the live site (owner / manager / kitchen_manager / restaurant_manager + one deactivated test user). Any failures logged before starting Sprint B.
+**Two verification items before Sprint C:**
+
+1. **Browser test of Admin → Add User.** The rotated secret is proved working for service-role PostgREST reads (`public-checkin` returns 200), but `auth.admin.createUser` against the `sb_secret_*` format is untested — `standards.md` §4 records that the auto-injected non-JWT key cannot do `auth.admin` calls. If Add User fails, put the JWT-format service-role key in the `SERVICE_ROLE_KEY` secret.
+2. **Take a manual Supabase snapshot.** Sprint C touches money and quantity logic; the last known restore point predates Sprints A and B.
+
+Then **Sprint C — money and quantity guards**, now carrying one extra item: Event Add Payment has never worked (`received_by` FK vs `staff` dropdown, see COMPLIANCE above).
 
 ---
 

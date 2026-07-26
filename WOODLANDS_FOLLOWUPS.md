@@ -60,6 +60,14 @@
 
   *Diagnosis notes:* not a Sprint B regression. `git blame` puts the dropdown source (`:207`), the `fetchAllActiveStaff()` call (`:31`) and the import (`:5`) at commits `e638646` and `e63c7fb`, both 2026-05-28. Sprint B's only change to this file was the `supabaseAdmin` → `supabase` identifier rename. The FK was always enforced — the service-role key bypasses RLS, never constraints — so this path has never worked for any role since it was built. First exercised during the Sprint B smoke test.
 
+### Sprint B — Task 5 (key rotation, 2026-07-26)
+
+- **`auth.admin.createUser` is unverified against the rotated secret.** The key was rotated via the new API keys route, so `SERVICE_ROLE_KEY` now holds an `sb_secret_*` value rather than a JWT. `src/lib/standards.md` §4 records that the auto-injected 41-character non-JWT key *cannot* perform `auth.admin` calls — whether `sb_secret_*` can was not tested, because testing it means creating a real user. `public-checkin` was proved working (service-role PostgREST read returns 200), so the secret is valid for `.from()` queries at least. **Needs a browser test of Admin → Add User.** If it fails, the fix is to put the JWT-format service-role key in the secret instead.
+
+- **`src/lib/standards.md` §4 may now be stale.** It mandates storing "the JWT value" in `SERVICE_ROLE_KEY`. With the new API keys model the secret is `sb_secret_*`, not a JWT. Update §4 once the Add User test above settles which format actually works. **Sprint C.**
+
+- **No fresh manual backup was taken before Sprint B.** Confirmed by Aman as a deliberate call (backups live on Supabase, not locally). The restore point going into this sprint was the automatic backup of 26 July 02:30:54 UTC, which predates migrations 021 and 022. Both are idempotent and in git, so they are replayable, but any data written after that timestamp is not covered. **Take a manual snapshot before Sprint C**, which touches money and quantity logic.
+
 ### Sprint B — carried from Task 2 setup
 
 - **No `supabase/config.toml` in the repo.** The deployed `verify_jwt` setting is still not expressible in source. The function no longer depends on it (it verifies the caller itself), but the setting remains undocumented. **Sprint D.**
