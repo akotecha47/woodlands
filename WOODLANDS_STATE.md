@@ -34,7 +34,7 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 ## STAGE
 
-**5 — HARDEN.** Sprint plan being revised per AUDIT_2 findings before Sprint A begins.
+**5 — HARDEN.** Sprint A complete (26 July 2026). Sprint B next.
 
 ---
 
@@ -51,6 +51,10 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 ## COMPLIANCE VS STANDARD (v1.5)
 
 Per WOODLANDS_AUDIT_2.md (26 July 2026):
+
+**Closed by Sprint A (26 July):** AUDIT_2 §2.2(a) stale `staff` blanket policy, §2.2(b) missing `events`/`event_payments`/`table_bookings` write policies, §2.2(c) `user_profiles` UPDATE, §4.4 unauthenticated `create-user` endpoint, §2.5(b) unenforced `is_active`. Standard §6 "no public write endpoint that lets a stranger create a privileged account" is now green.
+
+**Still open:** the service-key findings (§2.1, §2.1b, §2.4) — Sprint B. Money/quantity guards (§3 DoD 6) — Sprint C. Schema reconciliation (§2.6) — Sprint D. `/inventory` route mismatch (§2.5a) — Sprint E.
 
 - **7 CRITICAL/HIGH from AUDIT (4 July) — all still open.** Zero source commits between audits.
 - **7 new findings** in AUDIT_2. Highlights: service_role key also in git history via `scripts/seed-attendance.mjs:14`; `events`/`event_payments`/`table_bookings` have RLS on with zero policies (fail-closed today, but a prerequisite dependency for stripping the service key); `staff` table writable by any authenticated user via a stale `004` blanket policy; `is_active` never enforced (deactivation is cosmetic); Inventory module unreachable due to `/inventory` vs `/` route key mismatch; stock clamp + full-quantity return creates phantom inventory on cancel; `src/lib/standards.md` mandates the anti-pattern that produced the service-key spread.
@@ -94,7 +98,7 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 
 **Revised sequence (Sprint A–F, per audit's dependency graph):**
 
-- **Sprint A — Foundations.** Write missing policies (`events`, `event_payments`, `table_bookings`, `user_profiles`, four ghost tables); drop stale `004` blanket policy on `staff`; authenticate `create-user` Edge Function; enforce `is_active` in RouteGuard. Additive only. Prerequisite for Sprint B.
+- **Sprint A — Foundations. ✅ DONE 26 July 2026.** Commits `6b56bdd`, `8a22e1c`, `aabb620`. Migration `021_sprint_a_policies.sql` applied to the live DB and verified by `pg_policies` query; `create-user` Edge Function authenticated and redeployed; `is_active` enforced in RouteGuard and Login. Build clean. Additive only — nothing dropped except the stale `004` blanket policy on `staff`, which was in scope. Per-role login testing outstanding (Dhiren-facing, Sprint F).
 - **Sprint B — Rewrite `src/lib/standards.md`, then strip the key.** Rewrite the superseded standards file first so future sessions don't regress. Migrate 36 files off `supabaseAdmin` (CheckIn.jsx first). Rotate service_role key. Strip hardcoded key from seed script. Verify by grep of fresh `dist/`.
 - **Sprint C — Money and quantity guards.** Fix stock clamp (fail-not-warn); persist deducted quantity; atomic stock operations; CHECK constraints on `amount` columns; attendance UTC date boundary + `shift_date` fix.
 - **Sprint D — Schema reconciliation.** Ghost tables → migrations; `returned_qty` column; drop dead tables; renumber duplicate `008`; verify DB rebuildable from files alone.
@@ -105,7 +109,12 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 
 ## NEXT ACTION
 
-Pre-sprint cleanup in progress (this update is part of it). After cleanup commit lands: begin Sprint A.
+**Sprint B — rewrite `src/lib/standards.md`, then strip the service key.** Sprint A cleared its prerequisite: `events`, `event_payments` and `table_bookings` now have non-service-role access paths, so removing `supabaseAdmin` will no longer hard-break Events and Table Bookings.
+
+Two Sprint A discoveries feed Sprint B and D:
+
+1. **`supabase db push` is unsafe until migration history is repaired.** Remote history records only 001–007; 008–020 ran but were never recorded. A push would replay `016_staff_restructure.sql` and duplicate all 62 real staff rows. `021` was applied via the Management API query endpoint instead. Repair before any future push. Sprint D.
+2. **`fm_market_days` does not exist in the live database at all** — not a table, view, or matview. `MarketDayTab.jsx` reads and writes it, so the Farmers Market market-day notes surface is broken in production today. AUDIT_2 §2.6 classified it as an unmigrated "ghost table"; it is worse than that. Sprint D must `CREATE` it, not just back-fill a migration.
 
 ---
 
