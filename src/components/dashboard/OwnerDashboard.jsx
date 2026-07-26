@@ -75,6 +75,13 @@ export default function OwnerDashboard() {
   const marketDay = getNextMarketDay()
   const initials  = getInitials(profile?.full_name)
 
+  // This dashboard is shared by all four roles (ROUTE_ACCESS['/dashboard']),
+  // but Farmers Market is owner/manager only. Without this gate a
+  // kitchen_manager saw "Next Market Day" and "N holders at risk" — data from a
+  // module they cannot open. Matches FM_MANAGE_ROLES and
+  // ROUTE_ACCESS['/farmers-market'].
+  const canSeeFarmersMarket = ['owner', 'manager'].includes(profile?.role)
+
   useEffect(() => {
     async function load() {
       const [attR, stockR, eventsR, bookingsR, unverifiedR, depositPmtsR, atRiskR] = await Promise.all([
@@ -183,7 +190,7 @@ export default function OwnerDashboard() {
         : 'Check inventory',
       link:      '/',
     }] : []),
-    ...(atRiskCount > 0 ? [{
+    ...(canSeeFarmersMarket && atRiskCount > 0 ? [{
       key:       'at-risk',
       Icon:      Users,
       iconColor: 'text-amber-500',
@@ -228,8 +235,12 @@ export default function OwnerDashboard() {
         </div>
       </div>
 
-      {/* ── KPI cards ─────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* ── KPI cards ───────────────────────────────────────────────────────────
+          Column count follows the card count so hiding the Farmers Market card
+          does not leave a dead slot in the row. */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 ${
+        canSeeFarmersMarket ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+      }`}>
 
         {/* Attendance — teal icon on teal tint */}
         <KpiCard
@@ -270,17 +281,21 @@ export default function OwnerDashboard() {
           <p className="text-xs text-gray-400">from today onwards</p>
         </KpiCard>
 
-        {/* Market day — green icon on green tint; date is longer so shrink value */}
-        <KpiCard
-          Icon={Leaf}
-          iconBg="bg-green-50"
-          iconColor="text-green-600"
-          label="Next Market Day"
-          value={mdDateLabel}
-          valueCls="text-base"
-        >
-          <p className={`text-xs font-medium ${mdDaysColor}`}>{mdDaysLabel}</p>
-        </KpiCard>
+        {/* Market day — green icon on green tint; date is longer so shrink value.
+            Owner/manager only: Farmers Market is not a kitchen_manager or
+            restaurant_manager surface. */}
+        {canSeeFarmersMarket && (
+          <KpiCard
+            Icon={Leaf}
+            iconBg="bg-green-50"
+            iconColor="text-green-600"
+            label="Next Market Day"
+            value={mdDateLabel}
+            valueCls="text-base"
+          >
+            <p className={`text-xs font-medium ${mdDaysColor}`}>{mdDaysLabel}</p>
+          </KpiCard>
+        )}
 
       </div>
 
