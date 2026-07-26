@@ -75,11 +75,16 @@ export async function fetchUserMap() {
   return data ? Object.fromEntries(data.map(u => [u.id, u.full_name])) : {}
 }
 
+// Populates the "Received by" pickers on Log Delivery and Transfers. Dropped
+// 'store_supervisor' from the filter: the role was removed from roles.js in
+// June (commits 5d86e3e, 00fbdaa) and no user_profiles row can hold it, so it
+// only ever widened the query to nothing. Matches the owner/manager gate on
+// both tabs that use this.
 export async function fetchStaffUsers() {
   const { data } = await supabase
     .from('user_profiles')
     .select('id, full_name')
-    .in('role', ['owner', 'manager', 'store_supervisor'])
+    .in('role', ['owner', 'manager'])
     .eq('is_active', true)
     .order('full_name')
   return data ?? []

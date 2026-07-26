@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, AccessDenied, fetchActiveItems, fetchDepartmentList, fetchStaffUsers } from './InventoryUI'
 
-const ALLOWED = ['owner', 'manager', 'store_supervisor']
+// 'store_supervisor' removed — see LogDeliveryTab. Dead role, no behaviour change.
+const ALLOWED = ['owner', 'manager']
 
 export default function TransfersTab() {
   const { profile, session } = useAuth()

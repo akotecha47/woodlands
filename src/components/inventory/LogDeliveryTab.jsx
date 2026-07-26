@@ -4,7 +4,9 @@ import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { todayStr, itemLabel, AccessDenied, fetchActiveItems, fetchStaffUsers } from './InventoryUI'
 import { applyStockDelta } from '../../lib/stock'
 
-const ALLOWED = ['owner', 'manager', 'store_supervisor']
+// 'store_supervisor' removed — deleted from roles.js in June, so no user could
+// hold it and this tab was AccessDenied to everyone except owner/manager anyway.
+const ALLOWED = ['owner', 'manager']
 
 export default function LogDeliveryTab() {
   // performed_by is set server-side from auth.uid() inside apply_stock_delta,
