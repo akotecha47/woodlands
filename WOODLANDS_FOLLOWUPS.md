@@ -94,6 +94,20 @@
 
 - **`AdjustmentsTab` is a fourth site that writes stock, not covered by Task 4's three.** `AdjustmentsTab.jsx:42-55` inserts a `stock_movements` row and *then* upserts `current_stock`. It sets an absolute quantity (a stock take) rather than applying a delta, so it has no clamp bug — but if the upsert fails, e.g. on the `quantity >= 0` CHECK, the movement row is already committed, leaving a ledger entry with no corresponding stock change. `apply_stock_delta` does not fit it directly because the operation is a set, not a delta. **Raised with Aman before Task 4** per the sprint's scope-surprise stopping rule.
 
+## BLOCKER — ALL EDGE FUNCTIONS ARE DOWN (26 July 2026, evening)
+
+- **`SERVICE_ROLE_KEY` still holds the disabled legacy `service_role` JWT.** Disabling legacy API keys killed the admin client inside every Edge Function. Confirmed for `public-checkin`: the `fm_holders` lookup returns `"Legacy API keys are disabled"`. `create-user` follows by construction — it builds the same admin client and cannot get past `auth.getUser`, so **Add User is broken too**, despite having been tested successfully earlier today (that test predated the legacy-key disable).
+
+- **The project's existing `sb_secret_*` key does not authenticate.** `sb_secret_vXtUz…` (id `85f95296…`, created 2026-07-26 09:53, `secret_jwt_template: {role: service_role}`) returns `401` with an empty body against both `/rest/v1` and `/auth/v1/admin`, in every header form. By contrast `sb_publishable_*` authenticates correctly. So simply pasting the existing secret key into `SERVICE_ROLE_KEY` will **not** fix this — it needs a working secret key first.
+
+- **Remediation is Aman's, in the dashboard.** Two options, and the choice matters:
+  1. **Create a fresh secret key** (Project Settings → API Keys) and set `SERVICE_ROLE_KEY` to it. Keeps the Sprint B security posture. Then verify BOTH `public-checkin` (QR scan) and Add User, because a secret key's `auth.admin` capability is now unverified — see the correction in `src/lib/standards.md` §4.
+  2. **Temporarily re-enable legacy JWT API keys.** Fastest route to a working demo — the existing `SERVICE_ROLE_KEY` starts working again immediately with no other change — but it partly undoes the Sprint B key migration and re-enables the old `anon` JWT as well.
+
+- **Lesson worth keeping:** both earlier "verified" results — `public-checkin` returning 200 and Add User succeeding — passed because `SERVICE_ROLE_KEY` still held the *legacy* key. They proved the old configuration worked, not the new one. A passing test proves the configuration that was live when it ran, not the one you believe you set.
+
+- **`public-checkin` now returns `detail` on infrastructure failure.** A short error string is included in the 503 body so a failure is diagnosable rather than silent. It contains no PII or credentials, but it does leak internal state on a public endpoint — **drop it before handover** and rely on `console.error` in the function logs.
+
 ## FROM DEMO PREP (Sprint D P1 + Sprint E must-ships, 26 July 2026 evening)
 
 - **`WOODLANDS_DEMO_PREP.md` does not exist.** The demo-prep brief instructed me to read it and cited §1, §4 items 5–6, and §5 (four verification tests). Searched the repo, the whole user directory, and git history on all branches — no such file, and no commit ever added one. Tasks 1–6 were unaffected because the brief specified them fully and §4 items 5–6 duplicate findings already in this log from the Sprint C smoke test. The only casualty was Task 7's NEXT ACTION, which was supposed to cite §5's four tests; concrete steps derived from tonight's changes were written instead. **Either write the file or stop citing it** — this project has already been bitten twice by confident references to documents that turned out to be missing or misnumbered (AUDIT_2 §0 on the absent Standard; the §2.5-vs-§4.4 create-user citation).

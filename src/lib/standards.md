@@ -130,7 +130,17 @@ if (!session?.access_token) throw new Error('Session expired')
 
 **Current value format:** `sb_secret_*`. This project migrated off legacy JWT-based API keys on 26 July 2026 (Sprint B); the anon/service_role JWT pair is disabled and the project now uses an `sb_publishable_*` / `sb_secret_*` pair.
 
-**Verified 26 July 2026:** an `sb_secret_*` key performs **both** service-role PostgREST reads (`public-checkin`) and `auth.admin` calls including `createUser` (`create-user`, confirmed by creating a real user). Earlier guidance in this file claimed only a JWT-format key could do `auth.admin` — that was true of an older auto-injected 41-character format and is **not** true of `sb_secret_*`. Do not swap the secret back to a JWT on that basis.
+**CORRECTION, 26 July 2026 (evening) — the "verified" claim below was wrong.** This section previously read: *"Verified 26 July 2026: an `sb_secret_*` key performs both service-role PostgREST reads and `auth.admin` calls including `createUser`."* That conclusion was drawn from `public-checkin` returning 200 and Add User succeeding — **but at the time of both tests `SERVICE_ROLE_KEY` still held the legacy `service_role` JWT.** What those tests actually proved is that the *legacy* key worked. `sb_secret_*` was never exercised.
+
+**Current verified state:**
+- `sb_publishable_*` authenticates correctly (reaches PostgREST and is subject to RLS).
+- The **legacy** `anon` and `service_role` JWTs are disabled and return a bare `401`.
+- The project's `sb_secret_*` key (created 2026-07-26 09:53) **does not authenticate** — `401` with an empty body against both `/rest/v1` and `/auth/v1/admin`, in every header form (`apikey`, `Bearer`, or both).
+- Consequently **every Edge Function is broken**, because `SERVICE_ROLE_KEY` still holds the disabled legacy JWT. Confirmed for `public-checkin` (`"Legacy API keys are disabled"` surfaced from the `fm_holders` lookup); `create-user` follows by construction, since it builds the same admin client and cannot get past `auth.getUser`.
+
+**Do not treat the key format question as settled.** Until a secret key is proved to work end to end, record what was actually tested and with which key in the secret.
+
+**Lesson:** a passing test proves the configuration that was live when it ran, not the configuration you believe you set. Both tests above passed for the wrong reason.
 
 **Why set it manually anyway:** the runtime's auto-injected variable has changed format before, silently, and broke `auth.admin`. An explicitly set secret is one you control and can verify.
 

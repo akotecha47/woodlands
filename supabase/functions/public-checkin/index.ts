@@ -131,9 +131,21 @@ serve(async (req) => {
       .eq('id', holderId)
       .maybeSingle()
 
+    // An infrastructure failure is NOT "business not found". Conflating them
+    // meant a broken service_role key surfaced to a stall holder as "This QR
+    // code is invalid or the business account is inactive", sending anyone
+    // debugging it after the data instead of the connection.
+    if (holderErr) {
+      console.error('public-checkin: fm_holders lookup failed', holderErr)
+      return jsonResponse({
+        error:  'Check-in is temporarily unavailable. Please see the market manager.',
+        detail: holderErr.message ?? String(holderErr),
+      }, 503)
+    }
+
     // Inactive holders return the same shape as missing ones, so the response
     // does not confirm that a given UUID exists.
-    if (holderErr || !holder || holder.status === 'inactive') {
+    if (!holder || holder.status === 'inactive') {
       return jsonResponse({ not_found: true }, 200)
     }
 
