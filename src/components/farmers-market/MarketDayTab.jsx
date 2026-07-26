@@ -194,22 +194,33 @@ export default function MarketDayTab() {
 
   // ── market conditions ─────────────────────────────────────────────────────
 
+  // Errors were previously swallowed here, and setConditionsDirty(false) ran
+  // unconditionally, so a failed save cleared the "Saving…" hint exactly like a
+  // successful one. That is how this went unnoticed while fm_market_days did not
+  // even exist: every save silently vanished and the UI reported nothing.
   async function persistConditions(val) {
-    if (conditionsId) {
-      await supabase.from('fm_market_days').update({
-        notes:      val,
-        updated_by: session?.user?.id ?? null,
-        updated_at: new Date().toISOString(),
-      }).eq('id', conditionsId)
-    } else {
-      const { data } = await supabase.from('fm_market_days').insert({
-        market_date: marketDate,
-        notes:       val,
-        updated_by:  session?.user?.id ?? null,
-      }).select('id').single()
-      if (data) setConditionsId(data.id)
+    try {
+      if (conditionsId) {
+        const { error } = await supabase.from('fm_market_days').update({
+          notes:      val,
+          updated_by: session?.user?.id ?? null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', conditionsId)
+        if (error) throw error
+      } else {
+        const { data, error } = await supabase.from('fm_market_days').insert({
+          market_date: marketDate,
+          notes:       val,
+          updated_by:  session?.user?.id ?? null,
+        }).select('id').single()
+        if (error) throw error
+        if (data) setConditionsId(data.id)
+      }
+      setConditionsDirty(false)
+    } catch (err) {
+      // Leave conditionsDirty set, so the hint stays and the failure is visible.
+      flash(`Could not save market conditions: ${err.message}`, false)
     }
-    setConditionsDirty(false)
   }
 
   function handleConditionsChange(val) {
@@ -222,7 +233,6 @@ export default function MarketDayTab() {
   // ── derived ───────────────────────────────────────────────────────────────
 
   const today          = todayStr()
-  const isPast         = marketDate < today
   const isDecemberDate = new Date(marketDate + 'T12:00:00').getMonth() === 11
   const validMarketDay = isMarketDay(marketDate)
   const isToday        = marketDate === today
@@ -299,12 +309,22 @@ export default function MarketDayTab() {
             <label className="text-xs font-medium text-gray-500">Market Conditions</label>
             {conditionsDirty && <span className="text-xs text-gray-400">Saving…</span>}
           </div>
+          {/* Editable for any market day the user can manage, past included.
+              This was previously `disabled={!canManage || isPast}`, where
+              isPast = marketDate < today. Because the tab opens on the CURRENT
+              month's market day (defaultMarketDate), that locked the field from
+              the day after market day until month end — 29 days in 30 — and it
+              was the only thing isPast gated. Check-in and fee collection have
+              always worked on past dates, so blocking the note about the day
+              while allowing edits to the day's records was inconsistent: you
+              could take a holder's fee for yesterday's market but not write down
+              what the weather was. */}
           <input
             type="text"
             value={conditions}
             onChange={e => handleConditionsChange(e.target.value)}
-            disabled={!canManage || isPast}
-            placeholder={canManage && !isPast ? 'Describe conditions for this market day…' : 'No conditions recorded'}
+            disabled={!canManage}
+            placeholder={canManage ? 'Describe conditions for this market day…' : 'No conditions recorded'}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
           />
         </div>
