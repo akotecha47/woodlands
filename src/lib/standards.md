@@ -1,39 +1,140 @@
-> **SUPERSEDED — do not follow.** This file's guidance predates STREAMLINE_BUILD_STANDARD.md v1.5 and mandates patterns the Standard now forbids (specifically: `supabaseAdmin` in browser code). Being rewritten in Sprint B. Until then, treat this entire file as archival. Authoritative doctrine: STREAMLINE_BUILD_STANDARD.md in repo root, and CLAUDE.md.
+> **HISTORICAL HEADER — retained for trace.** The text below is the warning that sat at the top of this file between the 26 July 2026 audit and the Sprint B rewrite:
+>
+> > **SUPERSEDED — do not follow.** This file's guidance predates STREAMLINE_BUILD_STANDARD.md v1.5 and mandates patterns the Standard now forbids (specifically: `supabaseAdmin` in browser code). Being rewritten in Sprint B. Until then, treat this entire file as archival. Authoritative doctrine: STREAMLINE_BUILD_STANDARD.md in repo root, and CLAUDE.md.
+>
+> That rewrite is this document. The body below is current and authoritative as of Sprint B, 26 July 2026. The former §1, §4, §9 and §14 — which mandated `supabaseAdmin` in browser code, a service-role-only policy template, and `VITE_SUPABASE_SERVICE_ROLE_KEY` in the client env — are **deleted, not deprecated**. They were the root cause of the 36-file service-key spread recorded in `WOODLANDS_AUDIT_2.md` §4.3.
 
-# Woodlands — Resolved Issues & Permanent Standards
+# Woodlands — Permanent Standards
 
-These are real bugs that were hit in production or development. Each fix is permanent. Do not reintroduce these patterns.
+Operational rules for this codebase. Each one is a real bug hit in production or development, or a rule derived from one.
+
+**Authoritative doctrine is `STREAMLINE_BUILD_STANDARD.md` v1.5 in the repo root.** This file is subordinate to it and must never contradict it. Where this file and the Standard disagree, the Standard wins and this file is the defect.
 
 ---
 
-## 1. Supabase client rules
+## 1. Browser code uses the anon client. Only the anon client.
 
-**Rule:** All admin DB operations must use `supabaseAdmin` (service role client). The regular `supabase` anon client is for auth operations only. Never use the anon client for DB reads/writes in admin pages.
+**Rule:** Every `.from()`, `.rpc()`, `.select()`, `.insert()`, `.update()` and `.delete()` issued from anything under `src/` uses the anon client from `src/lib/supabase.js`:
 
-**supabaseAdmin config** (`src/lib/supabaseAdmin.js`):
 ```js
-createClient(url, serviceRoleKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-    storageKey: 'sb-admin-token',
-  },
-})
+import { supabase } from '../lib/supabase'
 ```
 
-**Why:** The anon client is subject to RLS and returns empty results or permission errors for rows the logged-in user doesn't own. Admin pages need unrestricted access.
+There is no second client. `src/lib/supabaseAdmin.js` was deleted in Sprint B and must not be recreated.
+
+**Forbidden, without exception:**
+
+- `supabaseAdmin`, or any browser `createClient()` call taking a service-role key
+- `VITE_SUPABASE_SERVICE_ROLE_KEY`, or any `VITE_*` variable holding a secret
+- any `service_role` JWT in a file under `src/`, in `index.html`, or in any file Vite bundles
+
+**Why:** Vite inlines every `VITE_*` variable into the public bundle at build time. The app ships as one unsplit chunk, so a key in the bundle is served to every visitor of every route — including unauthenticated ones at `/login` and `/checkin`. A `service_role` key bypasses RLS entirely: full read, write and delete on every table, plus `auth.admin`. This is not a theoretical exposure; it shipped, and is why the key was rotated in Sprint B.
+
+**Authoritative:** `STREAMLINE_BUILD_STANDARD.md` §2.1 ("The service role key never touches the browser") and §2.4 ("Only the anon key is client-side").
+
+**The old rule this replaces** claimed the anon client "returns empty results for rows the logged-in user doesn't own" and concluded that admin pages need the service role. The diagnosis was backwards. Empty results are the signal that a policy or a grant is missing. Write the policy — see §2.
 
 ---
 
-## 2. Edge function secrets — service role key naming
+## 2. RLS is the access control layer. Not JSX.
+
+**Rule:** Access control lives in the database. `src/lib/roles.js` and `RouteGuard.jsx` gate *navigation*; they are a usability affordance, not a security boundary. Anything that must not be readable or writable by a given role is enforced by an RLS policy.
+
+**Every table needs all four of these, in the same migration that creates it:**
+
+```sql
+ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;
+
+-- 1. service_role escape hatch (Edge Functions only — never the browser)
+CREATE POLICY "service_role_all_<t>" ON <t>
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+GRANT ALL ON <t> TO service_role;
+
+-- 2. the grants the anon client actually needs
+GRANT SELECT, INSERT, UPDATE ON <t> TO authenticated;
+
+-- 3. read policy
+CREATE POLICY "authenticated_read_<t>" ON <t>
+  FOR SELECT TO authenticated USING (true);
+
+-- 4. write policies, scoped to the roles the UI actually gives the action to
+CREATE POLICY "<t>_manage_insert" ON <t>
+  FOR INSERT TO authenticated
+  WITH CHECK (public.current_app_role() IN ('owner', 'manager'));
+```
+
+**`GRANT` and `CREATE POLICY` are two separate gates and you need both.** A table can have a perfectly correct SELECT policy and still return permission-denied because `authenticated` was never granted `SELECT`. This bit this project twice: Sprint A found `event_checklists`, `shift_settings` and `tables` with working policies and no grants, and Sprint B found the same on eleven more tables. Postgres grants DML to `service_role` by default in Supabase, which is why the bug hides while the browser is using a service-role client and surfaces the moment it stops.
+
+**Role lookups use the helper, never a subquery on `user_profiles`:**
+
+```sql
+public.current_app_role()   -- migration 021, SECURITY DEFINER
+```
+
+It returns the caller's `user_profiles.role`, or NULL if their profile is deactivated (`is_active = false`). SECURITY DEFINER is what lets a policy *on* `user_profiles` consult `user_profiles` without infinite RLS recursion. Writing `EXISTS (SELECT 1 FROM user_profiles WHERE ...)` inline in a policy on that table will recurse.
+
+**Roles are authoritative in `src/lib/roles.js`:** `owner`, `manager`, `kitchen_manager`, `restaurant_manager`. Four. A policy must not reference a role outside that list.
+
+**Authoritative:** `STREAMLINE_BUILD_STANDARD.md` §2.2 ("RLS is part of 'the table exists', not a later task").
+
+---
+
+## 3. Privileged operations go through Edge Functions
+
+**Rule:** Anything that genuinely needs `service_role` — creating auth users, reading data the caller must not be able to read directly, anything unauthenticated that touches PII — goes in a Supabase Edge Function. The key lives in the function's environment, server-side, and never leaves it.
+
+**Every Edge Function verifies the caller itself. Do not rely on the platform's `verify_jwt`** — the anon key satisfies it, and the anon key is public.
+
+**Reference implementation: `supabase/functions/create-user/index.ts`.** The pattern:
+
+```ts
+// 1. Bearer token present
+const authHeader = req.headers.get('Authorization') ?? ''
+const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
+if (!token) return jsonResponse({ error: 'Unauthorized' }, 401)
+
+// 2. Token verifies server-side (rejects the anon key: no `sub` claim)
+const { data: caller, error } = await admin.auth.getUser(token)
+if (error || !caller?.user) return jsonResponse({ error: 'Unauthorized' }, 401)
+
+// 3. Caller holds the required role and is not deactivated
+const { data: profile } = await admin.from('user_profiles')
+  .select('role, is_active').eq('id', caller.user.id).maybeSingle()
+if (!profile || profile.role !== 'owner' || profile.is_active === false)
+  return jsonResponse({ error: 'Forbidden' }, 403)
+
+// 4. Validate the body, allowlist any role value, THEN act
+```
+
+**Callers send the session JWT, never the anon key:**
+
+```js
+const { data: { session } } = await supabase.auth.getSession()
+if (!session?.access_token) throw new Error('Session expired')
+// Authorization: `Bearer ${session.access_token}`
+```
+
+**CORS is pinned to the deployed origin**, never `*`:
+
+```ts
+'Access-Control-Allow-Origin': 'https://woodlands-beta.vercel.app'
+```
+
+**Public (unauthenticated) functions** — currently `public-checkin` — have no caller to verify, so they compensate: they return only the minimum fields the screen needs, never `select('*')` on a table holding PII, and they validate every input. A public function is the *reason* holder PII is not exposed by an anon RLS policy; it must not undo that by echoing whole rows back.
+
+---
+
+## 4. Edge Function secret naming — `SERVICE_ROLE_KEY`
 
 **Rule:** Store the service role key as `SERVICE_ROLE_KEY` in Edge Function Secrets. Do not use `SUPABASE_SERVICE_ROLE_KEY`.
 
-**Why:** The Supabase runtime auto-injects `SUPABASE_SERVICE_ROLE_KEY` but it is the new 41-character non-JWT key format. This key cannot be used for `auth.admin` calls (e.g. `createUser`), which require the JWT service role key. The manually set `SERVICE_ROLE_KEY` holds the correct JWT value.
+**Why:** The Supabase runtime auto-injects `SUPABASE_SERVICE_ROLE_KEY`, but as the newer 41-character non-JWT key format. That format cannot perform `auth.admin` calls such as `createUser`, which require the JWT-format service role key. The manually set `SERVICE_ROLE_KEY` holds the correct JWT value.
+
+**When the key is rotated:** update this secret in the same maintenance window, or every Edge Function breaks. Rotating in the Supabase dashboard does *not* update function secrets automatically.
 
 ---
 
-## 3. Auth trigger — handle_new_user must not exist
+## 5. Auth trigger — `handle_new_user` must not exist
 
 **Rule:** There must be no `handle_new_user` trigger on `auth.users`. If found, drop it.
 
@@ -42,76 +143,18 @@ drop trigger if exists handle_new_user on auth.users;
 drop function if exists public.handle_new_user();
 ```
 
-Verify the trigger is absent before any user creation work:
+Verify absence before any user-creation work:
 ```sql
 SELECT * FROM pg_trigger WHERE tgname = 'on_auth_user_created';
 ```
 
-**Why:** The trigger caused an `unexpected_failure` error on every user creation call made through `auth.admin.createUser`. User profile rows are created manually by the `create-user` edge function after the auth user is created, not via trigger.
+**Why:** The trigger caused an `unexpected_failure` on every `auth.admin.createUser` call. Profile rows are created explicitly by the `create-user` Edge Function after the auth user exists, not via trigger.
 
 ---
 
-## 4. RLS policies — both policies required on every table
+## 6. Foreign key on `user_profiles` — deferrable
 
-**Rule:** Every table must have both:
-1. `authenticated` SELECT policy
-2. `service_role` ALL policy
-
-Template:
-```sql
-alter table <table> enable row level security;
-create policy "authenticated read <table>" on <table>
-  for select to authenticated using (true);
-create policy "service role full access on <table>" on <table>
-  for all to service_role using (true) with check (true);
-```
-
-**Why:** Missing the service role policy causes the admin client to return silent empty results even though no error is thrown. This is hard to debug. Always include both.
-
----
-
-## 5. Vercel SPA routing
-
-**Rule:** `vercel.json` must always contain the catch-all rewrite below. Without it, direct URL visits and hard refreshes return 404 for every route except `/`.
-
-```json
-{
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
-}
-```
-
-**Why:** Vercel serves static files by path. Without the rewrite, any URL that isn't the root (e.g. `/admin`, `/inventory`) returns a 404 on hard refresh or direct navigation because there is no corresponding file on disk.
-
----
-
-## 6. Shared constants
-
-**Rule:** Units, roles, departments, and any repeated dropdown values must be defined in `src/lib/constants.js` and imported wherever used. Never hardcode these inline in components.
-
-```js
-// src/lib/constants.js
-export const UNITS = ['kg', 'g', 'litres', 'ml', 'units', 'portions', 'boxes', 'bags', 'bottles', 'cans']
-```
-
-**Why:** Inline lists drift out of sync across pages. A single source of truth ensures every dropdown shows the same options.
-
----
-
-## 7. Column naming — user_profiles
-
-**Rule:** The role column on `user_profiles` is `role`, not `user_role`. Before writing any query against an unfamiliar table, verify actual column names:
-
-```sql
-select column_name from information_schema.columns where table_name = 'user_profiles';
-```
-
-**Why:** A `user_role` column reference caused silent null values in user listings. The schema uses `role` as the column name.
-
----
-
-## 8. Foreign key on user_profiles — deferrable constraint
-
-**Rule:** The foreign key `user_profiles.id → auth.users(id)` must be `DEFERRABLE INITIALLY DEFERRED`.
+**Rule:** `user_profiles.id → auth.users(id)` must be `DEFERRABLE INITIALLY DEFERRED`.
 
 ```sql
 alter table user_profiles
@@ -120,114 +163,90 @@ alter table user_profiles
   deferrable initially deferred;
 ```
 
-**Why:** The edge function creates the auth user and then immediately inserts the profile row within the same operation. A non-deferred FK constraint fires before the transaction commits and raises a constraint violation. The deferred version checks only at commit time, by which point both rows exist.
+**Why:** The Edge Function creates the auth user then immediately inserts the profile row. A non-deferred constraint fires before commit and raises a violation. Deferred checks at commit, by which point both rows exist.
 
 ---
 
-## 9. Every new table — mandatory SQL block (no exceptions)
+## 7. Schema changes go in a numbered migration first
 
-**Rule:** Before writing any frontend code for a new module, run this exact block for every table in that module. If any of these 3 lines are missing, the frontend will get permission denied errors. No exceptions.
+**Rule:** No DDL through the Supabase SQL editor or dashboard without a corresponding numbered file in `supabase/migrations/`. The file is the blueprint; the database is its output.
 
-```sql
--- MANDATORY for every new table — never skip any of these 3 lines
-ALTER TABLE table_name ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "service role full access table_name" ON table_name FOR ALL TO service_role USING (true) WITH CHECK (true);
-GRANT ALL ON table_name TO service_role;
+**Test:** if the database died tomorrow, could it be rebuilt from `supabase/migrations/` alone? Today the answer is no — see `WOODLANDS_FOLLOWUPS.md`. Do not add to that debt.
+
+**`supabase db push` is currently unsafe on this project.** Remote migration history records only 001–007 although 008–021 have run; a push would replay `016_staff_restructure.sql` and duplicate all 62 real staff rows. Apply migrations through the SQL editor until the history is repaired (Sprint D).
+
+**Authoritative:** `STREAMLINE_BUILD_STANDARD.md` §2.6.
+
+---
+
+## 8. Vercel SPA routing
+
+**Rule:** `vercel.json` must always contain the catch-all rewrite:
+
+```json
+{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
 ```
 
-**Why:** Missing any one of these causes silent empty results or permission denied errors in the frontend, with no obvious error message to diagnose. The service role policy is what allows `supabaseAdmin` (the service-role client) to read and write the table. Without the grant, even the service role client gets blocked. RLS without the policy means every query returns zero rows.
-
-Always run all three together in the same migration block so none can be forgotten independently.
+**Why:** Vercel serves static files by path. Without it, any URL other than `/` 404s on hard refresh or direct navigation.
 
 ---
 
-## 10. Scaffold reconciliation — verify schema before writing any frontend code
+## 9. Shared constants
 
-**Rule:** Before building any module that has an existing scaffolded page, always do all of the following for every related table:
+**Rule:** Units, roles, departments and any repeated dropdown values are defined once — roles in `src/lib/roles.js`, the rest in `src/lib/constants.js` — and imported. Never hardcoded inline.
 
-1. Run the column query:
-```sql
-SELECT column_name FROM information_schema.columns
-WHERE table_name = 'x'
-ORDER BY ordinal_position;
-```
-
-2. Compare the output against the spec column names line by line.
-
-3. Run all necessary `ALTER TABLE` statements to add missing columns.
-
-4. Drop `NOT NULL` constraints on old scaffold columns that conflict with the new spec.
-
-5. Never assume scaffold column names match the spec — they won't.
-
-**Common mismatches found across this project:**
-
-| Scaffold name | Correct name |
-|---|---|
-| `customer_name` | `guest_name` |
-| `customer_phone` | `guest_phone` |
-| `customer_email` | `guest_email` |
-| `organizer` | `organiser` |
-| `title` | `name` |
-| `description` | `notes` |
-| `capacity` | `guest_count` |
-| `venue` | `venue_area` |
-| `is_active` (boolean) | `status` (text with CHECK) |
-
-**Why:** Building against the wrong column names causes silent empty results, type errors, or constraint violations that are hard to trace back to a spelling mismatch. One query before starting saves the rework.
+**Why:** Inline lists drift. `WOODLANDS_AUDIT_2.md` §4.1 found three gates still keyed to `store_supervisor`, a role deleted from `roles.js` in June, permanently denying Log Delivery and Transfers to every role that can exist.
 
 ---
 
-## 11. Reports are built last
+## 10. Column naming conventions
 
-**Rule:** The Reports module is always built after all other modules are complete.
+**Rule:** Always these names — no alternatives:
 
-**Why:** Reports need full visibility of all data sources. Building reports before the underlying modules are stable means the report layer ends up querying half-formed schemas, missing tables, or provisional column names — all of which require rework. Complete every module first, then build reports once the data model is settled.
-
----
-
-## 12. Seed data rules
-
-**Rule:** Follow these exactly when writing seed INSERT statements:
-
-- Always cast date strings explicitly: `'2026-05-30'::date` not `'2026-05-30'`
-- Never use `ON CONFLICT` unless the constraint is confirmed to exist
-- Check constraints exist before using them:
-```sql
-SELECT constraint_name FROM information_schema.table_constraints
-WHERE table_name = 'x';
-```
-
-**Why:** Implicit date casting silently inserts wrong values in some Postgres versions. `ON CONFLICT` on a non-existent constraint throws a syntax error that blocks the entire migration.
-
----
-
-## 13. Column naming conventions
-
-**Rule:** Always use these names — no exceptions, no alternatives:
-
-- **British spelling:** `organiser` not `organizer`
+- **British spelling:** `organiser`, not `organizer`
 - **Customer-facing bookings:** `guest_name`, `guest_phone`, `guest_email`
-- **State with more than 2 values:** `status text` with a `CHECK` constraint — never `is_active boolean`
+- **State with more than two values:** `status text` with a `CHECK` constraint — never `is_active boolean`
 - **Internal staff notes:** `notes` — never `description`
 - **Entity name:** `name` — never `title`
-- **Phone fields:** always international format stored as `text`
+- **Phone fields:** international format, stored as `text`
+- **`user_profiles` role column is `role`** — not `user_role`
 
-**Why:** Inconsistent naming across modules causes query mismatches, confusing diffs, and subtle bugs when data is shared between views or reports.
+**Departments are plain text everywhere.** Never a FK to a `departments` table.
+
+**Why:** Inconsistent naming causes query mismatches and subtle bugs when data is shared between views.
 
 ---
 
-## 14. Environment variables
+## 11. Seed data rules
 
-**Rule:** All three must exist in both `.env.local` AND Vercel environment variables before any frontend DB calls will work:
+**Rule:**
+
+- Cast date strings explicitly: `'2026-05-30'::date`, never bare `'2026-05-30'`
+- Never use `ON CONFLICT` unless the constraint is confirmed to exist:
+```sql
+SELECT constraint_name FROM information_schema.table_constraints WHERE table_name = 'x';
+```
+- Seed scripts read secrets from the environment and **throw if unset**. No hardcoded key, no `?? 'eyJ...'` fallback. `scripts/seed-attendance.mjs` carried one into git history and it cost a key rotation.
+
+---
+
+## 12. Reports are built last
+
+**Rule:** The Reports module is built after all other modules are complete.
+
+**Why:** Reports need full visibility of all data sources. Building them against half-formed schemas guarantees rework.
+
+---
+
+## 13. Environment variables
+
+**Rule:** Exactly two variables, in both `.env.local` and Vercel:
 
 ```
 VITE_SUPABASE_URL=https://[project-ref].supabase.co
 VITE_SUPABASE_ANON_KEY=...
-VITE_SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
-- `VITE_SUPABASE_URL` must be the full URL including `https://` — not just the project ref
-- Edge function secrets use `SERVICE_ROLE_KEY` (no `VITE_` prefix, no `SUPABASE_` prefix) — see section 2
-
-**Why:** Missing a variable causes silent auth failures or empty query results with no clear error. Vercel deployments and local dev both need all three set independently.
+- `VITE_SUPABASE_URL` must be the full URL including `https://`, not just the project ref.
+- **There is no third variable.** `VITE_SUPABASE_SERVICE_ROLE_KEY` was removed in Sprint B and must not return. If you find yourself adding a `VITE_*` variable to make a query work, the actual problem is a missing GRANT or policy — see §2.
+- Edge Function secrets are set separately, in the Supabase dashboard, and use `SERVICE_ROLE_KEY` — see §4.
