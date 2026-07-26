@@ -54,6 +54,12 @@
 
 - **Inventory module had no runtime exercise.** All seven files were migrated to the anon client, but the module is unreachable (`ROUTE_ACCESS` keys `/inventory`, route is `/`). Its policies and grants are therefore untested against a real session. First real test will be after the Sprint E route fix.
 
+### Sprint B — Task 4 smoke test (2026-07-26)
+
+- **Event Add Payment broken since 28 May 2026.** `event_payments.received_by` FKs to `auth.users(id)` but the dropdown at EventPaymentsSection.jsx:207 populates from the `staff` table. Any staff.id inserted fails the FK. Also inconsistent within the same table: `recorded_by` correctly FKs to `user_profiles`. Read path at :162 already treats `received_by` as a user_profiles id (via `userMap`), which is the direction the fix should go. Sprint C — repoint dropdown source to user_profiles, matching read-path semantics and recorded_by. No migration needed if the FK is left pointing at auth.users (a user_profiles.id is also an auth.users.id).
+
+  *Diagnosis notes:* not a Sprint B regression. `git blame` puts the dropdown source (`:207`), the `fetchAllActiveStaff()` call (`:31`) and the import (`:5`) at commits `e638646` and `e63c7fb`, both 2026-05-28. Sprint B's only change to this file was the `supabaseAdmin` → `supabase` identifier rename. The FK was always enforced — the service-role key bypasses RLS, never constraints — so this path has never worked for any role since it was built. First exercised during the Sprint B smoke test.
+
 ### Sprint B — carried from Task 2 setup
 
 - **No `supabase/config.toml` in the repo.** The deployed `verify_jwt` setting is still not expressible in source. The function no longer depends on it (it verifies the caller itself), but the setting remains undocumented. **Sprint D.**
