@@ -94,19 +94,31 @@
 
 - **`AdjustmentsTab` is a fourth site that writes stock, not covered by Task 4's three.** `AdjustmentsTab.jsx:42-55` inserts a `stock_movements` row and *then* upserts `current_stock`. It sets an absolute quantity (a stock take) rather than applying a delta, so it has no clamp bug — but if the upsert fails, e.g. on the `quantity >= 0` CHECK, the movement row is already committed, leaving a ledger entry with no corresponding stock change. `apply_stock_delta` does not fit it directly because the operation is a set, not a delta. **Raised with Aman before Task 4** per the sprint's scope-surprise stopping rule.
 
-## BLOCKER — ALL EDGE FUNCTIONS ARE DOWN (26 July 2026, evening)
+## RESOLVED — Edge Function outage, 26 July 2026 evening
 
-- **`SERVICE_ROLE_KEY` still holds the disabled legacy `service_role` JWT.** Disabling legacy API keys killed the admin client inside every Edge Function. Confirmed for `public-checkin`: the `fm_holders` lookup returns `"Legacy API keys are disabled"`. `create-user` follows by construction — it builds the same admin client and cannot get past `auth.getUser`, so **Add User is broken too**, despite having been tested successfully earlier today (that test predated the legacy-key disable).
+**Cause:** `SERVICE_ROLE_KEY` still held the legacy `service_role` JWT after legacy API keys were disabled, so the admin client inside every Edge Function was dead. QR check-in and Add User were both down. Surfaced by `public-checkin` reporting `"Legacy API keys are disabled"` from the `fm_holders` lookup.
 
-- **The project's existing `sb_secret_*` key does not authenticate.** `sb_secret_vXtUz…` (id `85f95296…`, created 2026-07-26 09:53, `secret_jwt_template: {role: service_role}`) returns `401` with an empty body against both `/rest/v1` and `/auth/v1/admin`, in every header form. By contrast `sb_publishable_*` authenticates correctly. So simply pasting the existing secret key into `SERVICE_ROLE_KEY` will **not** fix this — it needs a working secret key first.
+**Fix:** a fresh secret key (`sb_secret_atywb…`) was created and `SERVICE_ROLE_KEY` updated. No redeploy was needed — the functions picked it up immediately. Verified end to end through the application: QR check-in scan → check in → check out from a phone, and Admin → Add User creating a real user. Capability now recorded in `src/lib/standards.md` §4.
 
-- **Remediation is Aman's, in the dashboard.** Two options, and the choice matters:
-  1. **Create a fresh secret key** (Project Settings → API Keys) and set `SERVICE_ROLE_KEY` to it. Keeps the Sprint B security posture. Then verify BOTH `public-checkin` (QR scan) and Add User, because a secret key's `auth.admin` capability is now unverified — see the correction in `src/lib/standards.md` §4.
-  2. **Temporarily re-enable legacy JWT API keys.** Fastest route to a working demo — the existing `SERVICE_ROLE_KEY` starts working again immediately with no other change — but it partly undoes the Sprint B key migration and re-enables the old `anon` JWT as well.
+### Documented misstep — a working key deleted on faulty reasoning
 
-- **Lesson worth keeping:** both earlier "verified" results — `public-checkin` returning 200 and Add User succeeding — passed because `SERVICE_ROLE_KEY` still held the *legacy* key. They proved the old configuration worked, not the new one. A passing test proves the configuration that was live when it ran, not the one you believe you set.
+I reported the project's original secret key (`sb_secret_vXtUz…`, id `85f95296…`) as non-functional, on the evidence that it returned a bare `401` from `/rest/v1` and `/auth/v1/admin` in every header form. Aman deleted it partly on that basis.
 
-- **`public-checkin` now returns `detail` on infrastructure failure.** A short error string is included in the 503 body so a failure is diagnosable rather than silent. It contains no PII or credentials, but it does leak internal state on a public endpoint — **drop it before handover** and rely on `console.error` in the function logs.
+**That conclusion was not supported.** The value I probed with came from `GET /v1/projects/{ref}/api-keys`, which does **not** return usable material for `secret`-type keys — only a same-shaped placeholder. So the probe was testing a bogus string, and its `401` said nothing about the key. The `vXtUz` key may well have been fine; the only evidenced fault was the stale legacy JWT in `SERVICE_ROLE_KEY`.
+
+No lasting harm — the replacement key works — but the reasoning was wrong and it destroyed a credential. The tell was available and I missed it: `public-checkin` was reading `fm_holders` successfully with the key in the secret, while my direct probe of "the same key" failed. Two contradictory results about one key value should have prompted me to doubt the probe, not the key.
+
+### Two verification rules, both learned the hard way today
+
+1. **A passing test proves the configuration that was live when it ran, not the one you believe you set.** `public-checkin` returning 200 and Add User succeeding were both recorded as verifying the *new* secret key format. Both actually ran while `SERVICE_ROLE_KEY` still held the legacy JWT, so they verified the old key. The false claim then sat in `standards.md` as doctrine.
+
+2. **Never probe with a secret value read from the Management API.** Publishable keys come back usable; secret keys come back as non-functional placeholders. A probe using one produces an indistinguishable `401`. Verify a secret only through something that already holds it — an Edge Function call, or the app.
+
+Both are now written into `src/lib/standards.md` §4 so the next session inherits them.
+
+### Still open from this episode
+
+- **`public-checkin` returns a `detail` string on infrastructure failure.** Deliberate — it is what made the missing-column fault diagnosable instead of silent, and `CheckIn.jsx` now renders it. It contains no PII or credentials, but it does expose internal state on a public endpoint. **Drop it before handover** and rely on `console.error` in the function logs.
 
 ## FROM DEMO PREP (Sprint D P1 + Sprint E must-ships, 26 July 2026 evening)
 

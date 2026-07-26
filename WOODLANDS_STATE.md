@@ -34,7 +34,7 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 ## STAGE
 
-**5 — HARDEN.** Sprint D Priority 1 + Sprint E must-ships complete (26 July 2026 evening). System is demo-ready for feedback session Monday 27 July 11am.
+**5 — HARDEN.** Sprints D and E complete (26 July 2026 evening), including five bugs found and fixed in browser testing. All fixes retested and confirmed by Aman. System is demo-ready for the feedback session Monday 27 July, 11am.
 
 ---
 
@@ -90,6 +90,15 @@ Per WOODLANDS_AUDIT_2.md (26 July 2026):
 - **Dashboard "Needs Attention" cards navigate correctly.** The reported case — the low-stock card pointing at the unreachable `/` — is fixed by the route change. Verifying the other targets found a second instance the brief did not anticipate: `/attendance` and `/events` cards rendered for all four roles but are owner/manager-only, so kitchen_manager and restaurant_manager still bounced to `/login`. Cards are now filtered against `ROUTE_ACCESS` for the current role, which covers every present and future item.
 - **Deliberately untouched for the demo**, per brief: notification bell and search bar (placeholder UI, to be framed as such), the three remaining ghost tables, migration-history reconciliation, dead-table drops, attendance UTC boundary, delete-user Edge Function, password reset, hardcoded URLs, FUNCTIONAL_SPEC route table, and test-data purge.
 
+**Browser-test bug round (26 July 2026, evening) — five bugs, all fixed and retested:**
+- **Bug 1 — manager attendance path was completely broken.** Override, Mark All Absent and Save Note all violated `attendance_records.date` NOT NULL; three inserts set only `shift_date`. Fixed app-side. Reading the live DDL to choose the fix also **resolved AUDIT_2 §2.6(e)/§3 DoD 6(e)**: `date` is NOT NULL with no default and `shift_date` defaults to `CURRENT_DATE`, so the live table matches `seed.sql`, not `010`.
+- **Bug 2 — Dashboard cross-role leakage.** kitchen_manager and restaurant_manager saw Today's Attendance and Upcoming Events cards for modules they cannot open. An earlier fix had gated only the Needs Attention links, not the cards. All panels — KPI cards, attention items and the bookings section — now gate through one `canAccess()` helper reading `ROUTE_ACCESS`.
+- **Bug 3 — Market Conditions field was uneditable.** Not a wiring fault: `disabled={!canManage || isPast}`, and the tab opens on the current month's market day, so the field was locked from the day after market day until month end — 29 days in 30. `isPast` gated nothing else, while check-in and fee collection have always worked on past dates. Also fixed a silent-failure path that cleared the "Saving…" hint identically on success and failure.
+- **Bug 4 — all Edge Functions were down.** `SERVICE_ROLE_KEY` still held the legacy `service_role` JWT after legacy keys were disabled, so QR check-in and Add User were both broken. Fixed by rotating to a fresh `sb_secret_atywb…` key; no redeploy needed. The function's own error handling had conflated an infrastructure failure with "business not found", which is why it presented as a data problem — now separated.
+- **Bug 5 — QR check-in write path failed.** `migration 014_fm_visits_checkin_checkout.sql` **existed in the repo and had never been applied**, so `fm_visits` had no `checked_in_at`/`checked_out_at` and every scan failed with `undefined_column`. Applied 014 as written. Error reporting on `/checkin` now surfaces the real message rather than a generic "Something went wrong".
+- **Migration 027 — `fm_visits.notes`**, a second ghost column (after `event_stock_allocations.returned_qty`), used by the manager Market Day notes flow and present in no migration. Added.
+- **Verified end to end by Aman in the browser:** QR check-in scan → check in → check out from a phone; manager market-day check-in with a persisted note; Admin → Add User. Not inferred from probes.
+
 See `WOODLANDS_AUDIT_2.md` for full findings and file/line references.
 
 Standing rules from CLAUDE.md (rewritten 26 July to match code):
@@ -121,8 +130,8 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 ## OPEN QUALITY ITEMS / KNOWN GAPS
 
 - Both audit files now tracked and committed (`WOODLANDS_AUDIT.md` 4 July, `WOODLANDS_AUDIT_2.md` 26 July). AUDIT_2 supersedes for finding status; both retained side-by-side for the diff.
-- Full four-role walkthrough by role (owner / manager / kitchen_manager / restaurant_manager) + deactivated user — partially done during the Sprint B smoke test, which surfaced the Add Payment FK bug. Not yet a systematic pass; still TO CONFIRM.
-- **Inventory module has had no runtime exercise at all.** All seven files were migrated to the anon client, but the module is unreachable (`ROUTE_ACCESS` keys `/inventory`, route is mounted at `/`). Its policies and grants are untested against a real session until the Sprint E route fix.
+- Four-role walkthrough — substantially exercised across the 26 July browser rounds: owner, manager, kitchen_manager and restaurant_manager dashboards were all checked, and the manager attendance and Farmers Market flows were driven end to end. **Still not confirmed:** a deactivated user being refused (the `is_active` gate from Sprint A has never been tested against a real login).
+- **Inventory stock operations have had no runtime exercise.** The route is fixed (`bcab3bf`) so the module is now reachable, but no requisition fulfil, delivery or stock adjustment has been performed in the browser since Sprint C replaced all three with the `apply_stock_delta` / `set_stock_quantity` RPCs. Those functions were verified by SQL probe only. **This is the largest untested surface in the system** — it is money-adjacent and it is the module Dhiren is most likely to open first.
 - `npm audit` returned malformed registry response during AUDIT_2 — dependency CVE status UNVERIFIED, re-run pending.
 
 ---
@@ -136,25 +145,23 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 - **Sprint A — Foundations. ✅ DONE 26 July 2026.** Commits `6b56bdd`, `8a22e1c`, `aabb620`. Migration `021_sprint_a_policies.sql` applied to the live DB and verified by `pg_policies` query; `create-user` Edge Function authenticated and redeployed; `is_active` enforced in RouteGuard and Login. Build clean. Additive only — nothing dropped except the stale `004` blanket policy on `staff`, which was in scope. Per-role login testing outstanding (Dhiren-facing, Sprint F).
 - **Sprint B — Strip the service role key. ✅ DONE 26 July 2026.** Commits `d88387b` (standards.md rewrite), `e7b9df0` (CheckIn → `public-checkin` Edge Function), `516cd2a` (migration `022`, 14 tables), `6cb8e25`/`155461b`/`78300f0`/`ce1e06e`/`4cda9c4`/`e59c400` (35 files, six module commits), `22a3a89` (key rotation + cleanup). Verified by grep and JWT decode of a fresh `dist/`: zero service_role, one anon JWT. Migration `022` applied via SQL, not `db push`.
 - **Sprint C — Money and quantity guards. ✅ DONE 26 July 2026.** Commits `6605016` (Add Payment FK), `0fe4e76` (migration `023` amount CHECKs), `24bd7fb` (migration `024` + fail-closed clamps + `returned_qty`), `e7d1050` (migration `025` atomic stock, six call sites). Attendance UTC date boundary + `shift_date` **deferred to Sprint D** per the brief — it needs the live DDL settled first.
-- **Sprint D — Schema reconciliation. ◐ PARTIAL 26 July 2026 evening.** Priority 1 done: `fm_market_days` created (migration `026`, commit `6244cc0`) — it was the only one of the four ghost tables that did not exist at all. `returned_qty` landed in Sprint C (`024`). **Still open:** migrations for `event_checklists` / `shift_settings` / `tables`, migration-history reconciliation (008–026 unrecorded), duplicate `008` renumber, dead-table drops, attendance UTC boundary. Standard §2.6 rebuild test still fails.
-- **Sprint E — Fit and finish. ◐ PARTIAL 26 July 2026 evening.** Must-ships done: `/inventory` route fix (`bcab3bf`), dead `store_supervisor` gates deleted (`c920d01`), Farmers Market Dashboard cards gated (`6fff308`), `recorded_by` populated (`569cf1e`), Needs Attention navigation (`a793e9a`). **Still open:** notification bell + search bar are placeholder UI, password reset flow, un-hardcode project URL, refresh WOODLANDS_FUNCTIONAL_SPEC.md route table, delete-user path, "Recorded By" column display.
+- **Sprint D — Schema reconciliation. ✅ DEMO SCOPE COMPLETE 26 July 2026 evening.** `fm_market_days` created (migration `026`, commit `6244cc0`) — the only one of the four ghost tables that did not exist at all. `fm_visits.notes` ghost column added (`027`, `712c9c5`). `migration 014` (`checked_in_at`/`checked_out_at`) applied, having never been run. `returned_qty` landed in Sprint C (`024`). **Still open, post-demo:** migrations for `event_checklists` / `shift_settings` / `tables`, migration-history reconciliation (008–027 unrecorded), duplicate `008` renumber, dead-table drops, attendance UTC boundary. **Standard §2.6 rebuild-from-migrations test still fails** — three tables remain uncreatable from the files.
+- **Sprint E — Fit and finish. ✅ DEMO SCOPE COMPLETE 26 July 2026 evening.** `/inventory` route fix (`bcab3bf`), dead `store_supervisor` gates deleted (`c920d01`), Farmers Market Dashboard cards gated (`6fff308`), `recorded_by` populated (`569cf1e`), Needs Attention navigation (`a793e9a`), plus the five browser-test bugs (`471e467`, `acae3c2`, `d860b1c`, `d2eae09`, `fc344d5`). **Still open, post-demo:** notification bell + search bar are placeholder UI, password reset flow, un-hardcode project URL, refresh WOODLANDS_FUNCTIONAL_SPEC.md route table, delete-user path, "Recorded By" column display, drop the `detail` field from `public-checkin` error responses.
 - **Sprint F — Final audit + handover prep.** Fresh Fable audit (`WOODLANDS_AUDIT_3.md`); walk Standard §6 Pre-Handover Checklist; transfer Supabase/Vercel/GitHub ownership to Dhiren; one-page reference; testimonial + referrals ask; write `WOODLANDS_RETROSPECTIVE.md` (Standard §Stage 7).
 
 ---
 
 ## NEXT ACTION
 
-**Aman runs the verification tests below, then closes laptop. Meeting Monday 27 July, 11am.**
+**Demo-ready. Meeting Monday 27 July, 11am.** Aman decides the next task.
 
-The brief specified "the four verification tests from WOODLANDS_DEMO_PREP.md §5". **That file does not exist** — not in the repo, not on disk, not in git history on any branch (see `WOODLANDS_FOLLOWUPS.md`). These steps are derived from what actually changed tonight instead:
+Verified in the browser on 26 July, not inferred: manager attendance Override; the four role dashboards; Market Day conditions persisting; QR check-in scan → check in → check out from a phone; manager market-day check-in with a persisted visit note; Admin → Add User.
 
-1. **Owner → Inventory.** Sidebar link visible, loads the stock list. Previously unreachable for every role. Also confirm an unknown URL lands on Inventory rather than the login form.
-2. **Manager → Inventory → Log Delivery and Transfers.** Both tabs load rather than showing AccessDenied, and the "Received by" picker is populated.
-3. **kitchen_manager → Dashboard.** No "Next Market Day" card, no at-risk holder card, no empty slot in the KPI row, and every "Needs Attention" card that is shown navigates somewhere rather than bouncing to `/login`. Then **owner → Dashboard** and confirm the Farmers Market cards are still there.
-4. **Owner → Farmers Market → Market Day.** Type in the market-conditions box, wait for the debounce, reload — the text persists. This has never worked.
-5. **Owner → Events → Add Payment.** Still succeeds. New payments now carry `recorded_by`; every earlier payment has it NULL, so the check is `select recorded_by from event_payments order by created_at desc limit 1`.
+**Highest-value thing left before the meeting, if there is time:** drive one **Inventory** stock operation — a requisition fulfil, a delivery, or an adjustment. Sprint C rerouted all three through the `apply_stock_delta` / `set_stock_quantity` RPCs, and those have been verified by SQL probe only, never through the UI. It is the largest untested surface, it is money-adjacent, and Inventory is the module Dhiren is most likely to open first. Watch for double `stock_movements` rows, which is the signature of an incomplete refactor.
 
-Post-demo, in order: remaining three ghost tables (`event_checklists`, `shift_settings`, `tables`) → migration-history reconciliation → attendance UTC date boundary + `shift_date` → widen `stock_movements.movement_type` so event stock stops being logged as `'adjustment'` → dead-table drops.
+Also unconfirmed: a **deactivated user** being refused at login. The `is_active` gate has shipped since Sprint A and has never been tested against a real account.
+
+Post-demo, in order: remaining three ghost tables (`event_checklists`, `shift_settings`, `tables`) → migration-history reconciliation (008–027 unrecorded, so `supabase db push` stays unsafe) → attendance UTC date boundary + `shift_date` → widen `stock_movements.movement_type` so event stock stops being logged as `'adjustment'` → dead-table drops → drop the `detail` field from `public-checkin` error responses.
 
 `.env.local` anon key updated to sb_publishable value on 26 July after Sprint B closeout — matches Vercel and current live site.
 

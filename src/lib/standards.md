@@ -130,17 +130,25 @@ if (!session?.access_token) throw new Error('Session expired')
 
 **Current value format:** `sb_secret_*`. This project migrated off legacy JWT-based API keys on 26 July 2026 (Sprint B); the anon/service_role JWT pair is disabled and the project now uses an `sb_publishable_*` / `sb_secret_*` pair.
 
-**CORRECTION, 26 July 2026 (evening) — the "verified" claim below was wrong.** This section previously read: *"Verified 26 July 2026: an `sb_secret_*` key performs both service-role PostgREST reads and `auth.admin` calls including `createUser`."* That conclusion was drawn from `public-checkin` returning 200 and Add User succeeding — **but at the time of both tests `SERVICE_ROLE_KEY` still held the legacy `service_role` JWT.** What those tests actually proved is that the *legacy* key worked. `sb_secret_*` was never exercised.
+**VERIFIED 26 July 2026 (evening), through the application, not by probe.** An `sb_secret_*` key in `SERVICE_ROLE_KEY` performs both:
+- **service-role PostgREST reads and writes** — `public-checkin` returned a holder payload, then created a visit row and set `checked_out_at` on it (`fm_holders` read, `fm_visits` insert + update).
+- **`auth.admin` calls including `createUser`** — Admin → Add User created a real user in the browser, which appeared in the user list.
 
-**Current verified state:**
-- `sb_publishable_*` authenticates correctly (reaches PostgREST and is subject to RLS).
-- The **legacy** `anon` and `service_role` JWTs are disabled and return a bare `401`.
-- The project's `sb_secret_*` key (created 2026-07-26 09:53) **does not authenticate** — `401` with an empty body against both `/rest/v1` and `/auth/v1/admin`, in every header form (`apikey`, `Bearer`, or both).
-- Consequently **every Edge Function is broken**, because `SERVICE_ROLE_KEY` still holds the disabled legacy JWT. Confirmed for `public-checkin` (`"Legacy API keys are disabled"` surfaced from the `fm_holders` lookup); `create-user` follows by construction, since it builds the same admin client and cannot get past `auth.getUser`.
+Both exercised while `SERVICE_ROLE_KEY` held `sb_secret_atywb…` and the legacy JWTs were disabled. So the capability is settled for this key format.
 
-**Do not treat the key format question as settled.** Until a secret key is proved to work end to end, record what was actually tested and with which key in the secret.
+### Two verification rules this section was written the wrong way twice before
 
-**Lesson:** a passing test proves the configuration that was live when it ran, not the configuration you believe you set. Both tests above passed for the wrong reason.
+**1. A passing test proves the configuration that was live when it ran — not the configuration you believe you set.**
+
+This section previously claimed: *"Verified: an `sb_secret_*` key performs both PostgREST reads and `auth.admin` calls."* It was wrong. Both supporting tests ran while `SERVICE_ROLE_KEY` still contained the **legacy** `service_role` JWT, so what passed was the old key. The new format had never been exercised. The claim then sat in doctrine as fact, and its practical effect was an instruction not to swap the secret back to a JWT — advice derived from evidence that did not exist.
+
+Record which key was live when a test passed, not which key you intended to be live.
+
+**2. Never probe with a secret value read from the Management API.**
+
+`GET /v1/projects/{ref}/api-keys` returns a usable value for `publishable` keys but **not** for `secret` keys — the `api_key` field for a secret is a non-functional placeholder of the right shape and prefix. Probing with it produces a bare `401` from every endpoint, which is indistinguishable from a revoked key.
+
+This caused a real misdiagnosis: a working secret key was reported as broken and deleted on that basis. Secret key material is shown once, in the dashboard, and cannot be re-read. **Verify a secret key only through something that already holds it** — an Edge Function call, or the application itself.
 
 **Why set it manually anyway:** the runtime's auto-injected variable has changed format before, silently, and broke `auth.admin`. An explicitly set secret is one you control and can verify.
 
