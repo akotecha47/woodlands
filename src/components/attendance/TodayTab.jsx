@@ -166,6 +166,9 @@ export default function TodayTab() {
       const unclockedStaff = staffList.filter(u => !recMap[u.id])
       const inserts = unclockedStaff.map(u => ({
         staff_id:   u.id,
+        // `date` is NOT NULL with no default in the live table, and every
+        // manager-path insert omitted it — see handleOverride below.
+        date:       today,
         shift_date: today,
         clock_in:   null,
         status:     'absent',
@@ -196,8 +199,19 @@ export default function TodayTab() {
         const clockIn = shift?.shift_start
           ? new Date(`${today}T${shift.shift_start}`).toISOString()
           : new Date(`${today}T08:00:00`).toISOString()
+        // `date` is NOT NULL with no default in the live table (verified
+        // against the live DDL, which matches seed.sql rather than
+        // 010_attendance_user_id.sql). Every manager-path insert set only
+        // shift_date, so Override, Mark All Absent and Save Note all failed
+        // with "null value in column 'date' violates not-null constraint".
+        //
+        // Both columns are set to the same value deliberately: this tab reads
+        // and filters on shift_date, while ClockInOutTab and OwnerDashboard
+        // filter on date. Writing one and not the other is what made the two
+        // attendance write paths structurally disjoint (AUDIT_2 §3 DoD 6(e)).
         const { error } = await supabase.from('attendance_records').insert({
-          staff_id: user.id, shift_date: today, clock_in: clockIn, status: overrideVal,
+          staff_id: user.id, date: today, shift_date: today,
+          clock_in: clockIn, status: overrideVal,
         })
         if (error) throw error
       }
@@ -224,7 +238,7 @@ export default function TodayTab() {
           ? new Date(`${today}T${shift.shift_start}`).toISOString()
           : new Date(`${today}T08:00:00`).toISOString()
         const { error } = await supabase.from('attendance_records').insert({
-          staff_id: user.id, shift_date: today, clock_in: clockIn,
+          staff_id: user.id, date: today, shift_date: today, clock_in: clockIn,
           status: 'absent', notes: noteVal || null,
         })
         if (error) throw error
