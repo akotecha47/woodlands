@@ -3,11 +3,13 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, AccessDenied, fetchActiveItems } from './InventoryUI'
+import { setStockQuantity } from '../../lib/stock'
 
 const ALLOWED = ['owner', 'manager']
 
 export default function AdjustmentsTab() {
-  const { profile, session } = useAuth()
+  // performed_by is set server-side from auth.uid() inside set_stock_quantity.
+  const { profile } = useAuth()
   const [items,    setItems]    = useState([])
   const [stockMap, setStockMap] = useState({}) // stock_item_id → quantity
   const [busy,     setBusy]     = useState(false)
@@ -36,25 +38,21 @@ export default function AdjustmentsTab() {
     setBusy(true)
     try {
       const newQty = Number(form.new_quantity)
-      const oldQty = Number(stockMap[form.stock_item_id] ?? 0)
-      const diff   = newQty - oldQty
 
-      const { error: mvErr } = await supabase.from('stock_movements').insert({
-        stock_item_id:  form.stock_item_id,
-        movement_type:  'adjustment',
-        quantity_change: diff,
-        performed_by:   session.user.id,
-        notes:          form.reason || null,
-      })
-      if (mvErr) throw mvErr
-
-      const { error: csErr } = await supabase.from('current_stock').upsert(
-        { stock_item_id: form.stock_item_id, quantity: newQty, last_updated: new Date().toISOString() },
-        { onConflict: 'stock_item_id' }
+      // A stock take, so the balance is SET rather than shifted. The delta for
+      // the ledger is computed server-side under the row lock — deriving it
+      // from stockMap here would base a permanent ledger entry on whatever the
+      // client last happened to load.
+      //
+      // Previously the movement row was inserted first and the balance upserted
+      // second, so a rejected balance (e.g. the quantity >= 0 CHECK) left an
+      // adjustment on record that never took effect. Both now commit together,
+      // and an unchanged value writes no ledger row at all.
+      const applied = await setStockQuantity(
+        form.stock_item_id, newQty, form.reason || null
       )
-      if (csErr) throw csErr
 
-      flash(`Stock set to ${newQty} (${diff >= 0 ? '+' : ''}${diff})`)
+      flash(`Stock set to ${applied}`)
       setForm({ stock_item_id: '', new_quantity: '', reason: '' })
       loadData()
     } catch (err) { flash(err.message, false) }

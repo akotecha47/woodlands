@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
-import { todayStr, itemLabel, AccessDenied, shiftStock, fetchActiveItems, fetchStaffUsers } from './InventoryUI'
+import { todayStr, itemLabel, AccessDenied, fetchActiveItems, fetchStaffUsers } from './InventoryUI'
+import { applyStockDelta } from '../../lib/stock'
 
 const ALLOWED = ['owner', 'manager', 'store_supervisor']
 
 export default function LogDeliveryTab() {
-  const { profile, session } = useAuth()
+  // performed_by is set server-side from auth.uid() inside apply_stock_delta,
+  // so the session is no longer needed here.
+  const { profile } = useAuth()
   const [items,      setItems]      = useState([])
   const [staffUsers, setStaffUsers] = useState([])
   const [busy,       setBusy]       = useState(false)
@@ -36,15 +38,13 @@ export default function LogDeliveryTab() {
         form.notes,
       ].filter(Boolean).join('\n') || null
 
-      const { error } = await supabase.from('stock_movements').insert({
-        stock_item_id:   form.stock_item_id,
-        movement_type:   'delivery',
-        quantity_change:  Number(form.quantity),
-        performed_by:    session.user.id,
-        notes:           noteValue,
+      // One atomic call — balance and ledger row together. Previously the
+      // movement was inserted first and the balance updated second, so a
+      // failure between them left a delivery on record that never arrived.
+      await applyStockDelta(form.stock_item_id, Number(form.quantity), {
+        movementType: 'delivery',
+        reason:       noteValue,
       })
-      if (error) throw error
-      await shiftStock(form.stock_item_id, Number(form.quantity))
       flash('Delivery logged')
       setForm({ stock_item_id: '', quantity: '', supplier: '', date: todayStr(), notes: '', received_by_id: '' })
     } catch (err) { flash(err.message, false) }

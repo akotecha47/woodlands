@@ -85,35 +85,11 @@ export async function fetchStaffUsers() {
   return data ?? []
 }
 
-// Add `delta` to a stock item's current_stock row (upserts if row missing).
-// Throws on DB error, and throws when a negative delta exceeds what is in
-// stock, so callers can catch and flash.
+// shiftStock was removed in Sprint C / Task 4. It did a read-then-write on
+// current_stock with no lock and no transaction, and left the caller to insert
+// the stock_movements row as a second statement.
 //
-// This previously clamped with Math.max(0, current + delta), which silently
-// under-deducted an over-requisition instead of failing: fulfilling a
-// requisition for 20 against 5 in stock recorded a stock_movements row for
-// -20 while removing only 5, so the ledger and the balance disagreed
-// permanently and invisibly. Fail closed instead.
-export async function shiftStock(stockItemId, delta) {
-  const { data, error: readErr } = await supabase
-    .from('current_stock')
-    .select('quantity')
-    .eq('stock_item_id', stockItemId)
-    .maybeSingle()
-  if (readErr) throw readErr
-
-  const current = Number(data?.quantity) || 0
-  const newQty  = current + Number(delta)
-
-  if (newQty < 0) {
-    throw new Error(
-      `Insufficient stock — ${current} available, ${Math.abs(Number(delta))} required. Stock unchanged.`
-    )
-  }
-
-  const { error } = await supabase.from('current_stock').upsert(
-    { stock_item_id: stockItemId, quantity: newQty, last_updated: new Date().toISOString() },
-    { onConflict: 'stock_item_id' }
-  )
-  if (error) throw error
-}
+// Use applyStockDelta / setStockQuantity from src/lib/stock.js instead. They
+// call the Postgres functions from migration 025, which lock the row and write
+// the balance and the ledger entry atomically — and they write the movement
+// row themselves, so callers must not.

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash, fieldCls } from '../admin/AdminUI'
-import { itemLabel, EmptyRow, TdBold, ReqStatusBadge, shiftStock, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
+import { itemLabel, EmptyRow, TdBold, ReqStatusBadge, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
+import { applyStockDelta } from '../../lib/stock'
 
 const MANAGERS = ['owner', 'manager']
 
@@ -71,16 +72,14 @@ export default function RequisitionsTab() {
 
   async function handleFulfil(req) {
     try {
-      await shiftStock(req.stock_item_id, -Number(req.quantity))
-      const { error: mvErr } = await supabase.from('stock_movements').insert({
-        stock_item_id:  req.stock_item_id,
-        movement_type:  'requisition',
-        quantity_change: -Number(req.quantity),
-        to_department:  req.department,
-        performed_by:   session.user.id,
-        notes:          req.reason || null,
+      // One atomic call: locks the balance, deducts, and writes the
+      // stock_movements row. Do NOT insert a movement alongside it.
+      // performed_by is set server-side from auth.uid().
+      await applyStockDelta(req.stock_item_id, -Number(req.quantity), {
+        movementType: 'requisition',
+        toDepartment: req.department,
+        reason:       req.reason || null,
       })
-      if (mvErr) throw mvErr
       const { error } = await supabase.from('requisitions')
         .update({ status: 'fulfilled', reviewed_by: session.user.id, updated_at: new Date().toISOString() })
         .eq('id', req.id)

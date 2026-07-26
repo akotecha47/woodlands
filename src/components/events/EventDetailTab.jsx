@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { applyStockDelta } from '../../lib/stock'
 import { useAuth } from '../../contexts/AuthContext'
 import { Toast, useFlash } from '../admin/AdminUI'
 import {
@@ -120,11 +121,13 @@ export default function EventDetailTab({ eventId, onBack }) {
             `Insufficient stock — ${available} available, ${required} required. Stock unchanged.`
           )
         }
-        const { error: csErr } = await supabase
-          .from('current_stock')
-          .update({ quantity: available - required, last_updated: new Date().toISOString() })
-          .eq('stock_item_id', alloc.stock_item_id)
-        if (csErr) throw csErr
+        // Atomic: locks the balance, deducts, writes the ledger row. The
+        // guard above stays as a friendlier pre-check; this call is the one
+        // that actually enforces it under a lock.
+        await applyStockDelta(alloc.stock_item_id, -required, {
+          movementType: 'adjustment',
+          reason:       `Event stock allocated (event ${eventId})`,
+        })
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')
           .update({
@@ -148,18 +151,10 @@ export default function EventDetailTab({ eventId, onBack }) {
         // have been silently clamped; allocated_qty is then the best available
         // answer because nothing recorded the real figure.
         const qtyBack = Number(alloc.deducted_qty ?? alloc.allocated_qty)
-        const { data: cs, error: readErr } = await supabase
-          .from('current_stock').select('quantity')
-          .eq('stock_item_id', alloc.stock_item_id).maybeSingle()
-        if (readErr) throw readErr
-        const { error: csErr } = await supabase
-          .from('current_stock')
-          .update({
-            quantity:     Number(cs?.quantity ?? 0) + qtyBack,
-            last_updated: new Date().toISOString(),
-          })
-          .eq('stock_item_id', alloc.stock_item_id)
-        if (csErr) throw csErr
+        await applyStockDelta(alloc.stock_item_id, qtyBack, {
+          movementType: 'adjustment',
+          reason:       `Event cancelled, stock returned (event ${eventId})`,
+        })
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')
           .update({

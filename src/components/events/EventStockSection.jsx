@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Lock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { applyStockDelta } from '../../lib/stock'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 
@@ -92,28 +93,23 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
       if (error) throw error
 
       if (eventStatus === 'confirmed') {
-        // Re-read rather than trusting selectedItem.quantity from the last
-        // load — the :76 guard above is against stale client state.
-        const { data: cs, error: readErr } = await supabase
-          .from('current_stock').select('quantity')
-          .eq('stock_item_id', form.stock_item_id).maybeSingle()
-        if (readErr) throw readErr
-        const available = Number(cs?.quantity ?? 0)
-        // Fail closed. This previously clamped with Math.max(0, available - qty)
-        // and marked the allocation 'deducted' regardless, under-deducting and
-        // leaving the return path to over-credit it later.
-        if (available < qty) {
-          // Don't leave a phantom allocation behind for a deduction that failed.
+        // Atomic deduct. Fails closed on insufficient stock, where this used to
+        // clamp with Math.max(0, available - qty) and mark the allocation
+        // 'deducted' regardless — under-deducting, then letting the return path
+        // over-credit the difference back into inventory.
+        //
+        // The allocation row is inserted first (it needs an id), so if the
+        // deduction is refused we remove it again rather than leaving a phantom
+        // allocation behind a deduction that never happened.
+        try {
+          await applyStockDelta(form.stock_item_id, -qty, {
+            movementType: 'adjustment',
+            reason:       `Event stock allocated (event ${eventId})`,
+          })
+        } catch (deductErr) {
           await supabase.from('event_stock_allocations').delete().eq('id', newAlloc.id)
-          throw new Error(
-            `Insufficient stock — ${available} available, ${qty} required. Nothing was allocated or deducted.`
-          )
+          throw deductErr
         }
-        const { error: csErr } = await supabase
-          .from('current_stock')
-          .update({ quantity: available - qty, last_updated: new Date().toISOString() })
-          .eq('stock_item_id', form.stock_item_id)
-        if (csErr) throw csErr
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')
           .update({
@@ -167,14 +163,14 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
         const consumed    = Number(clearanceForm[a.id] ?? 0)
         const deductedQty = Number(a.deducted_qty ?? a.allocated_qty)
         const returned    = Math.max(0, deductedQty - consumed)
-        // Return surplus to stock
-        const { data: cs } = await supabase
-          .from('current_stock').select('quantity')
-          .eq('stock_item_id', a.stock_item_id).maybeSingle()
-        if (cs) {
-          await supabase.from('current_stock')
-            .update({ quantity: Number(cs.quantity ?? 0) + returned, last_updated: new Date().toISOString() })
-            .eq('stock_item_id', a.stock_item_id)
+        // Return surplus to stock, atomically. Skipped when nothing came back —
+        // applyStockDelta rejects a zero delta, and a zero-change ledger row
+        // would be noise.
+        if (returned > 0) {
+          await applyStockDelta(a.stock_item_id, returned, {
+            movementType: 'adjustment',
+            reason:       `Event clearance, unused stock returned (event ${eventId})`,
+          })
         }
         // Mark cleared. returned_qty is persisted so the audit trail matches
         // the stock movement — it was computed and displayed but never saved,
