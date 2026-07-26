@@ -17,7 +17,7 @@ Read **WOODLANDS_STATE.md** (in repo root) at the start of any substantive sessi
 Small deferred items live in **WOODLANDS_FOLLOWUPS.md** (in repo root). Add to it when a sprint consciously defers something rather than losing it in a commit message.
 
 ## Audits
-- `WOODLANDS_AUDIT.md` — 4 July 2026 (first audit, against Standard v1.0)
+- `WOODLANDS_AUDIT.md` — 4 July 2026 (first audit, pre-dates Standard v1.0)
 - `WOODLANDS_AUDIT_2.md` — 26 July 2026 (second audit, against Standard v1.5) — **current audit of record**
 
 Both are on disk. The newer one supersedes the older for finding status. Neither is deleted — they sit side-by-side as the diff record.
