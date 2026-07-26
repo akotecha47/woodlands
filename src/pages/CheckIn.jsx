@@ -15,7 +15,20 @@ async function callCheckIn(action, holderId) {
   const { data, error } = await supabase.functions.invoke('public-checkin', {
     body: { action, holder_id: holderId },
   })
-  if (error) throw error
+  if (error) {
+    // On a non-2xx the client hands back a FunctionsHttpError whose message is
+    // generic ("Edge Function returned a non-2xx status code"). The useful text
+    // is in the response body, so read it — otherwise a schema or key fault
+    // reaches the user as an unexplained "Something went wrong", which is how
+    // the missing checked_in_at column stayed invisible.
+    let detail = error.message
+    try {
+      const body = await error.context?.json?.()
+      if (body?.detail)     detail = `${body.error ?? 'Error'} — ${body.detail}`
+      else if (body?.error) detail = body.error
+    } catch { /* response body unreadable — keep the generic message */ }
+    throw new Error(detail)
+  }
   if (data?.error) throw new Error(data.error)
   return data
 }
@@ -41,6 +54,9 @@ export default function CheckIn() {
   // phase: loading | not_found | no_market | check_in | checked_in | checked_out | error
   const [phase,     setPhase]     = useState('loading')
   const [busy,      setBusy]      = useState(false)
+  // Underlying failure text, shown on the error screen. Without it every fault
+  // — dead service key, missing column, network — looked identical.
+  const [errorMsg,  setErrorMsg]  = useState(null)
 
   useEffect(() => {
     if (!holderId) { setPhase('not_found'); return }
@@ -63,7 +79,8 @@ export default function CheckIn() {
 
       setVisit(res.visit)
       resolvePhase(res.visit)
-    } catch {
+    } catch (err) {
+      setErrorMsg(err?.message ?? String(err))
       setPhase('error')
     }
   }
@@ -83,7 +100,8 @@ export default function CheckIn() {
       const res = await callCheckIn('check_in', holderId)
       setVisit(res.visit)
       setPhase('checked_in')
-    } catch {
+    } catch (err) {
+      setErrorMsg(err?.message ?? String(err))
       setPhase('error')
     } finally {
       setBusy(false)
@@ -97,7 +115,8 @@ export default function CheckIn() {
       const res = await callCheckIn('check_out', holderId)
       setVisit(res.visit)
       setPhase('checked_out')
-    } catch {
+    } catch (err) {
+      setErrorMsg(err?.message ?? String(err))
       setPhase('error')
     } finally {
       setBusy(false)
@@ -133,6 +152,9 @@ export default function CheckIn() {
           <p className="text-4xl mb-3">⚠️</p>
           <h1 className="text-lg font-semibold text-gray-900 mb-2">Something went wrong</h1>
           <p className="text-sm text-gray-500">Please try again or contact the market manager.</p>
+          {errorMsg && (
+            <p className="mt-3 text-xs text-gray-400 font-mono break-words">{errorMsg}</p>
+          )}
         </div>
       </div>
     )
