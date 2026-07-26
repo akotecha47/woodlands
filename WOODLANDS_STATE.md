@@ -34,7 +34,7 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 ## STAGE
 
-**5 — HARDEN.** Sprint B complete (26 July 2026). Sprint C is the next scheduled work.
+**5 — HARDEN.** Sprint C complete (26 July 2026). Sprint D is the next scheduled work.
 
 ---
 
@@ -70,6 +70,16 @@ Per WOODLANDS_AUDIT_2.md (26 July 2026):
 - **Zero `anon` policies exist in this database, deliberately.** Public `/checkin` reaches `fm_holders`/`fm_visits` only through the Edge Function, which keeps holder PII off a public read policy.
 - **New finding, pre-existing since 28 May:** Event Add Payment has never worked. `event_payments.received_by` FKs to `auth.users(id)` while the dropdown populates from `staff`. Not a Sprint B regression (confirmed by `git blame`) — constraints are enforced regardless of which key issues the insert. Sprint C.
 - `.env.local` held stale legacy anon key post-rotation; corrected same day. Vercel env was updated correctly during Sprint B Task 5 recovery.
+
+**Updated post-Sprint C (26 July 2026):**
+- Sprint C closed AUDIT_2 §3 DoD 6 in full, plus the Add Payment FK bug found in the Sprint B smoke test. Standard §6 "money and quantity logic guarded against negatives, double-inserts and date-boundary bugs" is now green **except** the attendance date-boundary item, deliberately deferred — see below.
+- **Add Payment fixed** (broken for every role since 28 May). `received_by` dropdown now reads `user_profiles`, matching both the `auth.users` FK and the existing read path. No migration needed.
+- **Migration 023 — positive-amount CHECK constraints** on `event_payments`, `fm_payments`, `event_bill_items`. Pre-validated (0 violating rows, 0 nulls) so all three are `validated`, applying to existing rows too. Verified by probe: negatives and zero are rejected, a control positive row still inserts. A `COMMENT` on the `event_payments` constraint records that refunds are stored positive, so nobody relaxes it on that reasoning.
+- **Migration 024 — `returned_qty` and `deducted_qty`** on `event_stock_allocations`, both with column comments. `returned_qty` was computed and displayed but never persisted, and the column did not exist. `deducted_qty` is new and was required to implement "return what was actually deducted"; nullable, where NULL means "deducted pre-Sprint C, amount unknown".
+- **All three stock clamps now fail closed.** The `Math.max(0, …)` clamp-and-continue is gone from `EventDetailTab`, `EventStockSection` and `shiftStock`. Confirming an event against insufficient stock is now refused rather than silently under-deducting and then over-returning on cancel — the phantom-inventory bug. A read-only pre-flight runs before the event status is written, because `changeStatus` wrote status *before* touching stock, so throwing later would have left an event confirmed-but-undeducted.
+- **Migration 025 — atomic stock via two Postgres functions.** `apply_stock_delta` (five delta sites) and `set_stock_quantity` (the absolute stock-take in `AdjustmentsTab`, a fourth site the sprint brief did not anticipate). Both take a row lock and write `current_stock` + `stock_movements` in one transaction. `SECURITY INVOKER`, so migration 022's owner/manager policies still decide who may move stock. `shiftStock` deleted; zero direct `current_stock` writes remain in `src/`.
+- **Not closed, do not assume otherwise:** multi-item event confirm is still not transactional (each item is atomic, the loop is not); event stock movements are typed `'adjustment'` pending a widened CHECK; 4 legacy allocations carry an unreconstructable historical deduction. All in `WOODLANDS_FOLLOWUPS.md`.
+- **Attendance UTC date boundary / `shift_date` deliberately deferred** to Sprint D per the sprint brief — it needs the live DDL settled first (`010` and `seed.sql` disagree on whether `shift_date` has a default).
 
 See `WOODLANDS_AUDIT_2.md` for full findings and file/line references.
 
@@ -116,7 +126,7 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 
 - **Sprint A — Foundations. ✅ DONE 26 July 2026.** Commits `6b56bdd`, `8a22e1c`, `aabb620`. Migration `021_sprint_a_policies.sql` applied to the live DB and verified by `pg_policies` query; `create-user` Edge Function authenticated and redeployed; `is_active` enforced in RouteGuard and Login. Build clean. Additive only — nothing dropped except the stale `004` blanket policy on `staff`, which was in scope. Per-role login testing outstanding (Dhiren-facing, Sprint F).
 - **Sprint B — Strip the service role key. ✅ DONE 26 July 2026.** Commits `d88387b` (standards.md rewrite), `e7b9df0` (CheckIn → `public-checkin` Edge Function), `516cd2a` (migration `022`, 14 tables), `6cb8e25`/`155461b`/`78300f0`/`ce1e06e`/`4cda9c4`/`e59c400` (35 files, six module commits), `22a3a89` (key rotation + cleanup). Verified by grep and JWT decode of a fresh `dist/`: zero service_role, one anon JWT. Migration `022` applied via SQL, not `db push`.
-- **Sprint C — Money and quantity guards.** Fix stock clamp (fail-not-warn); persist deducted quantity; atomic stock operations; CHECK constraints on `amount` columns; attendance UTC date boundary + `shift_date` fix.
+- **Sprint C — Money and quantity guards. ✅ DONE 26 July 2026.** Commits `6605016` (Add Payment FK), `0fe4e76` (migration `023` amount CHECKs), `24bd7fb` (migration `024` + fail-closed clamps + `returned_qty`), `e7d1050` (migration `025` atomic stock, six call sites). Attendance UTC date boundary + `shift_date` **deferred to Sprint D** per the brief — it needs the live DDL settled first.
 - **Sprint D — Schema reconciliation.** Ghost tables → migrations; `returned_qty` column; drop dead tables; renumber duplicate `008`; verify DB rebuildable from files alone.
 - **Sprint E — Fit and finish.** `/inventory` route fix; delete dead `store_supervisor` gates; password reset flow; un-hardcode project URL; refresh WOODLANDS_FUNCTIONAL_SPEC.md route table.
 - **Sprint F — Final audit + handover prep.** Fresh Fable audit (`WOODLANDS_AUDIT_3.md`); walk Standard §6 Pre-Handover Checklist; transfer Supabase/Vercel/GitHub ownership to Dhiren; one-page reference; testimonial + referrals ask; write `WOODLANDS_RETROSPECTIVE.md` (Standard §Stage 7).
@@ -125,7 +135,11 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 
 ## NEXT ACTION
 
-Take manual backup. Then Sprint C — money and quantity guards. Priority in Sprint C: fix Event Add Payment FK (dropdown source → user_profiles), stock clamp bug, atomic stock operations, CHECK constraints on amount columns.
+Sprint D — schema reconciliation. Create the four ghost tables (event_checklists, shift_settings, tables, fm_market_days), reconcile migration history divergence, drop dead tables.
+
+Also queued for Sprint D from Sprint C: the attendance UTC date boundary + `shift_date` fix (needs the live DDL settled first, which is what schema reconciliation establishes), and widening the `stock_movements.movement_type` CHECK so event stock stops being recorded as `'adjustment'`.
+
+**Sprint E is priority-critical for the demo** — five UI/routing findings from the Sprint C smoke test are in `WOODLANDS_FOLLOWUPS.md`, including `/inventory` being unreachable, which is the first thing Dhiren will click.
 
 `.env.local` anon key updated to sb_publishable value on 26 July after Sprint B closeout — matches Vercel and current live site.
 
