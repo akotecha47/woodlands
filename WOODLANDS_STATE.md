@@ -64,12 +64,12 @@ Per WOODLANDS_AUDIT_2.md (26 July 2026):
 
 **Updated post-Sprint B (26 July 2026):**
 - Sprint B closed: service_role key removed from browser and bundle (verified by grep of built JS — zero matches); standards.md rewritten to mandate anon client + Edge Functions; migration 022 added policies + authenticated DML grants for 14 additional tables (11 had unreachable policies due to missing grants — a defect invisible to source-only audits); legacy JWT-based API keys disabled; migrated to sb_publishable / sb_secret key pair; SERVICE_ROLE_KEY project secret rotated.
-- AUDIT_2 §2.1, §2.1b, §2.4 (three CRITICALs, open since 4 July) — now closed.
+- **Five CRITICALs, open since 4 July — now closed.** §2.1 (key in bundle), §2.1b (key in git history), §2.4 (only anon key client-side), the unauthenticated `create-user` endpoint (AUDIT_2 §4.4), and §2.2's structural closure via migrations 021 + 022 (RLS is now the access control layer, not JSX).
 - Standard §6 "no service role key in client bundle (checked in built JS)" — green.
 - **All 36 files migrated off `supabaseAdmin`.** 35 to the anon client, plus CheckIn.jsx to a new `public-checkin` Edge Function. Access control now genuinely lives in RLS rather than in JSX.
 - **Zero `anon` policies exist in this database, deliberately.** Public `/checkin` reaches `fm_holders`/`fm_visits` only through the Edge Function, which keeps holder PII off a public read policy.
 - **New finding, pre-existing since 28 May:** Event Add Payment has never worked. `event_payments.received_by` FKs to `auth.users(id)` while the dropdown populates from `staff`. Not a Sprint B regression (confirmed by `git blame`) — constraints are enforced regardless of which key issues the insert. Sprint C.
-- **Consequence of disabling legacy JWT keys — action required.** `.env.local` still holds the legacy JWT anon key, which now returns a bare `401` against PostgREST. The replacement is the project's publishable key (`sb_publishable_…`), which authenticates correctly. Until `VITE_SUPABASE_ANON_KEY` is updated in `.env.local` **and** Vercel and the site is redeployed, every browser query fails. See NEXT ACTION.
+- `.env.local` held stale legacy anon key post-rotation; corrected same day. Vercel env was updated correctly during Sprint B Task 5 recovery.
 
 See `WOODLANDS_AUDIT_2.md` for full findings and file/line references.
 
@@ -127,12 +127,9 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 
 Take manual backup. Then Sprint C — money and quantity guards. Priority in Sprint C: fix Event Add Payment FK (dropdown source → user_profiles), stock clamp bug, atomic stock operations, CHECK constraints on amount columns.
 
-**BLOCKING BEFORE ANY OF THAT — the live site is down.** Disabling the legacy JWT API keys invalidated the anon key that `.env.local` and Vercel still carry; it now returns a bare `401` from PostgREST, so every browser query fails. Fix:
+`.env.local` anon key updated to sb_publishable value on 26 July after Sprint B closeout — matches Vercel and current live site.
 
-1. Set `VITE_SUPABASE_ANON_KEY=sb_publishable_g4EcLtu7eED7aACKOMnxJw_Ou22iAtR` in `.env.local` **and** in Vercel env vars. (Publishable keys are public by design, exactly like the old anon key — this is safe to commit to config, not to source.)
-2. Redeploy Vercel.
-3. Then re-run the four-role walkthrough, since no role has been exercised against the new key pair.
-4. Also still outstanding: **browser test of Admin → Add User.** `auth.admin.createUser` against the `sb_secret_*` secret is unverified; `standards.md` §4 records that non-JWT keys cannot perform `auth.admin` calls. If it fails, put the JWT-format service-role key in the `SERVICE_ROLE_KEY` secret.
+Still outstanding: **browser test of Admin → Add User.** `auth.admin.createUser` against the `sb_secret_*` secret is unverified; `standards.md` §4 records that non-JWT keys cannot perform `auth.admin` calls. If it fails, put the JWT-format service-role key in the `SERVICE_ROLE_KEY` secret.
 
 ---
 
