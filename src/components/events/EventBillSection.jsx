@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { fmtMWK } from './EventsUI'
@@ -37,7 +37,7 @@ export default function EventBillSection({ eventId, items, canManage, onRefresh 
     e.preventDefault()
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('event_bill_items').insert({
+      const { error } = await supabase.from('event_bill_items').insert({
         event_id:    eventId,
         category:    form.category,
         description: form.description || null,
@@ -54,7 +54,7 @@ export default function EventBillSection({ eventId, items, canManage, onRefresh 
 
   async function handleDelete(id) {
     try {
-      const { error } = await supabaseAdmin.from('event_bill_items').delete().eq('id', id)
+      const { error } = await supabase.from('event_bill_items').delete().eq('id', id)
       if (error) throw error
       onRefresh()
     } catch (err) { flash(err.message, false) }

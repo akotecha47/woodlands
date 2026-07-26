@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 
 // ── constants ──────────────────────────────────────────────────
 
@@ -150,7 +150,7 @@ export function EmptyRow({ cols, msg = 'No records found' }) {
 // ── DB helpers ─────────────────────────────────────────────────
 
 export async function fetchAllActiveStaff() {
-  const { data } = await supabaseAdmin
+  const { data } = await supabase
     .from('staff')
     .select('id, full_name, department, position')
     .eq('is_active', true)
@@ -162,6 +162,6 @@ export async function generateBEO(eventId) {
   const rows = DEPT_ORDER.flatMap(dept =>
     BEO_TASKS[dept].map(task => ({ event_id: eventId, department: dept, task }))
   )
-  const { error } = await supabaseAdmin.from('event_checklists').insert(rows)
+  const { error } = await supabase.from('event_checklists').insert(rows)
   if (error) throw error
 }

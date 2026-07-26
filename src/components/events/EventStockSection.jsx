@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Lock } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 
@@ -26,7 +26,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
   const flash = useFlash(setToast)
 
   async function loadAllocations() {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('event_stock_allocations')
       .select('*, stock_items(id, name, sku, unit, department)')
       .eq('event_id', eventId)
@@ -43,12 +43,12 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
 
   async function loadStockItems() {
     const [itemsR, stockR] = await Promise.all([
-      supabaseAdmin
+      supabase
         .from('stock_items')
         .select('id, name, sku, unit, department')
         .eq('is_active', true)
         .order('department').order('name'),
-      supabaseAdmin
+      supabase
         .from('current_stock')
         .select('stock_item_id, quantity'),
     ])
@@ -79,7 +79,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
     }
     setBusy(true)
     try {
-      const { data: newAlloc, error } = await supabaseAdmin
+      const { data: newAlloc, error } = await supabase
         .from('event_stock_allocations')
         .insert({
           event_id:      eventId,
@@ -92,15 +92,15 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
       if (error) throw error
 
       if (eventStatus === 'confirmed') {
-        const { data: cs } = await supabaseAdmin
+        const { data: cs } = await supabase
           .from('current_stock').select('quantity').eq('stock_item_id', form.stock_item_id).single()
         const newQty = Math.max(0, (cs?.quantity ?? 0) - qty)
-        const { error: csErr } = await supabaseAdmin
+        const { error: csErr } = await supabase
           .from('current_stock')
           .update({ quantity: newQty, last_updated: new Date().toISOString() })
           .eq('stock_item_id', form.stock_item_id)
         if (csErr) throw csErr
-        const { error: allocErr } = await supabaseAdmin
+        const { error: allocErr } = await supabase
           .from('event_stock_allocations')
           .update({ status: 'deducted', deducted_at: new Date().toISOString() })
           .eq('id', newAlloc.id)
@@ -119,7 +119,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
 
   async function handleRemove(alloc) {
     try {
-      const { error } = await supabaseAdmin.from('event_stock_allocations').delete().eq('id', alloc.id)
+      const { error } = await supabase.from('event_stock_allocations').delete().eq('id', alloc.id)
       if (error) throw error
       loadAllocations()
       onRefresh()
@@ -146,15 +146,15 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
         const consumed = Number(clearanceForm[a.id] ?? 0)
         const returned = Math.max(0, a.allocated_qty - consumed)
         // Return surplus to stock
-        const { data: cs } = await supabaseAdmin
+        const { data: cs } = await supabase
           .from('current_stock').select('quantity').eq('stock_item_id', a.stock_item_id).single()
         if (cs) {
-          await supabaseAdmin.from('current_stock')
+          await supabase.from('current_stock')
             .update({ quantity: (cs.quantity ?? 0) + returned, last_updated: new Date().toISOString() })
             .eq('stock_item_id', a.stock_item_id)
         }
         // Mark cleared
-        await supabaseAdmin.from('event_stock_allocations').update({
+        await supabase.from('event_stock_allocations').update({
           consumed_qty: consumed,
           status:       'cleared',
           cleared_at:   new Date().toISOString(),

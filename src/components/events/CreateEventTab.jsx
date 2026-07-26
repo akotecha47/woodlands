@@ -2,7 +2,7 @@ import { useState } from 'react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { ChevronRight, ChevronDown } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
 import { EVENT_TYPES, VENUES, todayStr, AccessDenied, SERVICE_STYLES, CONFERENCE_SETUPS } from './EventsUI'
@@ -50,7 +50,7 @@ export default function CreateEventTab({ onCreated }) {
     e.preventDefault()
     setBusy(true)
     try {
-      const { data: newEvent, error } = await supabaseAdmin.from('events')
+      const { data: newEvent, error } = await supabase.from('events')
         .insert({
           name:                 form.name,
           event_type:           form.event_type,
@@ -71,7 +71,7 @@ export default function CreateEventTab({ onCreated }) {
       if (error) throw error
 
       if (setupOpen && hasSetupValues(setupForm)) {
-        const { error: setupErr } = await supabaseAdmin.from('event_configurations').insert({
+        const { error: setupErr } = await supabase.from('event_configurations').insert({
           event_id:               newEvent.id,
           service_style:          setupForm.service_style                          || null,
           service_style_other:    setupForm.service_style === 'other'

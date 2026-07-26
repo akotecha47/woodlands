@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Toast, useFlash } from '../admin/AdminUI'
 import {
@@ -30,12 +30,12 @@ export default function EventDetailTab({ eventId, onBack }) {
   async function load() {
     setLoading(true)
     const [evtR, clR, billR, profilesR] = await Promise.all([
-      supabaseAdmin.from('events').select('*').eq('id', eventId).single(),
-      supabaseAdmin.from('event_checklists').select('*')
+      supabase.from('events').select('*').eq('id', eventId).single(),
+      supabase.from('event_checklists').select('*')
         .eq('event_id', eventId).order('department').order('created_at'),
-      supabaseAdmin.from('event_bill_items').select('*')
+      supabase.from('event_bill_items').select('*')
         .eq('event_id', eventId).order('created_at'),
-      supabaseAdmin.from('user_profiles').select('id, full_name'),
+      supabase.from('user_profiles').select('id, full_name'),
     ])
     const evt = evtR.data
     let cls = clR.data ?? []
@@ -43,7 +43,7 @@ export default function EventDetailTab({ eventId, onBack }) {
     // Auto-generate BEO if event is confirmed/in_progress but has no checklists
     if (evt && ['confirmed', 'in_progress'].includes(evt.status) && cls.length === 0) {
       await generateBEO(eventId)
-      const clR2 = await supabaseAdmin.from('event_checklists').select('*')
+      const clR2 = await supabase.from('event_checklists').select('*')
         .eq('event_id', eventId).order('department').order('created_at')
       cls = clR2.data ?? []
     }
@@ -63,52 +63,52 @@ export default function EventDetailTab({ eventId, onBack }) {
 
   async function handleStockOnStatusChange(newStatus) {
     if (newStatus === 'confirmed') {
-      const { data: pending, error: pendingErr } = await supabaseAdmin
+      const { data: pending, error: pendingErr } = await supabase
         .from('event_stock_allocations')
         .select('id, stock_item_id, allocated_qty')
         .eq('event_id', eventId)
         .eq('status', 'pending')
       if (pendingErr) throw pendingErr
       for (const alloc of (pending ?? [])) {
-        const { data: cs } = await supabaseAdmin
+        const { data: cs } = await supabase
           .from('current_stock').select('quantity').eq('stock_item_id', alloc.stock_item_id).single()
         const newQty = Math.max(0, (cs?.quantity ?? 0) - alloc.allocated_qty)
         if ((cs?.quantity ?? 0) < alloc.allocated_qty) {
           flash('Warning: insufficient stock for some items — check inventory', false)
         }
-        const { error: csErr } = await supabaseAdmin
+        const { error: csErr } = await supabase
           .from('current_stock')
           .update({ quantity: newQty, last_updated: new Date().toISOString() })
           .eq('stock_item_id', alloc.stock_item_id)
         if (csErr) throw csErr
-        const { error: allocErr } = await supabaseAdmin
+        const { error: allocErr } = await supabase
           .from('event_stock_allocations')
           .update({ status: 'deducted', deducted_at: new Date().toISOString() })
           .eq('id', alloc.id)
         if (allocErr) throw allocErr
       }
     } else if (newStatus === 'cancelled') {
-      const { data: deducted, error: deductedErr } = await supabaseAdmin
+      const { data: deducted, error: deductedErr } = await supabase
         .from('event_stock_allocations')
         .select('id, stock_item_id, allocated_qty')
         .eq('event_id', eventId)
         .eq('status', 'deducted')
       if (deductedErr) throw deductedErr
       for (const alloc of (deducted ?? [])) {
-        const { data: cs } = await supabaseAdmin
+        const { data: cs } = await supabase
           .from('current_stock').select('quantity').eq('stock_item_id', alloc.stock_item_id).single()
-        const { error: csErr } = await supabaseAdmin
+        const { error: csErr } = await supabase
           .from('current_stock')
           .update({ quantity: (cs?.quantity ?? 0) + alloc.allocated_qty, last_updated: new Date().toISOString() })
           .eq('stock_item_id', alloc.stock_item_id)
         if (csErr) throw csErr
-        const { error: allocErr } = await supabaseAdmin
+        const { error: allocErr } = await supabase
           .from('event_stock_allocations')
           .update({ status: 'returned', cleared_at: new Date().toISOString() })
           .eq('id', alloc.id)
         if (allocErr) throw allocErr
       }
-      const { error: cancelErr } = await supabaseAdmin
+      const { error: cancelErr } = await supabase
         .from('event_stock_allocations')
         .update({ status: 'cancelled' })
         .eq('event_id', eventId)
@@ -124,7 +124,7 @@ export default function EventDetailTab({ eventId, onBack }) {
       if (newStatus === 'confirmed' && checklists.length === 0) {
         await generateBEO(eventId)
       }
-      const { error } = await supabaseAdmin.from('events')
+      const { error } = await supabase.from('events')
         .update({ status: newStatus, updated_at: new Date().toISOString() })
         .eq('id', eventId)
       if (error) throw error
@@ -144,7 +144,7 @@ export default function EventDetailTab({ eventId, onBack }) {
       completed_at: checked ? new Date().toISOString() : null,
     }
     try {
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from('event_checklists').update(patch).eq('id', task.id)
       if (error) throw error
       setChecklists(cs => cs.map(c => c.id === task.id ? { ...c, ...patch } : c))

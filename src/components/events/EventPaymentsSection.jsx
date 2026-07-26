@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { PAY_METHODS, PAY_TYPES, fmtDate, fmtMWK, todayStr, fetchAllActiveStaff } from './EventsUI'
@@ -25,9 +25,9 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
 
   async function load() {
     const [payR, profilesR, activeStaffR] = await Promise.all([
-      supabaseAdmin.from('event_payments').select('*')
+      supabase.from('event_payments').select('*')
         .eq('event_id', eventId).order('payment_date'),
-      supabaseAdmin.from('user_profiles').select('id, full_name'),
+      supabase.from('user_profiles').select('id, full_name'),
       fetchAllActiveStaff(),
     ])
     setPayments(payR.data ?? [])
@@ -59,7 +59,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
     if (!form.reference.trim()) { flash('Reference is required', false); return }
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('event_payments').insert({
+      const { error } = await supabase.from('event_payments').insert({
         event_id:       eventId,
         payment_type:   form.payment_type,
         amount:         Number(form.amount),
@@ -73,7 +73,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
       if (error) throw error
 
       if (form.payment_type === 'deposit') {
-        await supabaseAdmin.from('events')
+        await supabase.from('events')
           .update({ deposit_paid: true, updated_at: new Date().toISOString() })
           .eq('id', eventId)
       }

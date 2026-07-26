@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 
@@ -15,7 +15,7 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
   const flash = useFlash(setToast)
 
   async function loadAssignments() {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('event_staff')
       .select('*, staff(id, full_name, department)')
       .eq('event_id', eventId)
@@ -24,7 +24,7 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
   }
 
   async function loadStaff() {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('staff')
       .select('id, full_name, department')
       .eq('is_active', true)
@@ -48,7 +48,7 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
     }
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('event_staff').insert({
+      const { error } = await supabase.from('event_staff').insert({
         event_id:    eventId,
         staff_id:    form.staff_id,
         role_label:  form.role_label.trim(),
@@ -66,7 +66,7 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
 
   async function handleRemove(id) {
     try {
-      const { error } = await supabaseAdmin.from('event_staff').delete().eq('id', id)
+      const { error } = await supabase.from('event_staff').delete().eq('id', id)
       if (error) throw error
       loadAssignments()
       onRefresh()

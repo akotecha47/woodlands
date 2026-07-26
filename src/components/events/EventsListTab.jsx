@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Eye, Pencil, Trash2 } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
@@ -114,7 +114,7 @@ export default function EventsListTab({ onView }) {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('events')
       .select('*, event_checklists(id, is_complete)')
     setEvents(data ?? [])
@@ -176,7 +176,7 @@ export default function EventsListTab({ onView }) {
     e.preventDefault()
     setEditBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('events').update({
+      const { error } = await supabase.from('events').update({
         name:                 editForm.name,
         event_type:           editForm.event_type,
         event_date:           editForm.event_date,
@@ -204,7 +204,7 @@ export default function EventsListTab({ onView }) {
   async function handleDelete() {
     setDelBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('events').delete().eq('id', deleteId)
+      const { error } = await supabase.from('events').delete().eq('id', deleteId)
       if (error) throw error
       flash('Event deleted')
       setDeleteId(null)

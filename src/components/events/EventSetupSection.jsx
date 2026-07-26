@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
 import { SERVICE_STYLES, CONFERENCE_SETUPS } from './EventsUI'
@@ -54,7 +54,7 @@ export default function EventSetupSection({ eventId, canManage, onRefresh }) {
   const flash = useFlash(setToast)
 
   async function load() {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('event_configurations')
       .select('*')
       .eq('event_id', eventId)
@@ -90,11 +90,11 @@ export default function EventSetupSection({ eventId, canManage, onRefresh }) {
         updated_at:             new Date().toISOString(),
       }
       if (cfg) {
-        const { error } = await supabaseAdmin
+        const { error } = await supabase
           .from('event_configurations').update(payload).eq('id', cfg.id)
         if (error) throw error
       } else {
-        const { error } = await supabaseAdmin
+        const { error } = await supabase
           .from('event_configurations').insert({ ...payload, created_by: session?.user?.id ?? null })
         if (error) throw error
       }
