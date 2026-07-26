@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, AccessDenied, fetchActiveItems } from './InventoryUI'
@@ -18,7 +18,7 @@ export default function AdjustmentsTab() {
   async function loadData() {
     const [activeItems, { data: cs }] = await Promise.all([
       fetchActiveItems(),
-      supabaseAdmin.from('current_stock').select('stock_item_id, quantity'),
+      supabase.from('current_stock').select('stock_item_id, quantity'),
     ])
     setItems(activeItems)
     if (cs) setStockMap(Object.fromEntries(cs.map(r => [r.stock_item_id, r.quantity])))
@@ -39,7 +39,7 @@ export default function AdjustmentsTab() {
       const oldQty = Number(stockMap[form.stock_item_id] ?? 0)
       const diff   = newQty - oldQty
 
-      const { error: mvErr } = await supabaseAdmin.from('stock_movements').insert({
+      const { error: mvErr } = await supabase.from('stock_movements').insert({
         stock_item_id:  form.stock_item_id,
         movement_type:  'adjustment',
         quantity_change: diff,
@@ -48,7 +48,7 @@ export default function AdjustmentsTab() {
       })
       if (mvErr) throw mvErr
 
-      const { error: csErr } = await supabaseAdmin.from('current_stock').upsert(
+      const { error: csErr } = await supabase.from('current_stock').upsert(
         { stock_item_id: form.stock_item_id, quantity: newQty, last_updated: new Date().toISOString() },
         { onConflict: 'stock_item_id' }
       )

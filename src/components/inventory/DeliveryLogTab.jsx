@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { Th, Td, Toast, useFlash, fmtDate } from '../admin/AdminUI'
 import { EmptyRow, TdBold, fetchActiveItems, fetchUserMap } from './InventoryUI'
 
@@ -20,7 +20,7 @@ export default function DeliveryLogTab() {
   const flash = useFlash(setToast)
 
   async function fetchMovements() {
-    let q = supabaseAdmin
+    let q = supabase
       .from('stock_movements')
       .select('id, quantity_change, notes, created_at, performed_by, stock_item_id, stock_items(name, sku)')
       .eq('movement_type', 'delivery')

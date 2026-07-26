@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, EmptyRow, TdBold, ReqStatusBadge, shiftStock, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
@@ -21,7 +21,7 @@ export default function RequisitionsTab() {
 
   async function fetchReqs() {
     if (!session?.user?.id) return
-    let q = supabaseAdmin
+    let q = supabase
       .from('requisitions')
       .select('*')
       .order('created_at', { ascending: false })
@@ -42,7 +42,7 @@ export default function RequisitionsTab() {
     e.preventDefault()
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('requisitions').insert({
+      const { error } = await supabase.from('requisitions').insert({
         stock_item_id: form.stock_item_id,
         requested_by:  session.user.id,
         department:    form.department || profile?.department || null,
@@ -60,7 +60,7 @@ export default function RequisitionsTab() {
 
   async function handleApprove(req) {
     try {
-      const { error } = await supabaseAdmin.from('requisitions')
+      const { error } = await supabase.from('requisitions')
         .update({ status: 'approved', reviewed_by: session.user.id, updated_at: new Date().toISOString() })
         .eq('id', req.id)
       if (error) throw error
@@ -72,7 +72,7 @@ export default function RequisitionsTab() {
   async function handleFulfil(req) {
     try {
       await shiftStock(req.stock_item_id, -Number(req.quantity))
-      const { error: mvErr } = await supabaseAdmin.from('stock_movements').insert({
+      const { error: mvErr } = await supabase.from('stock_movements').insert({
         stock_item_id:  req.stock_item_id,
         movement_type:  'requisition',
         quantity_change: -Number(req.quantity),
@@ -81,7 +81,7 @@ export default function RequisitionsTab() {
         notes:          req.reason || null,
       })
       if (mvErr) throw mvErr
-      const { error } = await supabaseAdmin.from('requisitions')
+      const { error } = await supabase.from('requisitions')
         .update({ status: 'fulfilled', reviewed_by: session.user.id, updated_at: new Date().toISOString() })
         .eq('id', req.id)
       if (error) throw error
@@ -92,7 +92,7 @@ export default function RequisitionsTab() {
 
   async function handleReject(req) {
     try {
-      const { error } = await supabaseAdmin.from('requisitions')
+      const { error } = await supabase.from('requisitions')
         .update({ status: 'rejected', reviewed_by: session.user.id, updated_at: new Date().toISOString() })
         .eq('id', req.id)
       if (error) throw error

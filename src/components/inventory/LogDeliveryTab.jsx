@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { todayStr, itemLabel, AccessDenied, shiftStock, fetchActiveItems, fetchStaffUsers } from './InventoryUI'
@@ -36,7 +36,7 @@ export default function LogDeliveryTab() {
         form.notes,
       ].filter(Boolean).join('\n') || null
 
-      const { error } = await supabaseAdmin.from('stock_movements').insert({
+      const { error } = await supabase.from('stock_movements').insert({
         stock_item_id:   form.stock_item_id,
         movement_type:   'delivery',
         quantity_change:  Number(form.quantity),

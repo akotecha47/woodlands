@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, AccessDenied, fetchActiveItems, fetchDepartmentList, fetchStaffUsers } from './InventoryUI'
@@ -53,7 +53,7 @@ export default function TransfersTab() {
         notes:           noteValue,
       }
       // Two rows: negative from source, positive to destination
-      const { error } = await supabaseAdmin.from('stock_movements').insert([
+      const { error } = await supabase.from('stock_movements').insert([
         { ...base, quantity_change: -qty },
         { ...base, quantity_change:  qty },
       ])

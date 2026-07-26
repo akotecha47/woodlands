@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 
 // ── label helpers ──────────────────────────────────────────────
 export const todayStr = () => new Date().toISOString().slice(0, 10)
@@ -57,7 +57,7 @@ export function AccessDenied() {
 // ── shared DB helpers ──────────────────────────────────────────
 
 export async function fetchActiveItems() {
-  const { data } = await supabaseAdmin
+  const { data } = await supabase
     .from('stock_items')
     .select('id, name, sku, unit, department')
     .eq('is_active', true)
@@ -66,17 +66,17 @@ export async function fetchActiveItems() {
 }
 
 export async function fetchDepartmentList() {
-  const { data } = await supabaseAdmin.from('departments').select('id, name').order('name')
+  const { data } = await supabase.from('departments').select('id, name').order('name')
   return data ?? []
 }
 
 export async function fetchUserMap() {
-  const { data } = await supabaseAdmin.from('user_profiles').select('id, full_name')
+  const { data } = await supabase.from('user_profiles').select('id, full_name')
   return data ? Object.fromEntries(data.map(u => [u.id, u.full_name])) : {}
 }
 
 export async function fetchStaffUsers() {
-  const { data } = await supabaseAdmin
+  const { data } = await supabase
     .from('user_profiles')
     .select('id, full_name')
     .in('role', ['owner', 'manager', 'store_supervisor'])
@@ -88,13 +88,13 @@ export async function fetchStaffUsers() {
 // Add `delta` to a stock item's current_stock row (upserts if row missing).
 // Throws on DB error so callers can catch and flash.
 export async function shiftStock(stockItemId, delta) {
-  const { data } = await supabaseAdmin
+  const { data } = await supabase
     .from('current_stock')
     .select('quantity')
     .eq('stock_item_id', stockItemId)
     .maybeSingle()
   const newQty = Math.max(0, (Number(data?.quantity) || 0) + delta)
-  const { error } = await supabaseAdmin.from('current_stock').upsert(
+  const { error } = await supabase.from('current_stock').upsert(
     { stock_item_id: stockItemId, quantity: newQty, last_updated: new Date().toISOString() },
     { onConflict: 'stock_item_id' }
   )

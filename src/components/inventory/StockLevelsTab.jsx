@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { EmptyRow, TdBold, StockBadge, fetchDepartmentList } from './InventoryUI'
 
@@ -11,7 +11,7 @@ export default function StockLevelsTab() {
   const flash = useFlash(setToast)
 
   async function fetchStock() {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from('current_stock')
       .select('quantity, stock_items(id, name, sku, unit, department, reorder_level)')
     if (error) { flash(error.message, false); return }
