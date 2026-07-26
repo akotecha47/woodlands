@@ -5,6 +5,7 @@ import {
   Calendar, Leaf, Search, Bell,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { ROUTE_ACCESS } from '../../lib/roles'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td } from '../admin/AdminUI'
 
@@ -199,6 +200,18 @@ export default function OwnerDashboard() {
       link:      '/farmers-market',
     }] : []),
   ]
+    // Never show a card that would bounce the current role to /login. Every
+    // item navigates via navigate(link), which lands on GuardedPage, so a link
+    // to a route this role lacks is a dead card.
+    //
+    // The reported case was the low-stock card pointing at '/', which had no
+    // ROUTE_ACCESS entry at all and so bounced every role — fixed by the route
+    // key correction. But '/attendance' and '/events' are owner/manager only
+    // while their cards rendered for all four roles, so kitchen_manager and
+    // restaurant_manager still had dead cards. Filtering against ROUTE_ACCESS
+    // fixes both and any future item, using the same source of truth the guard
+    // and the sidebar use.
+    .filter(item => ROUTE_ACCESS[item.link]?.includes(profile?.role))
 
   return (
     <div className="p-6">
