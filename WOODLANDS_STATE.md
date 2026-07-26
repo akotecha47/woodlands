@@ -63,12 +63,13 @@ Per WOODLANDS_AUDIT_2.md (26 July 2026):
 - **New finding, LIVE PRODUCTION BUG:** `fm_market_days` table does not exist in the DB at all. MarketDayTab.jsx reads/writes it on every render. Farmers Market monthly notes are broken in production. Sprint D must CREATE this table (not just its policies).
 
 **Updated post-Sprint B (26 July 2026):**
-- **The service role key is out of the browser and rotated.** AUDIT_2 §2.1, §2.1b and §2.4 (all CRITICAL) are closed. Verified on a clean rebuild, not assumed from source: the old key literal returns **0 matches in `dist/`** and **0 files anywhere in the working tree**; the bundle contains exactly **one JWT, `role=anon`**; zero occurrences of `service_role` or `sb_secret`. `src/lib/supabaseAdmin.js` is deleted, `VITE_SUPABASE_SERVICE_ROLE_KEY` is gone from `.env.local`, and the hardcoded literal is stripped from `scripts/seed-attendance.mjs` (now throws if `SUPABASE_SERVICE_KEY` is unset). Key rotated via the new API keys route, so the anon key and live sessions were unaffected.
+- Sprint B closed: service_role key removed from browser and bundle (verified by grep of built JS — zero matches); standards.md rewritten to mandate anon client + Edge Functions; migration 022 added policies + authenticated DML grants for 14 additional tables (11 had unreachable policies due to missing grants — a defect invisible to source-only audits); legacy JWT-based API keys disabled; migrated to sb_publishable / sb_secret key pair; SERVICE_ROLE_KEY project secret rotated.
+- AUDIT_2 §2.1, §2.1b, §2.4 (three CRITICALs, open since 4 July) — now closed.
+- Standard §6 "no service role key in client bundle (checked in built JS)" — green.
 - **All 36 files migrated off `supabaseAdmin`.** 35 to the anon client, plus CheckIn.jsx to a new `public-checkin` Edge Function. Access control now genuinely lives in RLS rather than in JSX.
-- **`src/lib/standards.md` rewritten** (AUDIT_2 §4.3, the root cause). It now mandates the anon client and Edge Functions and explicitly forbids `supabaseAdmin`, `VITE_SUPABASE_SERVICE_ROLE_KEY` and any `service_role` usage in browser bundles, pointing at Standard §2.1/§2.2/§2.4/§2.6.
-- **Migration 022 was far larger than the sprint brief anticipated.** It expected occasional policy patching; a live query found **14 tables** unusable by the anon client, 11 of them missing `authenticated` DML grants entirely. A grant is checked *before* a policy, so those tables had correct-looking SELECT policies that could never run — invisible while the browser held a service-role client. Events, Farmers Market and Inventory would have failed on every read and write.
 - **Zero `anon` policies exist in this database, deliberately.** Public `/checkin` reaches `fm_holders`/`fm_visits` only through the Edge Function, which keeps holder PII off a public read policy.
 - **New finding, pre-existing since 28 May:** Event Add Payment has never worked. `event_payments.received_by` FKs to `auth.users(id)` while the dropdown populates from `staff`. Not a Sprint B regression (confirmed by `git blame`) — constraints are enforced regardless of which key issues the insert. Sprint C.
+- **Consequence of disabling legacy JWT keys — action required.** `.env.local` still holds the legacy JWT anon key, which now returns a bare `401` against PostgREST. The replacement is the project's publishable key (`sb_publishable_…`), which authenticates correctly. Until `VITE_SUPABASE_ANON_KEY` is updated in `.env.local` **and** Vercel and the site is redeployed, every browser query fails. See NEXT ACTION.
 
 See `WOODLANDS_AUDIT_2.md` for full findings and file/line references.
 
@@ -84,7 +85,7 @@ Standing rules from CLAUDE.md (rewritten 26 July to match code):
 - **Full working system delivered no different from a paying client.**
 - **Handover-track** — meeting with Dhiren showing a proper working version of his system. Post-meeting: he decides if he wants to proceed to formal handover.
 - **Testimonial + referrals** post-handover. Nothing specific discussed yet.
-- **Restore point:** Supabase automatic backup, 26 July 2026 02:30:54 UTC — still the most recent known point. **No fresh manual backup was taken before Sprint B**; Aman's call, on the basis that backups live on Supabase rather than locally. That timestamp predates migrations 021 and 022, both of which are idempotent and in git and so replayable; data written after it is not covered. **Take a manual snapshot before Sprint C** — it touches money and quantity logic.
+- **Post-Sprint-B restore point:** Take a fresh manual backup before Sprint C begins. Previous backup (26 July 02:30 UTC automatic) predates Sprints A and B and no longer represents current state.
 
 ---
 
@@ -124,12 +125,14 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 
 ## NEXT ACTION
 
-**Two verification items before Sprint C:**
+Take manual backup. Then Sprint C — money and quantity guards. Priority in Sprint C: fix Event Add Payment FK (dropdown source → user_profiles), stock clamp bug, atomic stock operations, CHECK constraints on amount columns.
 
-1. **Browser test of Admin → Add User.** The rotated secret is proved working for service-role PostgREST reads (`public-checkin` returns 200), but `auth.admin.createUser` against the `sb_secret_*` format is untested — `standards.md` §4 records that the auto-injected non-JWT key cannot do `auth.admin` calls. If Add User fails, put the JWT-format service-role key in the `SERVICE_ROLE_KEY` secret.
-2. **Take a manual Supabase snapshot.** Sprint C touches money and quantity logic; the last known restore point predates Sprints A and B.
+**BLOCKING BEFORE ANY OF THAT — the live site is down.** Disabling the legacy JWT API keys invalidated the anon key that `.env.local` and Vercel still carry; it now returns a bare `401` from PostgREST, so every browser query fails. Fix:
 
-Then **Sprint C — money and quantity guards**, now carrying one extra item: Event Add Payment has never worked (`received_by` FK vs `staff` dropdown, see COMPLIANCE above).
+1. Set `VITE_SUPABASE_ANON_KEY=sb_publishable_g4EcLtu7eED7aACKOMnxJw_Ou22iAtR` in `.env.local` **and** in Vercel env vars. (Publishable keys are public by design, exactly like the old anon key — this is safe to commit to config, not to source.)
+2. Redeploy Vercel.
+3. Then re-run the four-role walkthrough, since no role has been exercised against the new key pair.
+4. Also still outstanding: **browser test of Admin → Add User.** `auth.admin.createUser` against the `sb_secret_*` secret is unverified; `standards.md` §4 records that non-JWT keys cannot perform `auth.admin` calls. If it fails, put the JWT-format service-role key in the `SERVICE_ROLE_KEY` secret.
 
 ---
 
