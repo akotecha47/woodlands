@@ -4,6 +4,26 @@
 
 ---
 
+## POST-MEETING PRIORITY 1 — MIGRATION HISTORY RECONCILIATION
+
+**Promoted out of "post-demo" on 26 July 2026. This is systemic, not incidental.**
+
+Three ghost-schema bugs in a single night, all tracing to the same root cause — migrations that were never applied, or never written:
+
+1. **`fm_visits` missing `checked_in_at` / `checked_out_at`** — `014_fm_visits_checkin_checkout.sql` existed in the repo and had never been run. Public QR check-in failed on every scan since the page was built (Bug 5).
+2. **`fm_visits.notes` missing** — used by the manager Market Day notes flow, present in no migration at all (migration `027`).
+3. **`requisitions` column set drift** — `008_inventory.sql` required a manual `DROP` first, which never happened, so its `CREATE TABLE IF NOT EXISTS` silently did nothing and the live table stayed the incompatible `001_schema.sql` version. Six column differences. The entire requisition flow had never worked (Bug 6, migration `028`).
+
+Plus two ghost columns found earlier: `event_stock_allocations.returned_qty` (`024`) and `fm_market_days` not existing at all (`026`).
+
+**Why it keeps happening:** the remote migration history table records only versions 001–007, while 008–028 have run. `supabase db push` is therefore unusable — it would replay `016_staff_restructure.sql` and duplicate all 62 real staff rows — so every migration since has been applied by hand through the SQL editor or Management API. Hand application is where "never applied" and "applied out of order" come from, and nothing detects either.
+
+**Until this closes, Standard §2.6's rebuild-from-migrations test keeps failing**, and the Sprint F audit will keep failing it. Three tables (`event_checklists`, `shift_settings`, `tables`) still cannot be created from the files at all.
+
+**Scope of the fix:** `supabase migration repair --status applied` for 008–028; write the three missing `CREATE TABLE` migrations; renumber the duplicate `008` pair; then verify `db push` is safe and prove the schema is rebuildable. After that, migrations get applied by `db push` and drift stops being silent.
+
+---
+
 ## FROM AUDIT #2 (2026-07-26) — DEFERRED
 
 - **WOODLANDS_FUNCTIONAL_SPEC.md route/role table is stale.** Lists seven roles that don't exist. Refresh at Sprint E fit-and-finish. Source: rename commit, 26 July.
