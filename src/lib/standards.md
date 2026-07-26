@@ -1,3 +1,5 @@
+> **SUPERSEDED — do not follow.** This file's guidance predates STREAMLINE_BUILD_STANDARD.md v1.5 and mandates patterns the Standard now forbids (specifically: `supabaseAdmin` in browser code). Being rewritten in Sprint B. Until then, treat this entire file as archival. Authoritative doctrine: STREAMLINE_BUILD_STANDARD.md in repo root, and CLAUDE.md.
+
 # Woodlands — Resolved Issues & Permanent Standards
 
 These are real bugs that were hit in production or development. Each fix is permanent. Do not reintroduce these patterns.
