@@ -92,17 +92,35 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
       if (error) throw error
 
       if (eventStatus === 'confirmed') {
-        const { data: cs } = await supabase
-          .from('current_stock').select('quantity').eq('stock_item_id', form.stock_item_id).single()
-        const newQty = Math.max(0, (cs?.quantity ?? 0) - qty)
+        // Re-read rather than trusting selectedItem.quantity from the last
+        // load — the :76 guard above is against stale client state.
+        const { data: cs, error: readErr } = await supabase
+          .from('current_stock').select('quantity')
+          .eq('stock_item_id', form.stock_item_id).maybeSingle()
+        if (readErr) throw readErr
+        const available = Number(cs?.quantity ?? 0)
+        // Fail closed. This previously clamped with Math.max(0, available - qty)
+        // and marked the allocation 'deducted' regardless, under-deducting and
+        // leaving the return path to over-credit it later.
+        if (available < qty) {
+          // Don't leave a phantom allocation behind for a deduction that failed.
+          await supabase.from('event_stock_allocations').delete().eq('id', newAlloc.id)
+          throw new Error(
+            `Insufficient stock — ${available} available, ${qty} required. Nothing was allocated or deducted.`
+          )
+        }
         const { error: csErr } = await supabase
           .from('current_stock')
-          .update({ quantity: newQty, last_updated: new Date().toISOString() })
+          .update({ quantity: available - qty, last_updated: new Date().toISOString() })
           .eq('stock_item_id', form.stock_item_id)
         if (csErr) throw csErr
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')
-          .update({ status: 'deducted', deducted_at: new Date().toISOString() })
+          .update({
+            status:       'deducted',
+            deducted_qty: qty,
+            deducted_at:  new Date().toISOString(),
+          })
           .eq('id', newAlloc.id)
         if (allocErr) throw allocErr
         flash('Stock allocated and deducted from inventory')
@@ -129,12 +147,15 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
   async function handleClearance(e) {
     e.preventDefault()
     const toClear = allocations.filter(a => a.status === 'deducted')
-    // Validate before touching anything
+    // Validate before touching anything. The ceiling is what was actually
+    // deducted, not what was requested — they can differ for allocations
+    // deducted before Sprint C, where the amount could have been clamped.
     for (const a of toClear) {
-      const consumed = Number(clearanceForm[a.id] ?? 0)
-      if (consumed < 0 || consumed > a.allocated_qty) {
+      const consumed   = Number(clearanceForm[a.id] ?? 0)
+      const deductedQty = Number(a.deducted_qty ?? a.allocated_qty)
+      if (consumed < 0 || consumed > deductedQty) {
         flash(
-          `Consumed qty for ${a.stock_items?.name} must be 0 – ${a.allocated_qty} ${a.stock_items?.unit ?? ''}`,
+          `Consumed qty for ${a.stock_items?.name} must be 0 – ${deductedQty} ${a.stock_items?.unit ?? ''}`,
           false
         )
         return
@@ -143,19 +164,24 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
     setClearBusy(true)
     try {
       for (const a of toClear) {
-        const consumed = Number(clearanceForm[a.id] ?? 0)
-        const returned = Math.max(0, a.allocated_qty - consumed)
+        const consumed    = Number(clearanceForm[a.id] ?? 0)
+        const deductedQty = Number(a.deducted_qty ?? a.allocated_qty)
+        const returned    = Math.max(0, deductedQty - consumed)
         // Return surplus to stock
         const { data: cs } = await supabase
-          .from('current_stock').select('quantity').eq('stock_item_id', a.stock_item_id).single()
+          .from('current_stock').select('quantity')
+          .eq('stock_item_id', a.stock_item_id).maybeSingle()
         if (cs) {
           await supabase.from('current_stock')
-            .update({ quantity: (cs.quantity ?? 0) + returned, last_updated: new Date().toISOString() })
+            .update({ quantity: Number(cs.quantity ?? 0) + returned, last_updated: new Date().toISOString() })
             .eq('stock_item_id', a.stock_item_id)
         }
-        // Mark cleared
+        // Mark cleared. returned_qty is persisted so the audit trail matches
+        // the stock movement — it was computed and displayed but never saved,
+        // so the UI at :206/:319 always rendered blank.
         await supabase.from('event_stock_allocations').update({
           consumed_qty: consumed,
+          returned_qty: returned,
           status:       'cleared',
           cleared_at:   new Date().toISOString(),
         }).eq('id', a.id)
@@ -344,8 +370,12 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                     {deductedAllocations.map(a => {
                       const item     = a.stock_items
                       const unit     = item?.unit ?? ''
-                      const consumed = Number(clearanceForm[a.id] ?? a.allocated_qty)
-                      const returned = Math.max(0, a.allocated_qty - consumed)
+                      // Base the preview on what was actually deducted, matching
+                      // handleClearance — otherwise the "Returned (auto)" figure
+                      // shown here disagrees with the value that gets written.
+                      const deductedQty = Number(a.deducted_qty ?? a.allocated_qty)
+                      const consumed = Number(clearanceForm[a.id] ?? deductedQty)
+                      const returned = Math.max(0, deductedQty - consumed)
                       return (
                         <tr key={a.id} className="border-b border-gray-100 last:border-0">
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">{item?.name ?? '—'}</td>
@@ -355,9 +385,9 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                               <input
                                 type="number"
                                 min="0"
-                                max={a.allocated_qty}
+                                max={deductedQty}
                                 step="0.01"
-                                value={clearanceForm[a.id] ?? a.allocated_qty}
+                                value={clearanceForm[a.id] ?? deductedQty}
                                 onChange={e => setClearanceForm(cf => ({ ...cf, [a.id]: e.target.value }))}
                                 className="w-24 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                               />

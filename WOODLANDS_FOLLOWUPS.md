@@ -88,6 +88,12 @@
 
 - **Refunds confirmed to be stored positive.** `event_payments` records refunds as `payment_type = 'refund'` with a positive `amount`, subtracted in the UI (`EventPaymentsSection.jsx:46-48`, rendered parenthesised at `:156-159`). So `amount > 0` does not block refunds. Noted because a future session might reasonably assume refunds are negative and try to relax the constraint.
 
+### Sprint C — Task 3 (stock clamp + returned_qty, 2026-07-26)
+
+- **4 legacy allocations carry an unknowable deduction amount.** `event_stock_allocations` holds 6 rows: 4 `deducted` (16 units) and 2 `pending` (42 units). The 4 deducted rows were deducted before Sprint C, when the clamp could silently remove less than `allocated_qty`. Nothing recorded the real figure and event stock deduction writes no `stock_movements` row, so it cannot be reconstructed. They were **deliberately not backfilled** — setting `deducted_qty = allocated_qty` would assert the clamp never fired, which is unverifiable. They read as `coalesce(deducted_qty, allocated_qty)`, i.e. exactly today's behaviour. If any of those 4 events is later cancelled or cleared, the return could still over-credit stock by the historical shortfall. **Sprint D** — either reconcile against a physical stock count or accept and close.
+
+- **`AdjustmentsTab` is a fourth site that writes stock, not covered by Task 4's three.** `AdjustmentsTab.jsx:42-55` inserts a `stock_movements` row and *then* upserts `current_stock`. It sets an absolute quantity (a stock take) rather than applying a delta, so it has no clamp bug — but if the upsert fails, e.g. on the `quantity >= 0` CHECK, the movement row is already committed, leaving a ledger entry with no corresponding stock change. `apply_stock_delta` does not fit it directly because the operation is a set, not a delta. **Raised with Aman before Task 4** per the sprint's scope-surprise stopping rule.
+
 ### Sprint B — carried from Task 2 setup
 
 - **No `supabase/config.toml` in the repo.** The deployed `verify_jwt` setting is still not expressible in source. The function no longer depends on it (it verifies the caller itself), but the setting remains undocumented. **Sprint D.**

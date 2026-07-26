@@ -61,6 +61,41 @@ export default function EventDetailTab({ eventId, onBack }) {
 
   useEffect(() => { load() }, [eventId])
 
+  // Read-only pre-flight for confirm. MUST run before the event status is
+  // written: changeStatus updates events.status first, so a shortfall raised
+  // from inside handleStockOnStatusChange would leave the event 'confirmed'
+  // with its allocations still 'pending' and nothing deducted.
+  // Checking every allocation up front also avoids deducting the first few
+  // items and then aborting part-way through the loop.
+  async function assertStockAvailableForConfirm() {
+    const { data: pending, error } = await supabase
+      .from('event_stock_allocations')
+      .select('id, stock_item_id, allocated_qty, stock_items(name, unit)')
+      .eq('event_id', eventId)
+      .eq('status', 'pending')
+    if (error) throw error
+
+    const shortfalls = []
+    for (const alloc of (pending ?? [])) {
+      const { data: cs, error: csErr } = await supabase
+        .from('current_stock').select('quantity')
+        .eq('stock_item_id', alloc.stock_item_id).maybeSingle()
+      if (csErr) throw csErr
+      const available = Number(cs?.quantity ?? 0)
+      const required  = Number(alloc.allocated_qty)
+      if (available < required) {
+        const name = alloc.stock_items?.name ?? 'Unknown item'
+        const unit = alloc.stock_items?.unit ? ` ${alloc.stock_items.unit}` : ''
+        shortfalls.push(`${name} — need ${required}${unit}, have ${available}${unit}`)
+      }
+    }
+    if (shortfalls.length) {
+      throw new Error(
+        `Cannot confirm — insufficient stock. Nothing was deducted. ${shortfalls.join('; ')}`
+      )
+    }
+  }
+
   async function handleStockOnStatusChange(newStatus) {
     if (newStatus === 'confirmed') {
       const { data: pending, error: pendingErr } = await supabase
@@ -70,41 +105,68 @@ export default function EventDetailTab({ eventId, onBack }) {
         .eq('status', 'pending')
       if (pendingErr) throw pendingErr
       for (const alloc of (pending ?? [])) {
-        const { data: cs } = await supabase
-          .from('current_stock').select('quantity').eq('stock_item_id', alloc.stock_item_id).single()
-        const newQty = Math.max(0, (cs?.quantity ?? 0) - alloc.allocated_qty)
-        if ((cs?.quantity ?? 0) < alloc.allocated_qty) {
-          flash('Warning: insufficient stock for some items — check inventory', false)
+        const { data: cs, error: readErr } = await supabase
+          .from('current_stock').select('quantity')
+          .eq('stock_item_id', alloc.stock_item_id).maybeSingle()
+        if (readErr) throw readErr
+        const available = Number(cs?.quantity ?? 0)
+        const required  = Number(alloc.allocated_qty)
+        // Fail closed. This previously clamped with Math.max(0, available -
+        // required) and carried on, marking the allocation 'deducted' while
+        // removing less than it claimed. The cancel branch then returned the
+        // full allocated_qty, manufacturing the shortfall as real inventory.
+        if (available < required) {
+          throw new Error(
+            `Insufficient stock — ${available} available, ${required} required. Stock unchanged.`
+          )
         }
         const { error: csErr } = await supabase
           .from('current_stock')
-          .update({ quantity: newQty, last_updated: new Date().toISOString() })
+          .update({ quantity: available - required, last_updated: new Date().toISOString() })
           .eq('stock_item_id', alloc.stock_item_id)
         if (csErr) throw csErr
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')
-          .update({ status: 'deducted', deducted_at: new Date().toISOString() })
+          .update({
+            status:       'deducted',
+            deducted_qty: required,
+            deducted_at:  new Date().toISOString(),
+          })
           .eq('id', alloc.id)
         if (allocErr) throw allocErr
       }
     } else if (newStatus === 'cancelled') {
       const { data: deducted, error: deductedErr } = await supabase
         .from('event_stock_allocations')
-        .select('id, stock_item_id, allocated_qty')
+        .select('id, stock_item_id, allocated_qty, deducted_qty')
         .eq('event_id', eventId)
         .eq('status', 'deducted')
       if (deductedErr) throw deductedErr
       for (const alloc of (deducted ?? [])) {
-        const { data: cs } = await supabase
-          .from('current_stock').select('quantity').eq('stock_item_id', alloc.stock_item_id).single()
+        // Return what was actually deducted, not what was requested. A NULL
+        // deducted_qty means the row predates Sprint C, when the amount could
+        // have been silently clamped; allocated_qty is then the best available
+        // answer because nothing recorded the real figure.
+        const qtyBack = Number(alloc.deducted_qty ?? alloc.allocated_qty)
+        const { data: cs, error: readErr } = await supabase
+          .from('current_stock').select('quantity')
+          .eq('stock_item_id', alloc.stock_item_id).maybeSingle()
+        if (readErr) throw readErr
         const { error: csErr } = await supabase
           .from('current_stock')
-          .update({ quantity: (cs?.quantity ?? 0) + alloc.allocated_qty, last_updated: new Date().toISOString() })
+          .update({
+            quantity:     Number(cs?.quantity ?? 0) + qtyBack,
+            last_updated: new Date().toISOString(),
+          })
           .eq('stock_item_id', alloc.stock_item_id)
         if (csErr) throw csErr
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')
-          .update({ status: 'returned', cleared_at: new Date().toISOString() })
+          .update({
+            status:       'returned',
+            returned_qty: qtyBack,
+            cleared_at:   new Date().toISOString(),
+          })
           .eq('id', alloc.id)
         if (allocErr) throw allocErr
       }
@@ -121,6 +183,11 @@ export default function EventDetailTab({ eventId, onBack }) {
     if (statusBusy) return
     setStatusBusy(true)
     try {
+      // Verify stock before anything is written, so an insufficient-stock
+      // confirm leaves the event untouched rather than confirmed-but-undeducted.
+      if (newStatus === 'confirmed') {
+        await assertStockAvailableForConfirm()
+      }
       if (newStatus === 'confirmed' && checklists.length === 0) {
         await generateBEO(eventId)
       }
