@@ -1,15 +1,23 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { supabaseAdmin } from '../lib/supabaseAdmin'
-import { fmtDate, getMarketDayForMonth } from '../components/farmers-market/FarmersMarketUI'
+import { supabase } from '../lib/supabase'
+import { fmtDate } from '../components/farmers-market/FarmersMarketUI'
 
 const SETUP_HOUR  = 7   // 07:30 — set-up deadline
 const SETUP_MIN   = 30
 const PACKUP_HOUR = 12  // 12:30 — pack-up deadline
 const PACKUP_MIN  = 30
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+// All database access on this public route goes through the public-checkin
+// Edge Function, which holds service_role server-side. The browser never
+// touches fm_holders or fm_visits directly — see src/lib/standards.md §3.
+async function callCheckIn(action, holderId) {
+  const { data, error } = await supabase.functions.invoke('public-checkin', {
+    body: { action, holder_id: holderId },
+  })
+  if (error) throw error
+  if (data?.error) throw new Error(data.error)
+  return data
 }
 
 function fmtTime(ts) {
@@ -21,12 +29,6 @@ function isAfter(ts, hour, min) {
   if (!ts) return false
   const d = new Date(ts)
   return d.getHours() > hour || (d.getHours() === hour && d.getMinutes() >= min)
-}
-
-function daysApart(a, b) {
-  return Math.abs(Math.round(
-    (new Date(a + 'T12:00:00').getTime() - new Date(b + 'T12:00:00').getTime()) / 86400000
-  ))
 }
 
 export default function CheckIn() {
@@ -47,32 +49,20 @@ export default function CheckIn() {
 
   async function init() {
     try {
-      const { data: h, error } = await supabaseAdmin
-        .from('fm_holders')
-        .select('id, full_name, business_name, stall_number, status')
-        .eq('id', holderId)
-        .single()
+      // The market day is decided server-side so a caller cannot fabricate
+      // visits on arbitrary dates. December (no market) and "not within a day
+      // of market day" both come back as no_market.
+      const res = await callCheckIn('lookup', holderId)
 
-      if (error || !h || h.status === 'inactive') { setPhase('not_found'); return }
-      setHolder(h)
+      if (res?.not_found) { setPhase('not_found'); return }
 
-      const now = new Date()
-      const md  = getMarketDayForMonth(now.getFullYear(), now.getMonth())
+      setHolder(res.holder)
+      setMarketDay(res.market_day)
 
-      if (!md) { setPhase('no_market'); return }  // December — no market this month
+      if (res.no_market) { setPhase('no_market'); return }
 
-      if (daysApart(md, todayStr()) > 1) { setMarketDay(md); setPhase('no_market'); return }
-      setMarketDay(md)
-
-      const { data: v } = await supabaseAdmin
-        .from('fm_visits')
-        .select('id, checked_in_at, checked_out_at')
-        .eq('holder_id', holderId)
-        .eq('visit_date', md)
-        .maybeSingle()
-
-      setVisit(v)
-      resolvePhase(v)
+      setVisit(res.visit)
+      resolvePhase(res.visit)
     } catch {
       setPhase('error')
     }
@@ -88,33 +78,10 @@ export default function CheckIn() {
     if (busy) return
     setBusy(true)
     try {
-      const now = new Date().toISOString()
-      let row
-      if (!visit) {
-        const { data, error } = await supabaseAdmin
-          .from('fm_visits')
-          .insert({
-            holder_id:     holderId,
-            visit_date:    marketDay,
-            checked_in_at: now,
-            checked_in_by: null,
-            fee_paid:      false,
-          })
-          .select('id, checked_in_at, checked_out_at')
-          .single()
-        if (error) throw error
-        row = data
-      } else {
-        const { data, error } = await supabaseAdmin
-          .from('fm_visits')
-          .update({ checked_in_at: now })
-          .eq('id', visit.id)
-          .select('id, checked_in_at, checked_out_at')
-          .single()
-        if (error) throw error
-        row = data
-      }
-      setVisit(row)
+      // Insert-or-update is decided server-side from the holder's existing
+      // visit row for the market day.
+      const res = await callCheckIn('check_in', holderId)
+      setVisit(res.visit)
       setPhase('checked_in')
     } catch {
       setPhase('error')
@@ -127,14 +94,8 @@ export default function CheckIn() {
     if (!visit || busy) return
     setBusy(true)
     try {
-      const { data, error } = await supabaseAdmin
-        .from('fm_visits')
-        .update({ checked_out_at: new Date().toISOString() })
-        .eq('id', visit.id)
-        .select('id, checked_in_at, checked_out_at')
-        .single()
-      if (error) throw error
-      setVisit(data)
+      const res = await callCheckIn('check_out', holderId)
+      setVisit(res.visit)
       setPhase('checked_out')
     } catch {
       setPhase('error')
