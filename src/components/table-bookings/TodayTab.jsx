@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
@@ -25,11 +25,11 @@ export default function TodayTab() {
 
   async function load() {
     const [bookingsR, tablesR] = await Promise.all([
-      supabaseAdmin.from('table_bookings')
+      supabase.from('table_bookings')
         .select('*, tables(table_number, capacity, location)')
         .eq('booking_date', date)
         .order('booking_time'),
-      supabaseAdmin.from('tables')
+      supabase.from('tables')
         .select('id, table_number, capacity, location')
         .eq('is_active', true)
         .order('table_number'),
@@ -42,7 +42,7 @@ export default function TodayTab() {
 
   async function updateStatus(bookingId, newStatus) {
     try {
-      const { error } = await supabaseAdmin.from('table_bookings')
+      const { error } = await supabase.from('table_bookings')
         .update({ status: newStatus, updated_at: new Date().toISOString() })
         .eq('id', bookingId)
       if (error) throw error
@@ -55,7 +55,7 @@ export default function TodayTab() {
     e.preventDefault()
     setWalkInBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('table_bookings').insert({
+      const { error } = await supabase.from('table_bookings').insert({
         guest_name:   walkInForm.guest_name,
         guest_phone:  walkInForm.guest_phone,
         party_size:   Number(walkInForm.party_size),

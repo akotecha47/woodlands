@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
 import { TB_MANAGE_ROLES, todayStr, fmtTime, AccessDenied } from './TableBookingsUI'
@@ -28,7 +28,7 @@ export default function NewBookingTab() {
       setConflictWarning('')
       return
     }
-    const { data } = await supabaseAdmin.from('table_bookings')
+    const { data } = await supabase.from('table_bookings')
       .select('id, booking_time, tables(table_number)')
       .eq('table_id', tableId)
       .eq('booking_date', bookingDate)
@@ -57,7 +57,7 @@ export default function NewBookingTab() {
   }
 
   useEffect(() => {
-    supabaseAdmin.from('tables')
+    supabase.from('tables')
       .select('id, table_number, capacity, location')
       .eq('is_active', true)
       .order('table_number')
@@ -84,7 +84,7 @@ export default function NewBookingTab() {
     }
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('table_bookings').insert({
+      const { error } = await supabase.from('table_bookings').insert({
         guest_name:       form.guest_name,
         guest_phone:      form.guest_phone,
         guest_email:      form.guest_email      || null,

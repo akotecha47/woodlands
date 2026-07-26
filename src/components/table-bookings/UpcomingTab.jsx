@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
 import { TB_MANAGE_ROLES, fmtDate, fmtTime, todayStr, StatusBadge } from './TableBookingsUI'
@@ -31,17 +31,17 @@ export default function UpcomingTab() {
 
   async function load() {
     const [bookingsR, tablesR, profilesR] = await Promise.all([
-      supabaseAdmin.from('table_bookings')
+      supabase.from('table_bookings')
         .select('*, tables(table_number, capacity, location)')
         .gte('booking_date', today)
         .lte('booking_date', end7)
         .order('booking_date')
         .order('booking_time'),
-      supabaseAdmin.from('tables')
+      supabase.from('tables')
         .select('id, table_number, capacity, location')
         .eq('is_active', true)
         .order('table_number'),
-      supabaseAdmin.from('user_profiles').select('id, full_name'),
+      supabase.from('user_profiles').select('id, full_name'),
     ])
     setBookings(bookingsR.data ?? [])
     setTables(tablesR.data ?? [])
@@ -78,7 +78,7 @@ export default function UpcomingTab() {
     e.preventDefault()
     setEditBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('table_bookings').update({
+      const { error } = await supabase.from('table_bookings').update({
         guest_name:       editForm.guest_name,
         guest_phone:      editForm.guest_phone,
         party_size:       Number(editForm.party_size),
