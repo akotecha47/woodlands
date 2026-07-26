@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Toast, useFlash } from '../admin/AdminUI'
 import {
@@ -41,12 +41,12 @@ export default function ClockInOutTab() {
     if (!session?.user?.id) return
 
     const [recR, shiftsR] = await Promise.all([
-      supabaseAdmin.from('attendance_records')
+      supabase.from('attendance_records')
         .select('*')
         .eq('user_id', session.user.id)
         .eq('date', today)
         .maybeSingle(),
-      supabaseAdmin.from('shift_settings').select('*'),
+      supabase.from('shift_settings').select('*'),
     ])
 
     setRecord(recR.data ?? null)
@@ -83,7 +83,7 @@ export default function ClockInOutTab() {
     setGpsStatus(null)
     setGpsMessage('')
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await supabase
       .from('attendance_records')
       .select('id')
       .eq('user_id', session.user.id)
@@ -125,7 +125,7 @@ export default function ClockInOutTab() {
     }
 
     try {
-      const { data, error } = await supabaseAdmin.from('attendance_records').insert({
+      const { data, error } = await supabase.from('attendance_records').insert({
         user_id:       session.user.id,
         date:          today,
         clock_in:      new Date().toISOString(),
@@ -144,7 +144,7 @@ export default function ClockInOutTab() {
   async function handleStartBreak() {
     setBusy(true)
     try {
-      const { data, error } = await supabaseAdmin.from('attendance_records')
+      const { data, error } = await supabase.from('attendance_records')
         .update({ break_start: new Date().toISOString() })
         .eq('id', record.id).select().single()
       if (error) throw error
@@ -157,7 +157,7 @@ export default function ClockInOutTab() {
   async function handleEndBreak() {
     setBusy(true)
     try {
-      const { data, error } = await supabaseAdmin.from('attendance_records')
+      const { data, error } = await supabase.from('attendance_records')
         .update({ break_end: new Date().toISOString() })
         .eq('id', record.id).select().single()
       if (error) throw error
@@ -170,7 +170,7 @@ export default function ClockInOutTab() {
   async function handleClockOut() {
     setBusy(true)
     try {
-      const { data, error } = await supabaseAdmin.from('attendance_records')
+      const { data, error } = await supabase.from('attendance_records')
         .update({ clock_out: new Date().toISOString() })
         .eq('id', record.id).select().single()
       if (error) throw error

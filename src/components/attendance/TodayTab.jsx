@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
@@ -39,16 +39,16 @@ export default function TodayTab() {
 
   const load = useCallback(async () => {
     const [usersR, recsR, shiftsR, recentR] = await Promise.all([
-      supabaseAdmin
+      supabase
         .from('staff')
         .select('id, full_name, department, position, shift_start, shift_end, is_active')
         .eq('is_active', true)
         .order('department').order('full_name'),
-      supabaseAdmin.from('attendance_records').select('*')
+      supabase.from('attendance_records').select('*')
         .eq('shift_date', today)
         .not('staff_id', 'is', null),
-      supabaseAdmin.from('shift_settings').select('*').order('department').order('shift_name'),
-      supabaseAdmin.from('attendance_records')
+      supabase.from('shift_settings').select('*').order('department').order('shift_name'),
+      supabase.from('attendance_records')
         .select('staff_id, shift_date, status')
         .gte('shift_date', offsetDate(-3))
         .lt('shift_date', today)
@@ -171,7 +171,7 @@ export default function TodayTab() {
         status:     'absent',
       }))
       if (inserts.length === 0) { flash('All staff already have records for today'); return }
-      const { error } = await supabaseAdmin.from('attendance_records').insert(inserts)
+      const { error } = await supabase.from('attendance_records').insert(inserts)
       if (error) throw error
       flash(`${inserts.length} staff marked absent`)
       load()
@@ -189,14 +189,14 @@ export default function TodayTab() {
       const rec   = recMap[user.id]
       const shift = getShift(user)
       if (rec) {
-        const { error } = await supabaseAdmin.from('attendance_records')
+        const { error } = await supabase.from('attendance_records')
           .update({ status: overrideVal }).eq('id', rec.id)
         if (error) throw error
       } else {
         const clockIn = shift?.shift_start
           ? new Date(`${today}T${shift.shift_start}`).toISOString()
           : new Date(`${today}T08:00:00`).toISOString()
-        const { error } = await supabaseAdmin.from('attendance_records').insert({
+        const { error } = await supabase.from('attendance_records').insert({
           staff_id: user.id, shift_date: today, clock_in: clockIn, status: overrideVal,
         })
         if (error) throw error
@@ -216,14 +216,14 @@ export default function TodayTab() {
       const rec   = recMap[user.id]
       const shift = getShift(user)
       if (rec) {
-        const { error } = await supabaseAdmin.from('attendance_records')
+        const { error } = await supabase.from('attendance_records')
           .update({ notes: noteVal || null }).eq('id', rec.id)
         if (error) throw error
       } else {
         const clockIn = shift?.shift_start
           ? new Date(`${today}T${shift.shift_start}`).toISOString()
           : new Date(`${today}T08:00:00`).toISOString()
-        const { error } = await supabaseAdmin.from('attendance_records').insert({
+        const { error } = await supabase.from('attendance_records').insert({
           staff_id: user.id, shift_date: today, clock_in: clockIn,
           status: 'absent', notes: noteVal || null,
         })

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Toast, useFlash } from '../admin/AdminUI'
 import { AT_MANAGE_ROLES, fmtTime, AccessDenied } from './AttendanceUI'
@@ -25,7 +25,7 @@ export default function SettingsTab() {
   const flash = useFlash(setToast)
 
   async function load() {
-    const { data } = await supabaseAdmin.from('shift_settings')
+    const { data } = await supabase.from('shift_settings')
       .select('*')
       .order('department')
       .order('shift_name')
@@ -50,7 +50,7 @@ export default function SettingsTab() {
   async function saveEdit() {
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('shift_settings').update({
+      const { error } = await supabase.from('shift_settings').update({
         department:     editData.department,
         shift_name:     editData.shift_name,
         shift_start:    editData.shift_start,
@@ -74,7 +74,7 @@ export default function SettingsTab() {
     }
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('shift_settings').insert({
+      const { error } = await supabase.from('shift_settings').insert({
         department:     newRow.department,
         shift_name:     newRow.shift_name,
         shift_start:    newRow.shift_start,
@@ -95,7 +95,7 @@ export default function SettingsTab() {
   async function deleteShift(id) {
     if (!window.confirm('Delete this shift setting?')) return
     try {
-      const { error } = await supabaseAdmin.from('shift_settings').delete().eq('id', id)
+      const { error } = await supabase.from('shift_settings').delete().eq('id', id)
       if (error) throw error
       flash('Shift deleted')
       load()

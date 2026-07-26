@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import {
@@ -63,18 +63,18 @@ export default function HistoryTab() {
 
   async function load() {
     const [recsR, usersR, shiftsR] = await Promise.all([
-      supabaseAdmin.from('attendance_records')
+      supabase.from('attendance_records')
         .select('*')
         .gte('shift_date', filterFrom)
         .lte('shift_date', filterTo)
         .not('staff_id', 'is', null)
         .order('shift_date', { ascending: false })
         .order('clock_in',   { ascending: false }),
-      supabaseAdmin.from('staff')
+      supabase.from('staff')
         .select('id, full_name, department, position')
         .eq('is_active', true)
         .order('full_name'),
-      supabaseAdmin.from('shift_settings').select('*'),
+      supabase.from('shift_settings').select('*'),
     ])
 
     const staffData = usersR.data ?? []
