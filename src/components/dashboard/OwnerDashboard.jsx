@@ -77,11 +77,30 @@ export default function OwnerDashboard() {
   const initials  = getInitials(profile?.full_name)
 
   // This dashboard is shared by all four roles (ROUTE_ACCESS['/dashboard']),
-  // but Farmers Market is owner/manager only. Without this gate a
-  // kitchen_manager saw "Next Market Day" and "N holders at risk" — data from a
-  // module they cannot open. Matches FM_MANAGE_ROLES and
-  // ROUTE_ACCESS['/farmers-market'].
-  const canSeeFarmersMarket = ['owner', 'manager'].includes(profile?.role)
+  // but the modules it summarises are not. Every panel here is gated on whether
+  // the current role can actually open the module the data comes from, using the
+  // same source of truth as RouteGuard and Sidebar.
+  //
+  // Applies to KPI cards, the Needs Attention list and the bookings section
+  // alike. A first pass gated only the Needs Attention links, which left
+  // kitchen_manager and restaurant_manager still seeing Today's Attendance and
+  // Upcoming Events cards for modules they cannot reach.
+  const canAccess = path => ROUTE_ACCESS[path]?.includes(profile?.role) ?? false
+
+  const canSeeAttendance    = canAccess('/attendance')
+  const canSeeInventory     = canAccess('/')
+  const canSeeEvents        = canAccess('/events')
+  const canSeeBookings      = canAccess('/table-bookings')
+  const canSeeFarmersMarket = canAccess('/farmers-market')
+
+  // Tailwind needs literal class names, so map the count rather than
+  // interpolating it. Floored at three columns: a role with one visible card
+  // would otherwise get lg:grid-cols-1 and a single card stretched across the
+  // whole page, which reads worse than a normal-width card with space beside it.
+  const visibleKpiCount = [
+    canSeeAttendance, canSeeInventory, canSeeEvents, canSeeFarmersMarket,
+  ].filter(Boolean).length
+  const kpiColsClass = visibleKpiCount >= 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
 
   useEffect(() => {
     async function load() {
@@ -249,50 +268,56 @@ export default function OwnerDashboard() {
       </div>
 
       {/* ── KPI cards ───────────────────────────────────────────────────────────
-          Column count follows the card count so hiding the Farmers Market card
-          does not leave a dead slot in the row. */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 ${
-        canSeeFarmersMarket ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
-      }`}>
+          Each card is gated on access to the module it summarises, and the
+          column count follows the visible-card count so hidden cards leave no
+          dead slot in the row. */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 ${kpiColsClass}`}>
 
-        {/* Attendance — teal icon on teal tint */}
-        <KpiCard
-          Icon={Users}
-          iconBg="bg-brand-teal-tint"
-          iconColor="text-brand-teal"
-          label="Today's Attendance"
-          value={attendance.total}
-        >
-          <div className="flex flex-col gap-0.5 text-xs">
-            <span className="text-green-700">Present: {attendance.present}</span>
-            <span className="text-amber-600">Late:    {attendance.late}</span>
-            <span className="text-red-600">Absent:  {attendance.absent}</span>
-          </div>
-        </KpiCard>
+        {/* Attendance — teal icon on teal tint. owner/manager. */}
+        {canSeeAttendance && (
+          <KpiCard
+            Icon={Users}
+            iconBg="bg-brand-teal-tint"
+            iconColor="text-brand-teal"
+            label="Today's Attendance"
+            value={attendance.total}
+          >
+            <div className="flex flex-col gap-0.5 text-xs">
+              <span className="text-green-700">Present: {attendance.present}</span>
+              <span className="text-amber-600">Late:    {attendance.late}</span>
+              <span className="text-red-600">Absent:  {attendance.absent}</span>
+            </div>
+          </KpiCard>
+        )}
 
-        {/* Low stock — amber icon on amber tint */}
-        <KpiCard
-          Icon={Package}
-          iconBg="bg-amber-50"
-          iconColor="text-amber-500"
-          label="Low Stock Items"
-          value={lowStock.count}
-        >
-          <p className={`text-xs ${lowStock.count > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
-            {lowStock.count === 0 ? 'All items stocked' : 'at or below reorder level'}
-          </p>
-        </KpiCard>
+        {/* Low stock — amber icon on amber tint. All four roles can open
+            Inventory (ROUTE_ACCESS['/']), so this stays visible to all. */}
+        {canSeeInventory && (
+          <KpiCard
+            Icon={Package}
+            iconBg="bg-amber-50"
+            iconColor="text-amber-500"
+            label="Low Stock Items"
+            value={lowStock.count}
+          >
+            <p className={`text-xs ${lowStock.count > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+              {lowStock.count === 0 ? 'All items stocked' : 'at or below reorder level'}
+            </p>
+          </KpiCard>
+        )}
 
-        {/* Events — navy icon on navy tint */}
-        <KpiCard
-          Icon={Calendar}
-          iconBg="bg-brand-navy-tint"
-          iconColor="text-brand-navy"
-          label="Upcoming Events"
-          value={eventCount}
-        >
-          <p className="text-xs text-gray-400">from today onwards</p>
-        </KpiCard>
+        {/* Events — navy icon on navy tint. owner/manager. */}
+        {canSeeEvents && (
+          <KpiCard
+            Icon={Calendar}
+            iconBg="bg-brand-navy-tint"
+            iconColor="text-brand-navy"
+            label="Upcoming Events"
+            value={eventCount}
+          >
+            <p className="text-xs text-gray-400">from today onwards</p>
+          </KpiCard>
+        )}
 
         {/* Market day — green icon on green tint; date is longer so shrink value.
             Owner/manager only: Farmers Market is not a kitchen_manager or
@@ -339,7 +364,11 @@ export default function OwnerDashboard() {
         )}
       </section>
 
-      {/* ── Today's confirmed bookings ────────────────────────────────────────── */}
+      {/* ── Today's confirmed bookings ──────────────────────────────────────────
+          owner / manager / restaurant_manager. Same leakage class as the KPI
+          cards: kitchen_manager cannot open Table Bookings, so they should not
+          see guest names and party sizes on the dashboard either. */}
+      {canSeeBookings && (
       <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-900">Today's Confirmed Bookings</h2>
@@ -389,6 +418,7 @@ export default function OwnerDashboard() {
           </table>
         </div>
       </section>
+      )}
 
     </div>
   )
