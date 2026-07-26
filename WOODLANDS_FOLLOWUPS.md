@@ -4,6 +4,44 @@
 
 ---
 
+## FARMERS MARKET REGISTER — DATA QUALITY (for Rose, post-meeting)
+
+*From the 26 July 2026 import of the Feb 2026 register. 305 of 319 stalls are live; the gaps below are source-data issues, not import faults.*
+
+### Rows not imported — need Rose to supply data
+
+- **12 stallholders skipped: no phone number in the register.** `phone` is `NOT NULL` on `fm_holders` and Aman's decision was to skip rather than insert a placeholder or weaken the constraint, so these are absent from the system entirely until numbers are collected:
+
+  | Stall | Holder | Stall | Holder |
+  |---|---|---|---|
+  | 12 | George Laisi | 262 | Fatima Mahommed |
+  | 52 | Janet Ntila | 264 | Kondwani Chavula |
+  | 81 | Wanangwe Mkandawire | 307 | Lonely Makata |
+  | 82 | Paul Lameck Mbawa | 308 | Tendai Shaba |
+  | 133 | Nikiwe Mtema | 309 | Feboh Swalei |
+  | 151 | Percy Maleta | | |
+  | 170 | Boniface Ngomwa | | |
+
+  Worth checking the register's co-holder columns first — several of these rows carry a co-holder phone, so numbers may be recoverable without contacting the stallholder.
+
+- **Stall 205 has no holder name** in the register. Excluded upstream by the generation pipeline. Rose to identify the holder.
+
+- **Stall 226 appears twice** — Caitlyn Herselman and Benjamin Gross. `stall_number` is UNIQUE. Benjamin Gross was kept because the surrounding row order (225, 227) puts him there; Caitlyn Herselman is **deferred pending Rose's clarification of her actual stall number** — likely 224 from row position, but not confirmed and not guessed at.
+
+### Register itself needs correcting
+
+- **125 rows had the EMAIL and PRODUCTS columns swapped** in the source register (the later entries). Auto-corrected on import using an `@` heuristic, so the live data is right — but **the master spreadsheet is still wrong** and will reintroduce the fault on any future export. Worth fixing at source.
+
+### Import decisions to revisit
+
+- **All 305 rows have `stall_type = 'Other'`.** The column is `NOT NULL` with a five-value CHECK (`Produce`, `Crafts`, `Food & Beverages`, `Clothing`, `Other`) and the register has no equivalent field. Uniform `'Other'` makes the category filter useless until reclassified — the `products` text is the obvious basis for doing so, semi-automatically.
+
+- **`fm_holders.products` is a text blob** (migration `029`), not normalised into `fm_approved_items` where the schema already models per-holder items. Deliberate: the register's product strings are comma-joined, but several individual product names contain internal commas — e.g. stall 79's `Chocolate "Salame Slab", Focaccia Slab`. Splitting on commas would have silently fragmented real product names across hundreds of rows, invisibly. **Needs Rose to confirm the intended delimiter before normalising.**
+
+- **Stall-number format is now `A001`–`A347`** (three-digit zero-padded, A-prefixed). The ten test rows it replaced were two-digit `A01`–`A10`. **Needs Dhiren's sign-off** — printed QR cards and the physical stall signage have to agree with whatever the system uses.
+
+---
+
 ## POST-MEETING PRIORITY 1 — MIGRATION HISTORY RECONCILIATION
 
 **Promoted out of "post-demo" on 26 July 2026. This is systemic, not incidental.**

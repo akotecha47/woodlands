@@ -99,6 +99,16 @@ Per WOODLANDS_AUDIT_2.md (26 July 2026):
 - **Migration 027 — `fm_visits.notes`**, a second ghost column (after `event_stock_allocations.returned_qty`), used by the manager Market Day notes flow and present in no migration. Added.
 - **Verified end to end by Aman in the browser:** QR check-in scan → check in → check out from a phone; manager market-day check-in with a persisted note; Admin → Add User. Not inferred from probes.
 
+**Data changeover (26 July 2026, evening) — test data out, real roster in:**
+- **Test data purged.** All 16 transactional tables cleared in FK-dependency order (`event_payments` before `events` — that FK is `NO ACTION` and would otherwise block). `current_stock` rows kept and zeroed rather than deleted, since they record which items exist. Preserved and verified unchanged: `user_profiles` 4, `staff` 62, `stock_items` 25, `departments` 7, `shift_settings` 12, `tables` 12.
+- **Starter seed loaded** so no demo screen is empty: 15 attendance rows across 3 recent days and 5 staff (mixed present/late/absent, both `date` and `shift_date` set), one confirmed wedding on 15 August with 3 bill items totalling 800,000 MWK and no payments, and 3 table bookings including one today.
+- **305 real Farmers Market stallholders imported** from the Feb 2026 register (`migration 029` for `fm_holders.products`; the import itself is data, in `scripts/data-ops/`). Stall numbers `A001`–`A347`. Coverage: phone 305/305, products 289, email 277, business_name 141, notes 146.
+- **Row arithmetic:** 319 register stalls − 1 (stall 205, no holder name) − 1 (duplicate stall 226) − 12 (no phone number) = **305**.
+- **The supplied import SQL could not run as written.** The Task 0 schema diff found six mismatches, four fatal: `name` vs `full_name`, no `products` column, `stall_type` NOT NULL and absent from source, `phone` NOT NULL against 12 NULL rows, plus a UNIQUE violation on duplicate stall 226 and an integer/text stall-number format clash. All six resolved by Aman's decisions before any SQL ran.
+- **An encoding defect nearly shipped.** The first import wrote mojibake into all 305 rows — PowerShell 5.1's `Get-Content` decoded a BOM-less UTF-8 file as Windows-1252. Caught in read-back, both readers fixed, rows deleted and re-imported. Verified by stored codepoints rather than rendered text, because the console misrepresented the data *after* the fix as well. Methodology recorded in `src/lib/standards.md` §4.
+- **Browser-verified by Aman across five screens:** Businesses list with notes rendering cleanly, Market Day showing 305 active businesses with a live QR check-in, Monthly Messages generating across all 305 (apostrophes and all-caps clean), Payments aggregating MWK 12,200,000 outstanding, and a full QR scan → check in → check out roundtrip from a phone.
+- **Deferred, in `WOODLANDS_FOLLOWUPS.md`:** staff reconciliation with Martin; bar stock import pending Dhiren's two-bar decision; the 12 phone-less stallholders and stall 205 for Rose; duplicate stall 226; 125 register rows with EMAIL/PRODUCTS swapped at source; `stall_type` reclassification off the products text; normalising `products` into `fm_approved_items`; and Dhiren's sign-off on the `A001` stall-number format.
+
 See `WOODLANDS_AUDIT_2.md` for full findings and file/line references.
 
 Standing rules from CLAUDE.md (rewritten 26 July to match code):
@@ -153,7 +163,9 @@ Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) a
 
 ## NEXT ACTION
 
-**Demo-ready. Meeting Monday 27 July, 11am.** Aman decides the next task.
+**Meeting Monday 27 July, 11am.** Post-meeting: staff reconciliation (Martin), bar stock import after Dhiren's two-bar decision, migration history reconciliation, stall 205 data fill (Rose).
+
+Demo-ready with real data: 305 Farmers Market stallholders live, test data purged, realistic starter state seeded for Attendance, Events and Table Bookings.
 
 Verified in the browser on 26 July, not inferred: manager attendance Override; the four role dashboards; Market Day conditions persisting; QR check-in scan → check in → check out from a phone; manager market-day check-in with a persisted visit note; Admin → Add User.
 

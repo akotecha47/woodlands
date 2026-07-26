@@ -136,7 +136,9 @@ if (!session?.access_token) throw new Error('Session expired')
 
 Both exercised while `SERVICE_ROLE_KEY` held `sb_secret_atywb…` and the legacy JWTs were disabled. So the capability is settled for this key format.
 
-### Two verification rules this section was written the wrong way twice before
+### Verification rules — general doctrine, recorded here because this is where they were learned
+
+These are not about keys. They apply to any claim that something was verified. Each one cost real rework on 26 July 2026.
 
 **1. A passing test proves the configuration that was live when it ran — not the configuration you believe you set.**
 
@@ -149,6 +151,25 @@ Record which key was live when a test passed, not which key you intended to be l
 `GET /v1/projects/{ref}/api-keys` returns a usable value for `publishable` keys but **not** for `secret` keys — the `api_key` field for a secret is a non-functional placeholder of the right shape and prefix. Probing with it produces a bare `401` from every endpoint, which is indistinguishable from a revoked key.
 
 This caused a real misdiagnosis: a working secret key was reported as broken and deleted on that basis. Secret key material is shown once, in the dashboard, and cannot be re-read. **Verify a secret key only through something that already holds it** — an Edge Function call, or the application itself.
+
+**3. Verify text encoding by stored codepoints, never by rendered output. The console lies in both directions.**
+
+The Farmers Market import wrote mojibake into all 305 rows on the first attempt: PowerShell 5.1's `Get-Content` defaults to the ANSI codepage, and the source file was UTF-8 **without a BOM**, so every em-dash and curly apostrophe was decoded as Windows-1252 and re-encoded as UTF-8.
+
+The trap was the check, not the bug. After the fix the terminal *still* displayed `Thatâs Amore` — that was the console's output codepage, not the data. Trusting the rendering would have meant either shipping corruption or re-corrupting clean data while chasing a phantom.
+
+Ask the database what it actually stored:
+
+```sql
+select business_name,
+       length(business_name)                     as char_len,   -- 12
+       octet_length(business_name)               as byte_len,   -- 14 -> one 3-byte char
+       position(chr(8217) in business_name)      as curly_pos,  -- U+2019 found
+       business_name like '%' || chr(195) || '%' as has_latin1   -- false = no 0xC3
+  from fm_holders where stall_number = 'A079';
+```
+
+`char_len` vs `octet_length` proves multibyte characters survived; `chr(8217)` / `chr(8212)` confirm the *expected* codepoint is present; a `chr(195)` (`Ã`) match is the signature of UTF-8 misread as Latin-1. When reading any file that may contain non-ASCII, decode explicitly — `[System.IO.File]::ReadAllText($f, [System.Text.Encoding]::UTF8)`, never bare `Get-Content`.
 
 **Why set it manually anyway:** the runtime's auto-injected variable has changed format before, silently, and broke `auth.admin`. An explicitly set secret is one you control and can verify.
 
