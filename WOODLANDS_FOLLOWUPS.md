@@ -76,6 +76,12 @@
 
 - **No delete-user path in Admin.** Sprint B added authenticated create-user; deactivate hides the user but doesn't remove the auth.users or user_profiles rows. Aman had to delete manually via Supabase dashboard during Sprint B smoke test. Deactivate is likely the correct operational default (preserves FK integrity across recorded_by, created_by, etc.), but a genuine delete-user Edge Function + Admin button is a Sprint E fit-and-finish item if wanted. Decision: keep deactivate as default, add hard-delete option at Sprint E.
 
+## FROM SPRINT C
+
+### Sprint C — Task 1 (Add Payment FK fix, 2026-07-26)
+
+- **`event_payments.recorded_by` is never populated.** The column exists and FKs to `user_profiles(id)`, but `handleAddPayment` in `EventPaymentsSection.jsx` does not set it — no payment in the system records who entered it, only who received it (`received_by`). `const { session } = useAuth()` sits unused at `:8`, which suggests `recorded_by: session.user.id` was intended and dropped. Pre-existing since the module was built; confirmed against `git show HEAD` before the Task 1 change. Not fixed in Task 1 (out of its stated scope), and AUDIT_2 did not flag it. **Sprint E** — one-line fix, but it changes insert behaviour on a money table so it wants its own verification. Same question applies to other `recorded_by`/`created_by` columns across the schema.
+
 ### Sprint B — carried from Task 2 setup
 
 - **No `supabase/config.toml` in the repo.** The deployed `verify_jwt` setting is still not expressible in source. The function no longer depends on it (it verifies the caller itself), but the setting remains undocumented. **Sprint D.**

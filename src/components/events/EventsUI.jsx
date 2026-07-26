@@ -149,6 +149,15 @@ export function EmptyRow({ cols, msg = 'No records found' }) {
 
 // ── DB helpers ─────────────────────────────────────────────────
 
+// The 62-row staff roster. These ids are NOT user ids — `staff` is disjoint
+// from user_profiles/auth.users with no FK between them.
+//
+// Do NOT use this to populate a picker for any `*_by` column. Those FK to
+// auth.users(id) or user_profiles(id), and a staff.id fails the constraint.
+// That is exactly what broke Event Add Payment from 28 May to 26 July 2026
+// (see WOODLANDS_FOLLOWUPS.md). Use user_profiles for attribution fields;
+// use this only where a roster member is genuinely meant, e.g. assigning
+// staff to work an event.
 export async function fetchAllActiveStaff() {
   const { data } = await supabase
     .from('staff')

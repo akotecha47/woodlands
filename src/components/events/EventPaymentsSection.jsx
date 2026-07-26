@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
-import { PAY_METHODS, PAY_TYPES, fmtDate, fmtMWK, todayStr, fetchAllActiveStaff } from './EventsUI'
+import { PAY_METHODS, PAY_TYPES, fmtDate, fmtMWK, todayStr } from './EventsUI'
 
 export default function EventPaymentsSection({ eventId, billTotal, canManage }) {
   const { session } = useAuth()
   const [payments, setPayments] = useState([])
-  const [staff,    setStaff]    = useState([])
+  // System users, not the staff roster. received_by FKs to auth.users(id),
+  // which a user_profiles.id satisfies and a staff.id never can.
+  const [users,    setUsers]    = useState([])
   const [userMap,  setUserMap]  = useState({})
   const [toast,    setToast]    = useState(null)
   const flash = useFlash(setToast)
@@ -24,17 +26,17 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
   }
 
   async function load() {
-    const [payR, profilesR, activeStaffR] = await Promise.all([
+    const [payR, profilesR] = await Promise.all([
       supabase.from('event_payments').select('*')
         .eq('event_id', eventId).order('payment_date'),
-      supabase.from('user_profiles').select('id, full_name'),
-      fetchAllActiveStaff(),
+      supabase.from('user_profiles').select('id, full_name').order('full_name'),
     ])
     setPayments(payR.data ?? [])
-    const map = {}
-    for (const u of (profilesR.data ?? [])) map[u.id] = u.full_name
-    setUserMap(map)
-    setStaff(activeStaffR)
+    // One source for both the dropdown and the rendered value, so the write
+    // path and the read path can no longer disagree about what received_by is.
+    const profiles = profilesR.data ?? []
+    setUsers(profiles)
+    setUserMap(Object.fromEntries(profiles.map(u => [u.id, u.full_name])))
   }
 
   useEffect(() => { load() }, [eventId])
@@ -203,8 +205,8 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
               </Field>
               <Field label="Received By *">
                 <Sel required value={form.received_by} onChange={f('received_by')}>
-                  <option value="">Select staff member…</option>
-                  {staff.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                  <option value="">Select user…</option>
+                  {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                 </Sel>
               </Field>
             </div>
