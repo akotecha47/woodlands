@@ -94,6 +94,16 @@
 
 - **`AdjustmentsTab` is a fourth site that writes stock, not covered by Task 4's three.** `AdjustmentsTab.jsx:42-55` inserts a `stock_movements` row and *then* upserts `current_stock`. It sets an absolute quantity (a stock take) rather than applying a delta, so it has no clamp bug — but if the upsert fails, e.g. on the `quantity >= 0` CHECK, the movement row is already committed, leaving a ledger entry with no corresponding stock change. `apply_stock_delta` does not fit it directly because the operation is a set, not a delta. **Raised with Aman before Task 4** per the sprint's scope-surprise stopping rule.
 
+## FROM SPRINT C SMOKE TEST
+
+*Found by Aman during the Sprint C browser verification, 26 July 2026. For Sprint D/E — which run tonight, not "later".*
+
+- **Kitchen manager sees Farmers Market cards on Dashboard** (should be Dashboard-only per the role table). Fix in Sprint E.
+- **"Needs Attention" cards on Dashboard link to `/login`** — likely the `/inventory` redirect. Fix with the `/inventory` route fix in Sprint E.
+- **Top-right notification bell + search bar non-functional** — wire up or remove before demo. Sprint E.
+- **Owner has no visible stock page** — `/inventory` unreachable. Sprint E priority-one, this is what Dhiren will click first.
+- **Completed events with outstanding balance are invisible** (event `ww`: 500k unpaid after completion). Ask Dhiren tomorrow whether this needs a card/filter. Sprint E if yes.
+
 ### Sprint B — carried from Task 2 setup
 
 - **No `supabase/config.toml` in the repo.** The deployed `verify_jwt` setting is still not expressible in source. The function no longer depends on it (it verifies the caller itself), but the setting remains undocumented. **Sprint D.**
