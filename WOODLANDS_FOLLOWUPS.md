@@ -82,6 +82,12 @@
 
 - **`event_payments.recorded_by` is never populated.** The column exists and FKs to `user_profiles(id)`, but `handleAddPayment` in `EventPaymentsSection.jsx` does not set it — no payment in the system records who entered it, only who received it (`received_by`). `const { session } = useAuth()` sits unused at `:8`, which suggests `recorded_by: session.user.id` was intended and dropped. Pre-existing since the module was built; confirmed against `git show HEAD` before the Task 1 change. Not fixed in Task 1 (out of its stated scope), and AUDIT_2 did not flag it. **Sprint E** — one-line fix, but it changes insert behaviour on a money table so it wants its own verification. Same question applies to other `recorded_by`/`created_by` columns across the schema.
 
+### Sprint C — Task 2 (amount CHECK constraints, 2026-07-26)
+
+- **`event_bill_items.amount > 0` forbids a zero-value line.** Verified by probe: an `amount = 0` bill item is now rejected. That means a genuinely complimentary or comped item cannot be recorded at zero — it would have to be omitted or priced. No such row exists today (7 bill items, all positive), and `> 0` was the specified constraint. If comped lines turn out to be wanted operationally, relax to `>= 0` in a **new migration** rather than dropping the constraint. Worth asking Dhiren at handover. **Sprint E / handover question.**
+
+- **Refunds confirmed to be stored positive.** `event_payments` records refunds as `payment_type = 'refund'` with a positive `amount`, subtracted in the UI (`EventPaymentsSection.jsx:46-48`, rendered parenthesised at `:156-159`). So `amount > 0` does not block refunds. Noted because a future session might reasonably assume refunds are negative and try to relax the constraint.
+
 ### Sprint B — carried from Task 2 setup
 
 - **No `supabase/config.toml` in the repo.** The deployed `verify_jwt` setting is still not expressible in source. The function no longer depends on it (it verifies the caller itself), but the setting remains undocumented. **Sprint D.**
