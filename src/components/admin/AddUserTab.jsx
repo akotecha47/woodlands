@@ -50,6 +50,14 @@ export default function AddUserTab() {
     setFormError(null)
     setSuccess(null)
     try {
+      // The Edge Function verifies this token server-side and requires the
+      // caller to be an active owner. Sending the anon key here (as this did
+      // before) authenticated nothing — it is public and in the bundle.
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Your session has expired. Sign in again to add a user.')
+      }
+
       const payload = { ...form }
       if (!payload.shift_name) delete payload.shift_name
       const response = await fetch(
@@ -58,7 +66,7 @@ export default function AddUserTab() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify(payload),
         }
