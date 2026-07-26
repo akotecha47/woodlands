@@ -69,7 +69,13 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
         payment_method: form.payment_method,
         reference:      form.reference.trim(),
         notes:          form.notes || null,
+        // Who took the money (chosen from the dropdown) vs who keyed it in
+        // (the signed-in user). recorded_by FKs to user_profiles(id) and was
+        // never populated, so no payment recorded who entered it — the
+        // `session` from useAuth() sat unused at :8, which is what gave the
+        // omission away.
         received_by:    form.received_by,
+        recorded_by:    session?.user?.id ?? null,
         created_at:     new Date().toISOString(),
       })
       if (error) throw error
