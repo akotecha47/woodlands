@@ -129,8 +129,6 @@ Take manual backup. Then Sprint C — money and quantity guards. Priority in Spr
 
 `.env.local` anon key updated to sb_publishable value on 26 July after Sprint B closeout — matches Vercel and current live site.
 
-Still outstanding: **browser test of Admin → Add User.** `auth.admin.createUser` against the `sb_secret_*` secret is unverified; `standards.md` §4 records that non-JWT keys cannot perform `auth.admin` calls. If it fails, put the JWT-format service-role key in the `SERVICE_ROLE_KEY` secret.
-
 ---
 
 ## BLOCKING

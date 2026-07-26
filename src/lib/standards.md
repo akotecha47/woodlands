@@ -126,11 +126,17 @@ if (!session?.access_token) throw new Error('Session expired')
 
 ## 4. Edge Function secret naming — `SERVICE_ROLE_KEY`
 
-**Rule:** Store the service role key as `SERVICE_ROLE_KEY` in Edge Function Secrets. Do not use `SUPABASE_SERVICE_ROLE_KEY`.
+**Rule:** Store the secret key as `SERVICE_ROLE_KEY` in Edge Function Secrets, set manually. Do not rely on the runtime-injected `SUPABASE_SERVICE_ROLE_KEY`.
 
-**Why:** The Supabase runtime auto-injects `SUPABASE_SERVICE_ROLE_KEY`, but as the newer 41-character non-JWT key format. That format cannot perform `auth.admin` calls such as `createUser`, which require the JWT-format service role key. The manually set `SERVICE_ROLE_KEY` holds the correct JWT value.
+**Current value format:** `sb_secret_*`. This project migrated off legacy JWT-based API keys on 26 July 2026 (Sprint B); the anon/service_role JWT pair is disabled and the project now uses an `sb_publishable_*` / `sb_secret_*` pair.
 
-**When the key is rotated:** update this secret in the same maintenance window, or every Edge Function breaks. Rotating in the Supabase dashboard does *not* update function secrets automatically.
+**Verified 26 July 2026:** an `sb_secret_*` key performs **both** service-role PostgREST reads (`public-checkin`) and `auth.admin` calls including `createUser` (`create-user`, confirmed by creating a real user). Earlier guidance in this file claimed only a JWT-format key could do `auth.admin` — that was true of an older auto-injected 41-character format and is **not** true of `sb_secret_*`. Do not swap the secret back to a JWT on that basis.
+
+**Why set it manually anyway:** the runtime's auto-injected variable has changed format before, silently, and broke `auth.admin`. An explicitly set secret is one you control and can verify.
+
+**When the key is rotated:** update this secret in the same maintenance window, or every Edge Function breaks — both `create-user` and `public-checkin` read it, so user creation and all public QR check-in fail together. Rotating in the Supabase dashboard does *not* update function secrets automatically.
+
+**Client-side counterpart:** `VITE_SUPABASE_ANON_KEY` now holds the `sb_publishable_*` value. Publishable keys are public by design, exactly as the anon key was — see §13.
 
 ---
 
@@ -244,9 +250,11 @@ SELECT constraint_name FROM information_schema.table_constraints WHERE table_nam
 
 ```
 VITE_SUPABASE_URL=https://[project-ref].supabase.co
-VITE_SUPABASE_ANON_KEY=...
+VITE_SUPABASE_ANON_KEY=sb_publishable_...
 ```
 
 - `VITE_SUPABASE_URL` must be the full URL including `https://`, not just the project ref.
+- **`VITE_SUPABASE_ANON_KEY` holds the `sb_publishable_*` key, not a JWT.** Legacy JWT API keys were disabled on 26 July 2026; the old `eyJ…` anon key returns a bare `401` from PostgREST. The variable keeps its historical name to avoid a rename across the codebase.
+- **Keep `.env.local` and Vercel in sync.** They are set independently. A stale `.env.local` breaks local dev only — the deployed bundle uses Vercel's values — and vice versa. This drifted once already, on the day of the key migration.
 - **There is no third variable.** `VITE_SUPABASE_SERVICE_ROLE_KEY` was removed in Sprint B and must not return. If you find yourself adding a `VITE_*` variable to make a query work, the actual problem is a missing GRANT or policy — see §2.
 - Edge Function secrets are set separately, in the Supabase dashboard, and use `SERVICE_ROLE_KEY` — see §4.
