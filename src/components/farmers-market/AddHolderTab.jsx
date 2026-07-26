@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
 import { STALL_TYPES, todayStr, AccessDenied } from './FarmersMarketUI'
@@ -39,7 +39,7 @@ export default function AddHolderTab({ onCreated }) {
     setBusy(true)
     try {
       // Pre-check for duplicate stall number among non-inactive holders
-      const { data: taken } = await supabaseAdmin
+      const { data: taken } = await supabase
         .from('fm_holders')
         .select('id')
         .eq('stall_number', form.stall_number.toUpperCase())
@@ -51,7 +51,7 @@ export default function AddHolderTab({ onCreated }) {
         return
       }
 
-      const { error } = await supabaseAdmin.from('fm_holders').insert({
+      const { error } = await supabase.from('fm_holders').insert({
         full_name:        form.full_name,
         business_name:    form.business_name    || null,
         stall_number:     form.stall_number,

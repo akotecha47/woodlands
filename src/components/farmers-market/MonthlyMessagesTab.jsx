@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { FM_FEES } from '../../lib/constants'
 import { fmtDate, getMarketDayForMonth, AccessDenied } from './FarmersMarketUI'
@@ -36,12 +36,12 @@ export default function MonthlyMessagesTab() {
 
   async function loadHolders() {
     const [holdersR, itemsR] = await Promise.all([
-      supabaseAdmin
+      supabase
         .from('fm_holders')
         .select('id, full_name, business_name, stall_number, application_paid, acceptance_paid')
         .eq('status', 'active')
         .order('stall_number'),
-      supabaseAdmin
+      supabase
         .from('fm_approved_items')
         .select('holder_id, item_name')
         .order('created_at'),
@@ -60,7 +60,7 @@ export default function MonthlyMessagesTab() {
     const monthStart = `${selYear}-${selMonthStr}-01`
     const lastDay    = new Date(Number(selYear), selMonthIdx, 0).getDate()
     const monthEnd   = `${selYear}-${selMonthStr}-${String(lastDay).padStart(2, '0')}`
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('fm_payments')
       .select('holder_id')
       .eq('payment_type', 'visit')

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { FM_PAY_METHODS, fmtDate, fmtMWK, todayStr, getMarketDayForMonth } from './FarmersMarketUI'
@@ -65,17 +65,17 @@ export default function PaymentsTab() {
 
   async function load() {
     const [holdersR, paymentsR, profilesR] = await Promise.all([
-      supabaseAdmin
+      supabase
         .from('fm_holders')
         .select('id, full_name, stall_number, status, application_paid, acceptance_paid')
         .not('status', 'eq', 'inactive')
         .order('stall_number'),
-      supabaseAdmin
+      supabase
         .from('fm_payments')
         .select('*, fm_holders(full_name, stall_number)')
         .order('payment_date', { ascending: false })
         .order('created_at', { ascending: false }),
-      supabaseAdmin.from('user_profiles').select('id, full_name'),
+      supabase.from('user_profiles').select('id, full_name'),
     ])
     setHolders(holdersR.data ?? [])
     setPayments(paymentsR.data ?? [])
@@ -134,7 +134,7 @@ export default function PaymentsTab() {
     e.preventDefault()
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('fm_payments').insert({
+      const { error } = await supabase.from('fm_payments').insert({
         holder_id:      form.holder_id,
         payment_type:   form.payment_type,
         amount:         Number(form.amount),
@@ -147,13 +147,13 @@ export default function PaymentsTab() {
       if (error) throw error
 
       if (form.payment_type === 'application') {
-        await supabaseAdmin.from('fm_holders').update({ application_paid: true }).eq('id', form.holder_id)
+        await supabase.from('fm_holders').update({ application_paid: true }).eq('id', form.holder_id)
       }
       if (form.payment_type === 'acceptance') {
-        await supabaseAdmin.from('fm_holders').update({ acceptance_paid: true }).eq('id', form.holder_id)
+        await supabase.from('fm_holders').update({ acceptance_paid: true }).eq('id', form.holder_id)
       }
       if (form.payment_type === 'visit') {
-        await supabaseAdmin.from('fm_visits')
+        await supabase.from('fm_visits')
           .update({ fee_paid: true })
           .eq('holder_id', form.holder_id)
           .eq('visit_date', form.payment_date)

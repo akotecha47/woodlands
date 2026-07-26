@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { QRCodeCanvas } from 'qrcode.react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { FM_FEES } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
@@ -93,13 +93,13 @@ export default function HoldersTab() {
     const lastDay       = getLastNMarketDays(1)[0] ?? null
 
     const [holdersR, yearVisitsR, atRiskVisitsR, lastVisitsR] = await Promise.all([
-      supabaseAdmin.from('fm_holders').select('*').order('stall_number'),
-      supabaseAdmin.from('fm_visits').select('holder_id').gte('visit_date', yearStart),
+      supabase.from('fm_holders').select('*').order('stall_number'),
+      supabase.from('fm_visits').select('holder_id').gte('visit_date', yearStart),
       lastThreeDays.length > 0
-        ? supabaseAdmin.from('fm_visits').select('holder_id, visit_date').in('visit_date', lastThreeDays)
+        ? supabase.from('fm_visits').select('holder_id, visit_date').in('visit_date', lastThreeDays)
         : Promise.resolve({ data: [] }),
       lastDay
-        ? supabaseAdmin.from('fm_visits').select('holder_id, fee_paid').eq('visit_date', lastDay)
+        ? supabase.from('fm_visits').select('holder_id, fee_paid').eq('visit_date', lastDay)
         : Promise.resolve({ data: [] }),
     ])
 
@@ -122,7 +122,7 @@ export default function HoldersTab() {
         .map(h => h.id)
 
       if (toFlag.length > 0) {
-        await supabaseAdmin.from('fm_holders').update({ status: 'at_risk' }).in('id', toFlag)
+        await supabase.from('fm_holders').update({ status: 'at_risk' }).in('id', toFlag)
         const flaggedSet = new Set(toFlag)
         allHolders = allHolders.map(h => flaggedSet.has(h.id) ? { ...h, status: 'at_risk' } : h)
       }
@@ -185,10 +185,10 @@ export default function HoldersTab() {
     setNewItemText('')
     setRemoveItemId(null)
     const [pR, vR, idR, itR] = await Promise.all([
-      supabaseAdmin.from('fm_payments').select('*').eq('holder_id', holder.id).order('payment_date', { ascending: false }),
-      supabaseAdmin.from('fm_visits').select('*').eq('holder_id', holder.id),
-      supabaseAdmin.from('fm_id_cards').select('*').eq('holder_id', holder.id).order('card_number'),
-      supabaseAdmin.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at'),
+      supabase.from('fm_payments').select('*').eq('holder_id', holder.id).order('payment_date', { ascending: false }),
+      supabase.from('fm_visits').select('*').eq('holder_id', holder.id),
+      supabase.from('fm_id_cards').select('*').eq('holder_id', holder.id).order('card_number'),
+      supabase.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at'),
     ])
     setExpandedPayments(pR.data ?? [])
     setExpandedVisits(vR.data ?? [])
@@ -214,7 +214,7 @@ export default function HoldersTab() {
   async function handleMarkContacted(holder) {
     const now = new Date().toISOString()
     try {
-      await supabaseAdmin.from('fm_holders').update({ last_contacted: now }).eq('id', holder.id)
+      await supabase.from('fm_holders').update({ last_contacted: now }).eq('id', holder.id)
       // Optimistic update — reflect in banner immediately without full reload
       setHolders(prev => prev.map(h => h.id === holder.id ? { ...h, last_contacted: now } : h))
       flash('Marked as contacted')
@@ -223,7 +223,7 @@ export default function HoldersTab() {
 
   async function doApprove(holder) {
     try {
-      await supabaseAdmin.from('fm_holders').update({ status: 'active' }).eq('id', holder.id)
+      await supabase.from('fm_holders').update({ status: 'active' }).eq('id', holder.id)
       flash(`${holder.full_name} approved`)
       load()
     } catch (err) { flash(err.message, false) }
@@ -231,7 +231,7 @@ export default function HoldersTab() {
 
   async function doDeactivate(holder) {
     try {
-      await supabaseAdmin.from('fm_holders').update({ status: 'inactive' }).eq('id', holder.id)
+      await supabase.from('fm_holders').update({ status: 'inactive' }).eq('id', holder.id)
       flash(`${holder.full_name} deactivated`)
       if (expandedId === holder.id) setExpandedId(null)
       load()
@@ -263,7 +263,7 @@ export default function HoldersTab() {
     e.preventDefault()
     setBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('fm_holders').update({
+      const { error } = await supabase.from('fm_holders').update({
         full_name:     editForm.full_name,
         business_name: editForm.business_name || null,
         stall_number:  editForm.stall_number,
@@ -304,7 +304,7 @@ export default function HoldersTab() {
     const today = new Date().toISOString().slice(0, 10)
     try {
       if (type === 'issue') {
-        const { error: cardErr } = await supabaseAdmin.from('fm_id_cards').insert({
+        const { error: cardErr } = await supabase.from('fm_id_cards').insert({
           holder_id:   holder.id,
           card_number: cardNum,
           card_fee:    fee,
@@ -312,7 +312,7 @@ export default function HoldersTab() {
           issued_by:   session?.user?.id ?? null,
         })
         if (cardErr) throw cardErr
-        const { error: payErr } = await supabaseAdmin.from('fm_payments').insert({
+        const { error: payErr } = await supabase.from('fm_payments').insert({
           holder_id:      holder.id,
           payment_type:   'id_card',
           amount:         fee,
@@ -324,9 +324,9 @@ export default function HoldersTab() {
         if (payErr) throw payErr
         flash(`Card #${cardNum} issued`)
       } else {
-        const { error: repErr } = await supabaseAdmin.from('fm_id_cards').update({ status: 'reprinted' }).eq('id', cardId)
+        const { error: repErr } = await supabase.from('fm_id_cards').update({ status: 'reprinted' }).eq('id', cardId)
         if (repErr) throw repErr
-        const { error: payErr } = await supabaseAdmin.from('fm_payments').insert({
+        const { error: payErr } = await supabase.from('fm_payments').insert({
           holder_id:      holder.id,
           payment_type:   'reprint',
           amount:         FM_FEES.reprint,
@@ -339,9 +339,9 @@ export default function HoldersTab() {
         flash(`Card #${cardNum} marked as reprinted`)
       }
       const [pR, idR, itR] = await Promise.all([
-        supabaseAdmin.from('fm_payments').select('*').eq('holder_id', holder.id).order('payment_date', { ascending: false }),
-        supabaseAdmin.from('fm_id_cards').select('*').eq('holder_id', holder.id).order('card_number'),
-        supabaseAdmin.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at'),
+        supabase.from('fm_payments').select('*').eq('holder_id', holder.id).order('payment_date', { ascending: false }),
+        supabase.from('fm_id_cards').select('*').eq('holder_id', holder.id).order('card_number'),
+        supabase.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at'),
       ])
       setExpandedPayments(pR.data ?? [])
       setExpandedIdCards(idR.data ?? [])
@@ -357,14 +357,14 @@ export default function HoldersTab() {
     if (!name) return
     setItemBusy(true)
     try {
-      const { error } = await supabaseAdmin.from('fm_approved_items').insert({
+      const { error } = await supabase.from('fm_approved_items').insert({
         holder_id: holder.id,
         item_name: name,
         added_by:  session?.user?.id ?? null,
       })
       if (error) throw error
       setNewItemText('')
-      const { data } = await supabaseAdmin.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at')
+      const { data } = await supabase.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at')
       setExpandedItems(data ?? [])
     } catch (err) { flash(err.message, false) }
     finally { setItemBusy(false) }
@@ -373,7 +373,7 @@ export default function HoldersTab() {
   async function doRemoveItem(itemId) {
     setRemoveItemId(null)
     try {
-      const { error } = await supabaseAdmin.from('fm_approved_items').delete().eq('id', itemId)
+      const { error } = await supabase.from('fm_approved_items').delete().eq('id', itemId)
       if (error) throw error
       setExpandedItems(prev => prev.filter(i => i.id !== itemId))
     } catch (err) { flash(err.message, false) }

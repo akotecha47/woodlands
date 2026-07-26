@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { fmtDate, fmtMWK, defaultMarketDate, FM_MANAGE_ROLES, FM_PAY_METHODS, todayStr, isMarketDay, getMarketDayForMonth } from './FarmersMarketUI'
@@ -39,9 +39,9 @@ export default function MarketDayTab() {
 
   async function load() {
     const [holdersR, visitsR, mdR] = await Promise.all([
-      supabaseAdmin.from('fm_holders').select('*').eq('status', 'active').order('stall_number'),
-      supabaseAdmin.from('fm_visits').select('*').eq('visit_date', marketDate),
-      supabaseAdmin.from('fm_market_days').select('id, notes').eq('market_date', marketDate).maybeSingle(),
+      supabase.from('fm_holders').select('*').eq('status', 'active').order('stall_number'),
+      supabase.from('fm_visits').select('*').eq('visit_date', marketDate),
+      supabase.from('fm_market_days').select('id, notes').eq('market_date', marketDate).maybeSingle(),
     ])
     setHolders(holdersR.data ?? [])
     const map = {}
@@ -53,7 +53,7 @@ export default function MarketDayTab() {
   }
 
   async function reloadVisits() {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
       .from('fm_visits').select('*').eq('visit_date', marketDate)
     const map = {}
     for (const v of (data ?? [])) map[v.holder_id] = v
@@ -65,7 +65,7 @@ export default function MarketDayTab() {
 
     async function refetchVisit(holderId) {
       if (!holderId) return
-      const { data: visit } = await supabaseAdmin
+      const { data: visit } = await supabase
         .from('fm_visits')
         .select('*')
         .eq('holder_id', holderId)
@@ -79,7 +79,7 @@ export default function MarketDayTab() {
       })
     }
 
-    const channel = supabaseAdmin
+    const channel = supabase
       .channel(`market-day-${marketDate}`)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'fm_visits',
@@ -95,7 +95,7 @@ export default function MarketDayTab() {
       })
       .subscribe(status => setLive(status === 'SUBSCRIBED'))
 
-    return () => { supabaseAdmin.removeChannel(channel) }
+    return () => { supabase.removeChannel(channel) }
   }, [marketDate])
 
   // ── check-in ──────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ export default function MarketDayTab() {
   async function handleCheckIn(holder) {
     if (!canCheckIn || visitMap[holder.id]) return
     try {
-      const { data, error } = await supabaseAdmin.from('fm_visits').insert({
+      const { data, error } = await supabase.from('fm_visits').insert({
         holder_id:     holder.id,
         visit_date:    marketDate,
         checked_in_by: session?.user?.id ?? null,
@@ -119,7 +119,7 @@ export default function MarketDayTab() {
   async function handleSaveNote() {
     const { visitId } = notesPrompt
     try {
-      await supabaseAdmin.from('fm_visits').update({ notes: visitNote || null }).eq('id', visitId)
+      await supabase.from('fm_visits').update({ notes: visitNote || null }).eq('id', visitId)
       setVisitMap(prev => {
         const holderId = Object.keys(prev).find(id => prev[id].id === visitId)
         if (!holderId) return prev
@@ -136,7 +136,7 @@ export default function MarketDayTab() {
     setFeeBusy(true)
     try {
       await Promise.all([
-        supabaseAdmin.from('fm_payments').insert({
+        supabase.from('fm_payments').insert({
           holder_id:      holder.id,
           payment_type:   'visit',
           amount:         Number(feeAmount) || VISIT_FEE,
@@ -144,7 +144,7 @@ export default function MarketDayTab() {
           payment_method: feeMethod,
           recorded_by:    session?.user?.id ?? null,
         }),
-        supabaseAdmin.from('fm_visits').update({ fee_paid: true })
+        supabase.from('fm_visits').update({ fee_paid: true })
           .eq('holder_id', holder.id).eq('visit_date', marketDate),
       ])
       await reloadVisits()
@@ -161,8 +161,8 @@ export default function MarketDayTab() {
     setRemoveConfirm(null)
     try {
       await Promise.all([
-        supabaseAdmin.from('fm_visits').delete().eq('id', visitId),
-        supabaseAdmin.from('fm_payments')
+        supabase.from('fm_visits').delete().eq('id', visitId),
+        supabase.from('fm_payments')
           .delete()
           .eq('holder_id', holder.id)
           .eq('payment_date', marketDate)
@@ -179,7 +179,7 @@ export default function MarketDayTab() {
 
   async function handleAddFromModal(holder) {
     try {
-      const { data, error } = await supabaseAdmin.from('fm_visits').insert({
+      const { data, error } = await supabase.from('fm_visits').insert({
         holder_id:     holder.id,
         visit_date:    marketDate,
         checked_in_by: session?.user?.id ?? null,
@@ -196,13 +196,13 @@ export default function MarketDayTab() {
 
   async function persistConditions(val) {
     if (conditionsId) {
-      await supabaseAdmin.from('fm_market_days').update({
+      await supabase.from('fm_market_days').update({
         notes:      val,
         updated_by: session?.user?.id ?? null,
         updated_at: new Date().toISOString(),
       }).eq('id', conditionsId)
     } else {
-      const { data } = await supabaseAdmin.from('fm_market_days').insert({
+      const { data } = await supabase.from('fm_market_days').insert({
         market_date: marketDate,
         notes:       val,
         updated_by:  session?.user?.id ?? null,
