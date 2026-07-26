@@ -3,15 +3,31 @@
  * Run after seed.sql has been applied in Supabase Studio:
  *   node scripts/seed-attendance.mjs
  *
- * Per standards rule 12: no ON CONFLICT (check before insert), explicit date casts.
- * Per standards rule 1: uses supabaseAdmin (service role) to bypass RLS.
+ * Per standards rule 11: no ON CONFLICT (check before insert), explicit date casts.
+ *
+ * This is a Node script, never bundled — it is the one place a service-role
+ * key is legitimate. It must come from the environment:
+ *   SUPABASE_SERVICE_KEY=... node scripts/seed-attendance.mjs
+ *
+ * There is deliberately no fallback. A hardcoded literal used to live here and
+ * was committed to git (WOODLANDS_AUDIT_2.md §2.1b, commit 9759cc4); it cost a
+ * key rotation. Per src/lib/standards.md §11, seed scripts throw when the
+ * secret is absent rather than carrying a default.
  */
 
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = 'https://gttsjmxltrxxfplqjans.supabase.co'
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY
-  ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0dHNqbXhsdHJ4eGZwbHFqYW5zIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Nzk3NjAyMSwiZXhwIjoyMDkzNTUyMDIxfQ.z4-L1LSe6GElhrVAHfZOeSWa1PVQrH7tpr8spSw417I'
+
+if (!SERVICE_KEY) {
+  console.error(
+    'SUPABASE_SERVICE_KEY is not set.\n' +
+    'This script needs a service-role key from the environment:\n' +
+    '  SUPABASE_SERVICE_KEY=<key> node scripts/seed-attendance.mjs'
+  )
+  process.exit(1)
+}
 
 const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
