@@ -42,6 +42,46 @@
 
 ---
 
+## FROM BAR STOCK IMPORT PREP (27 July 2026, pre-meeting)
+
+*Artifacts prepared and committed. **The import has NOT been applied to the live database.** Live state at commit, verified by direct query: 25 test `stock_items`, 25 `current_stock`, 0 `stock_movements`, 0 `event_stock_allocations`. Everything below was found during schema probing, not during an import run.*
+
+### Blocking — the import still has to be run
+
+- **`supabase/migrations/030_widen_movement_type.sql` — written, NOT applied.** Adds `'opening_balance'` to the `stock_movements.movement_type` CHECK. Must be applied *before* the data-ops script, which will otherwise fail the constraint on every insert.
+
+- **`scripts/data-ops/002_bar_stock_reset_and_import.sql` — written, NOT applied.** Wipes the 25 test stock rows and loads 559 real bar items (276 Restaurant Bar + 283 Sports Bar), 533 `opening_balance` movements, and 559 `current_stock` rows. Apply via the Supabase SQL Editor, never `db push`.
+
+### Findings
+
+- **`current_stock` is a BASE TABLE, not a view.** Verified: `pg_class.relkind = 'r'`, `information_schema.tables` reports `BASE TABLE`, absent from `pg_views`, and it carries a PK, a UNIQUE on `stock_item_id`, `CHECK (quantity >= 0)`, an FK to `stock_items` and two btree indexes — none of which a view can hold. **There are also no triggers whatsoever** on `stock_items`, `stock_movements` or `current_stock`, so nothing syncs the ledger to the balances.
+
+  A draft of the import script was written on the assumption that `current_stock` was a view over `stock_movements` and therefore only needed movement rows. Had it run, `DELETE FROM stock_items` would have cascaded `current_stock` empty and nothing would have refilled it: 559 items, 533 movements, **zero balances**, and a blank Stock Levels screen. The committed script writes both, and derives `current_stock` from the movements (STEP 4) so the two cannot disagree.
+
+- **An item with no `current_stock` row is invisible on Stock Levels, not shown as zero.** `StockLevelsTab.jsx:16` selects from `current_stock` and joins `stock_items`, so the balances table drives the list. Any future import must write a row for every item including zero-stock ones — hence the `LEFT JOIN` in STEP 4 covering all 559 rather than only the 533 with movements.
+
+- **`stock_movements.movement_type` CHECK matches migration 008 exactly — no drift.** Live definition is `CHECK (movement_type = ANY (ARRAY['delivery','transfer','adjustment','requisition']))`. It does **not** permit `event_allocation`, `event_return` or `opening_balance`, and `stock_movements_movement_type_check_v2` does not exist. Recorded explicitly because a session brief asserted the live CHECK was already wider than documented; it is not. The Sprint C Task 4 item to widen for `event_allocation` / `event_return` therefore **remains fully open** — migration 030 does not address it.
+
+- **`stock_items` has no DELETE policy, for any role except `service_role`.** RLS is enabled; policies are `SELECT` (authenticated), `stock_items_owner_insert` (INSERT, authenticated), `stock_items_owner_update` (UPDATE, authenticated), and `service role full access` (ALL, service_role). DELETE is fail-closed for every application user, which is why the data-ops wipe can only run through the Management API or an Edge Function. Probably correct as an operational default, but the asymmetry — INSERT and UPDATE present, DELETE simply absent rather than deliberately denied — looks unplanned. **Post-meeting: confirm intent and make it explicit either way.**
+
+  Note for whoever audits this: the Management API query endpoint runs privileged and bypasses RLS entirely. Running a statement successfully through it proves nothing about what `anon` or `authenticated` may do. Policy claims must be tested as the role in question.
+
+- **Stock Levels' department filter lists all 7 departments regardless of stock.** Populated from the `departments` table (`InventoryUI.jsx:69`), not from `DISTINCT stock_items.department`. After the bar-only import, Housekeeping / Kitchen / Grounds / Restaurant / Security will still appear in the dropdown, each showing "No items in this department." Cosmetic, and consistent with the "waiting on your other stock lists" framing — but worth knowing before demoing rather than discovering live. The `departments` table is deliberately untouched by the import: Transfers and Requisitions need all 7.
+
+- **`WOODLANDS_HISTORY.md` does not exist.** Named as required reading in this session's brief. Not in the repo root, not anywhere in the tree. This is the third confident citation of a missing document in this project, after `WOODLANDS_DEMO_PREP.md` and AUDIT_2 §0. **Either write these files or stop citing them.**
+
+### Deferred to Dhiren / Rose, post-meeting
+
+- **Real bar stock QUANTITIES.** All 559 quantities in the import are deterministic demo values. Load real levels from Dhiren's stocktake.
+- **Stock lists for the other five departments.** Housekeeping, Kitchen, Grounds, Restaurant and Security are cleared entirely by the import. Rose and the department heads to supply.
+- **Unit classification is heuristic.** Name pattern matching assigned 84 items `crates` and 475 `bottles`. Rose to sanity-check — some spirits ship in crates, some ciders in bottles.
+- **Reorder levels are placeholder.** Uniform: every `crates` item 8, every `bottles` item 5. Needs per-item review with the bar manager.
+- **Selling prices not imported.** Both source files carry real MWK prices; the schema has no price column and this system is inventory tracking, not accounting. If valuation is ever in scope, add `selling_price` via a migration and re-run a targeted UPDATE.
+- **Item names are ALL-CAPS from source.** Same convention decision as the Farmers Market import — preserve verbatim. Normalise to Title Case if Dhiren prefers.
+- **283 unique products; 276 stocked in both bars, 7 Sports-only** (`BULL DOG GIN`, `HENDRICKS GIN`, `APEROL`, `BLENDERS PRIDE`, `GLENMORANGIE 14 YRS`, `GLENMORANGIE 16 YRS`, `MONKEY SHOULDER`). Shared products are two rows, one per bar, with parallel `RBA-`/`SBA-` SKUs. If Dhiren wants one item tracked separately per bar instead, that is a schema change — the department-per-row model is what shipped.
+
+---
+
 ## POST-MEETING PRIORITY 1 — MIGRATION HISTORY RECONCILIATION
 
 **Promoted out of "post-demo" on 26 July 2026. This is systemic, not incidental.**
@@ -100,7 +140,7 @@ Plus two ghost columns found earlier: `event_stock_allocations.returned_qty` (`0
 
 - **Market-day maths is now duplicated.** `getMarketDayForMonth` exists in `src/components/farmers-market/FarmersMarketUI.jsx` and is re-implemented in `supabase/functions/public-checkin/index.ts` (Deno cannot import the browser module). The Deno copy computes in Africa/Blantyre (UTC+2) rather than the host's UTC, to preserve the browser's previous local-time behaviour. If the market-day rule changes, both must change. **Sprint E.**
 
-- **`check_in` / `check_out` write paths are not verified end-to-end.** Only `lookup` was probed live; exercising the writes would have fabricated a visit row for a real stall holder. Needs a browser smoke test.
+- **~~`check_in` / `check_out` write paths are not verified end-to-end~~ — CLOSED 26 July 2026 evening.** Verified via a real QR scan on Aman's phone: Banda Crafts holder scanned → check_in wrote the visit row → check_out completed roundtrip. Later re-verified with Shanie Cousins (A049) from the imported real dataset. Data-quality feedback ("Checked out after pack-up time") rendering correctly.
 
 ### Sprint B — Task 3 (anon-client migration, 2026-07-26)
 
@@ -110,7 +150,7 @@ Plus two ghost columns found earlier: `event_stock_allocations.returned_qty` (`0
 
 - **`store_supervisor` gates left in place.** `LogDeliveryTab.jsx:7` and `TransfersTab.jsx:7` still list a role that cannot exist, and `InventoryUI.jsx:82` filters on it. Migration 022 deliberately did not grant it anything. Those two tabs remain `AccessDenied` to everyone except owner/manager. **Sprint E.**
 
-- **Inventory module had no runtime exercise.** All seven files were migrated to the anon client, but the module is unreachable (`ROUTE_ACCESS` keys `/inventory`, route is `/`). Its policies and grants are therefore untested against a real session. First real test will be after the Sprint E route fix.
+- **~~Inventory module had no runtime exercise~~ — CLOSED 26 July 2026 evening.** After the `/inventory` route fix and Bug 6 (requisitions column drift) fix, the requisition raise → approve → fulfil path was exercised end-to-end via the browser. Sprint C's `apply_stock_delta` RPC verified for the first time through the UI. Delivery Log shows exactly one movement row per fulfil (no double-write). Stock Levels reflected the delta correctly.
 
 ### Sprint B — Task 4 smoke test (2026-07-26)
 
@@ -138,7 +178,7 @@ Plus two ghost columns found earlier: `event_stock_allocations.returned_qty` (`0
 
 ### Sprint C — Task 1 (Add Payment FK fix, 2026-07-26)
 
-- **`event_payments.recorded_by` is never populated.** The column exists and FKs to `user_profiles(id)`, but `handleAddPayment` in `EventPaymentsSection.jsx` does not set it — no payment in the system records who entered it, only who received it (`received_by`). `const { session } = useAuth()` sits unused at `:8`, which suggests `recorded_by: session.user.id` was intended and dropped. Pre-existing since the module was built; confirmed against `git show HEAD` before the Task 1 change. Not fixed in Task 1 (out of its stated scope), and AUDIT_2 did not flag it. **Sprint E** — one-line fix, but it changes insert behaviour on a money table so it wants its own verification. Same question applies to other `recorded_by`/`created_by` columns across the schema.
+- **~~`event_payments.recorded_by` is never populated~~ — PARTIALLY CLOSED 26 July 2026 evening (Sprint E must-ships).** `recorded_by` is now written on every payment insert. Two open pieces remain: (1) the payments table does not yet display who recorded a payment — the value is present in the DB but not rendered in any column, so verification is by SQL not by eye; (2) the same "written but not displayed" question applies to other `recorded_by`/`created_by` columns across the schema. Both are Sprint E post-demo (see the FROM DEMO PREP section below).
 
 ### Sprint C — Task 2 (amount CHECK constraints, 2026-07-26)
 
@@ -148,9 +188,11 @@ Plus two ghost columns found earlier: `event_stock_allocations.returned_qty` (`0
 
 ### Sprint C — Task 3 (stock clamp + returned_qty, 2026-07-26)
 
-- **4 legacy allocations carry an unknowable deduction amount.** `event_stock_allocations` holds 6 rows: 4 `deducted` (16 units) and 2 `pending` (42 units). The 4 deducted rows were deducted before Sprint C, when the clamp could silently remove less than `allocated_qty`. Nothing recorded the real figure and event stock deduction writes no `stock_movements` row, so it cannot be reconstructed. They were **deliberately not backfilled** — setting `deducted_qty = allocated_qty` would assert the clamp never fired, which is unverifiable. They read as `coalesce(deducted_qty, allocated_qty)`, i.e. exactly today's behaviour. If any of those 4 events is later cancelled or cleared, the return could still over-credit stock by the historical shortfall. **Sprint D** — either reconcile against a physical stock count or accept and close.
+- **~~4 legacy allocations carry an unknowable deduction amount~~ — MOOT as of 26 July 2026 evening.** `event_stock_allocations` held 6 rows: 4 `deducted` (16 units) and 2 `pending` (42 units), whose real deduction amounts could not be reconstructed. **All 6 rows were removed by the 26 July evening test-data purge** (`scripts/data-ops/2026-07-26_purge_test_data.sql`), which cleared every transactional table. Verified empty by direct query on 27 July 2026: `SELECT count(*) FROM event_stock_allocations` returns 0. There is nothing left to reconcile, so the Sprint D reconciliation task is dropped.
 
-- **`AdjustmentsTab` is a fourth site that writes stock, not covered by Task 4's three.** `AdjustmentsTab.jsx:42-55` inserts a `stock_movements` row and *then* upserts `current_stock`. It sets an absolute quantity (a stock take) rather than applying a delta, so it has no clamp bug — but if the upsert fails, e.g. on the `quantity >= 0` CHECK, the movement row is already committed, leaving a ledger entry with no corresponding stock change. `apply_stock_delta` does not fit it directly because the operation is a set, not a delta. **Raised with Aman before Task 4** per the sprint's scope-surprise stopping rule.
+  Recorded precisely because the closure reason matters: these rows were purged as test data along with everything else, **not** cleared by any later stock operation. The underlying defect the entry described — event stock deduction writing no `stock_movements` row, making clamp shortfalls unreconstructable — was fixed in Sprint C (migration 025) and is unrelated to their disappearance.
+
+- **~~`AdjustmentsTab` is a fourth site that writes stock, not covered by Task 4's three~~ — CLOSED 26 July 2026 (Task 4 expanded scope).** After Aman confirmed scope expansion, migration 025 added a second RPC — `set_stock_quantity` — alongside `apply_stock_delta`, and `AdjustmentsTab.jsx:42-55` was refactored to use it. The set-vs-delta shape mismatch is resolved: `set_stock_quantity` locks the row, computes the delta server-side, and writes the movement + updates `current_stock` atomically. The pre-existing ordering flaw (movement row committed before upsert) no longer exists on this path.
 
 ## RESOLVED — Edge Function outage, 26 July 2026 evening
 
@@ -166,13 +208,15 @@ I reported the project's original secret key (`sb_secret_vXtUz…`, id `85f95296
 
 No lasting harm — the replacement key works — but the reasoning was wrong and it destroyed a credential. The tell was available and I missed it: `public-checkin` was reading `fm_holders` successfully with the key in the secret, while my direct probe of "the same key" failed. Two contradictory results about one key value should have prompted me to doubt the probe, not the key.
 
-### Two verification rules, both learned the hard way today
+### Three verification rules, all learned the hard way today
 
 1. **A passing test proves the configuration that was live when it ran, not the one you believe you set.** `public-checkin` returning 200 and Add User succeeding were both recorded as verifying the *new* secret key format. Both actually ran while `SERVICE_ROLE_KEY` still held the legacy JWT, so they verified the old key. The false claim then sat in `standards.md` as doctrine.
 
 2. **Never probe with a secret value read from the Management API.** Publishable keys come back usable; secret keys come back as non-functional placeholders. A probe using one produces an indistinguishable `401`. Verify a secret only through something that already holds it — an Edge Function call, or the app.
 
-Both are now written into `src/lib/standards.md` §4 so the next session inherits them.
+3. **Verify by stored codepoints, not by rendered visual, when console codepage differs from source file encoding.** During the Farmers Market import, apostrophes in stall names (e.g. "That's Amore", "Jeniffer's Products") rendered as `â` in the terminal but were correctly stored as U+2019. The mojibake was the console, not the data. Verified by `char_length` vs `octet_length` and by checking expected Unicode points at expected positions — visual verification alone would have "found" a bug that wasn't there and possibly triggered a destructive re-import.
+
+All three are now written into `src/lib/standards.md` §4 so the next session inherits them.
 
 ### Still open from this episode
 
@@ -204,11 +248,11 @@ Both are now written into `src/lib/standards.md` §4 so the next session inherit
 
 *Found by Aman during the Sprint C browser verification, 26 July 2026. For Sprint D/E — which run tonight, not "later".*
 
-- **Kitchen manager sees Farmers Market cards on Dashboard** (should be Dashboard-only per the role table). Fix in Sprint E.
-- **"Needs Attention" cards on Dashboard link to `/login`** — likely the `/inventory` redirect. Fix with the `/inventory` route fix in Sprint E.
-- **Top-right notification bell + search bar non-functional** — wire up or remove before demo. Sprint E.
-- **Owner has no visible stock page** — `/inventory` unreachable. Sprint E priority-one, this is what Dhiren will click first.
-- **Completed events with outstanding balance are invisible** (event `ww`: 500k unpaid after completion). Ask Dhiren tomorrow whether this needs a card/filter. Sprint E if yes.
+- **~~Kitchen manager sees Farmers Market cards on Dashboard~~ — CLOSED 26 July 2026 evening.** Fixed as part of Sprint E must-ships — FM cards now gated to owner/manager only. Bug 2 (Task 6 gating partial for `restaurant_manager`) also caught and fixed same evening.
+- **~~"Needs Attention" cards on Dashboard link to `/login`~~ — CLOSED 26 July 2026 evening.** Resolved by the `/inventory` route fix in Sprint E — verified in browser.
+- **Top-right notification bell + search bar non-functional** — deliberately deferred. Framing at meeting: "placeholder UI, not wired yet." Wire up or remove post-meeting.
+- **~~Owner has no visible stock page~~ — CLOSED 26 July 2026 evening.** `/inventory` route fix in Sprint E — verified in browser. Stock Levels tab shows real items, real quantities, real reorder levels.
+- **Completed events with outstanding balance are invisible** (event `ww`: 500k unpaid after completion — that event has since been purged in the data cleanup, but the underlying UI gap remains). Ask Dhiren at the meeting whether this needs a card/filter. Sprint E post-meeting if yes.
 
 ### Sprint C — Task 4 (atomic stock, 2026-07-26)
 
