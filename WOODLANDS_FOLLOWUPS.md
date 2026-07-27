@@ -44,13 +44,28 @@
 
 ## FROM BAR STOCK IMPORT PREP (27 July 2026, pre-meeting)
 
-*Artifacts prepared and committed. **The import has NOT been applied to the live database.** Live state at commit, verified by direct query: 25 test `stock_items`, 25 `current_stock`, 0 `stock_movements`, 0 `event_stock_allocations`. Everything below was found during schema probing, not during an import run.*
+*Findings below came from schema probing before the import ran. **Both artifacts were subsequently applied and verified — see "Applied" immediately below.***
 
-### Blocking — the import still has to be run
+### Applied — 27 July 2026, pre-meeting
 
-- **`supabase/migrations/030_widen_movement_type.sql` — written, NOT applied.** Adds `'opening_balance'` to the `stock_movements.movement_type` CHECK. Must be applied *before* the data-ops script, which will otherwise fail the constraint on every insert.
+- **`supabase/migrations/030_widen_movement_type.sql` — APPLIED.** Adds `'opening_balance'` to the `stock_movements.movement_type` CHECK. Confirmed post-apply: `stock_movements_movement_type_check_v2` exists permitting all five types, the old four-value `stock_movements_movement_type_check` was dropped, and the column comment is set. **Not recorded in the remote migration history table** — same as every migration from 008 onward; folds into the Priority 1 reconciliation below.
 
-- **`scripts/data-ops/002_bar_stock_reset_and_import.sql` — written, NOT applied.** Wipes the 25 test stock rows and loads 559 real bar items (276 Restaurant Bar + 283 Sports Bar), 533 `opening_balance` movements, and 559 `current_stock` rows. Apply via the Supabase SQL Editor, never `db push`.
+- **`scripts/data-ops/002_bar_stock_reset_and_import.sql` — APPLIED.** Run via the Management API query endpoint, not `db push`. Dry-run first with `ROLLBACK` (numbers checked, rollback confirmed by re-reading counts as still 25), then applied for real. Verified against **committed** state on a fresh connection, not from inside the transaction:
+
+  | Metric | Expected | Actual |
+  |---|---|---|
+  | `stock_items` | 559 | ✅ 559 |
+  | `stock_movements` | 533 | ✅ 533 (all `opening_balance`) |
+  | `current_stock` | 559 | ✅ 559 |
+  | Restaurant Bar / Sports Bar | 276 / 283 | ✅ 276 / 283 |
+  | bottles / crates | 475 / 84 | ✅ 475 / 84 |
+  | out-of-stock / below-reorder / ok | 26 / 78 / 455 | ✅ 26 / 78 / 455 |
+  | ledger-vs-balance mismatches | 0 | ✅ 0 |
+  | items with no `current_stock` row | 0 | ✅ 0 |
+  | non-bar items remaining | 0 | ✅ 0 |
+  | non-ASCII characters in names | 0 | ✅ 0 |
+
+  Dashboard "Low Stock Items" will read **104** (26 out-of-stock + 78 below reorder). Quantity range 0–60.
 
 ### Findings
 
