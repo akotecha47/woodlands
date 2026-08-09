@@ -1,603 +1,233 @@
-# WOODLANDS FUNCTIONAL SPEC
+# WOODLANDS FUNCTIONAL SPEC — END-GOAL SYSTEM
 
-*Module-by-module inventory of screens, fields, and business rules. Written 31 May 2026. Renamed from `SYSTEM_AUDIT.md` on 26 July 2026 — this is a functional spec, not a security audit. For audits see `WOODLANDS_AUDIT.md` (4 July 2026) and `WOODLANDS_AUDIT_2.md` (26 July 2026).*
+*What the finished Woodlands system is: every module, screen, and rule at the target state. This is the build reference — Claude Code reads it to know what to build toward, not just what exists today.*
 
-> **Stale section flagged:** the "Route Access Control" table near the top lists seven roles (store_supervisor, bar1, bar2, head_waiter, waiter, farmers_market_admin) that do not exist. The authoritative role list is in `src/lib/roles.js` (four roles: owner, manager, kitchen_manager, restaurant_manager). Refresh this table at Sprint E fit-and-finish.
+**Rewritten 9 August 2026** to the end goal. Supersedes the 31 May 2026 version (which described the pre-hardening single-tier build with roles that no longer exist).
+
+**Scope source:** the Phase 2 additions below come from `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md`. Where that doc and this one disagree, the meeting doc is the record of what Dhiren asked for; this doc is the build interpretation of it.
 
 ---
 
-## Woodlands Lodge — System Audit
+## STATUS LEGEND
 
-## Route Access Control
+Every feature below carries one marker:
 
-Defined in `src/lib/roles.js` via `ROUTE_ACCESS`:
+- **[DONE]** — built and working today.
+- **[BUG]** — built but broken; fix required.
+- **[NEW]** — Phase 2, not yet built. This is the bulk of the remaining work.
+- **[VERIFY]** — a claim carried from the old spec or a session note that has NOT been confirmed against the live code or DB. Do not trust it until probed.
+
+The target for end of the week of 11 August: **every screen works on placeholder data.** Real data (bar stocktake, department stock lists, staff reconciliation, menus, real stallholder details) is explicitly out of scope until Dhiren verifies the system works. Blank screens fail the bar — every [NEW] table ships with placeholder seed as part of its own build step.
+
+---
+
+## 0. THE GATE — MIGRATION HISTORY RECONCILIATION [NEW / P1]
+
+**Nothing schema-heavy below is safe until this is done.** Remote migration history records only versions 001–007 while 001–030 have run. `supabase db push` is disqualified — it would replay migration 016's staff INSERT and duplicate all 62 real staff rows — so every migration from 021 on has been applied by hand through the SQL Editor. Five ghost-schema bugs have already come from that.
+
+Phase 2 adds roughly 8–12 tables (departmental stock, par levels, rooms, consumption, taxonomy, waiting list, fees). Hand-applying that many guarantees more ghost schema. Fix the history, get `db push` working and proven, then build. Scope: `supabase migration repair --status applied` for 008–030; write the three missing `CREATE TABLE` migrations (`event_checklists`, `shift_settings`, `tables`); renumber the duplicate `008` pair; verify `db push` is safe and the schema rebuilds from files alone (closes Standard §2.6).
+
+---
+
+## 1. ROLES
+
+### Current — authoritative in `src/lib/roles.js` [DONE]
+
+`owner`, `manager`, `kitchen_manager`, `restaurant_manager`. Four login roles. The `staff` table (62 rows) is disjoint from login roles — it is the roster the manager-facing Attendance screens operate on, no FK to `user_profiles`.
+
+### Target model [NEW — PROPOSED, confirm before the role migration runs]
+
+The meeting requires owner, front-desk admin, multiple restaurant heads, one head per other department, and HR. The right architecture is **one `department_head` role scoped by the existing `department` field, not a role per department** — role-per-department is role explosion and can't cleanly express "Restaurant has three or four heads."
+
+Target roles:
+
+| Role | Who | Scope |
+|---|---|---|
+| `owner` | Dhiren | Everything |
+| `admin` | Rose, Secret (front desk) | Bookings, events, Farmers Market, front-desk operations. Confirm exact surface. |
+| `department_head` | Sanjay/Patrick/Daniel + heads of Housekeeping, Laundry, Grounds, Restaurant Bar, Sports Bar | Scoped to their `department`: that department's sub-store, consumption, requisitions, par levels (bars), their staff's attendance. **Multiple heads per department allowed.** |
+| `hr` | Martin | Staff, roster, shifts, attendance. **Not** stock or revenue. Confirm. |
+
+**Collapse mapping (confirm):** `manager` → absorbed by `owner`/`admin`; `kitchen_manager` → `department_head` (Kitchen); `restaurant_manager` → `department_head` (Restaurant) or `admin`. Whether a general cross-department `manager` role survives below owner is Aman's call — do not delete it unilaterally.
+
+Departments stay plain text, never FK to a departments table (standing rule).
+
+### Route access — target
 
 | Route | Roles |
-|-------|-------|
-| `/` (Inventory) | owner, manager, store_supervisor, bar1, bar2 |
-| `/attendance` | All staff roles |
-| `/events` | owner, manager |
-| `/table-bookings` | owner, manager, restaurant_manager, bar1, bar2, head_waiter, waiter |
-| `/farmers-market` | owner, manager, farmers_market_admin |
+|---|---|
+| `/login`, `/checkin` (FM), `/attend` (staff QR) | Public |
+| `/dashboard` | All authenticated |
+| `/inventory` | owner, admin, department_head (own dept view) |
+| `/attendance` | owner, admin, hr; department_head (own staff) |
+| `/events` | owner, admin |
+| `/table-bookings` | owner, admin |
+| `/farmers-market` | owner, admin |
 | `/admin` | owner |
 
----
-
-## Login
-
-**File:** `src/pages/Login.jsx`  
-**Access:** Public
-
-**Form fields:** Email, Password
-
-**Actions:**
-- Sign In — authenticates via Supabase Auth, fetches role from user_profiles, navigates to default route based on role
+**[VERIFY]** the old spec claimed a GPS geofence on clock-in (100 m radius, `unverified` status). AUDIT (4 July) corroborates "GPS-flagged clock in/out," so it likely exists — but confirm against live code before relying on it, and decide how it coexists with QR check-in (§4).
 
 ---
 
-## Admin Module
+## 2. NEW CROSS-CUTTING CONCEPTS [NEW]
 
-**File:** `src/pages/Admin.jsx`  
-**Access:** owner only  
-**Tabs:** Users · Add User · Departments · Stock Items
+Three things Phase 2 introduces that don't map to a single existing module.
 
----
+### 2.1 Two-tier inventory
 
-### Users Tab
+One main store is the single inbound point — everything logged in on arrival. Stock then distributes out to departments as needed: **one inflow, many outflows.** Each department holds its own stock, consumed from its own dedicated list.
 
-**File:** `src/components/admin/UsersTab.jsx`
+Data-model direction: an item carries a main-store balance and a per-department balance. Reorder levels and low-stock alerts are per-tier — a department can be empty while the store is full, and that's a different alert. The requisition flow becomes the store→department transfer mechanism (requisitions already deduct on Fulfil). The existing `TransfersTab` net-zero assumption must be revisited under two tiers.
 
-**Columns:** Name · Email · Role · Department · Shift · Bar Wk · Status · Created · Actions
+Departments (exist in system; item lists empty): Kitchen, Restaurant, Housekeeping, Grounds, Security, plus the two bars which hold stock. **Laundry** is required by the meeting but not yet a department — add it. **Security** exists but wasn't named in the meeting — confirm it stays.
 
-**Data fields:** full_name, email, role, department, shift_name, bar_week, is_active, created_at
+### 2.2 Rooms
 
-**Actions:**
-- Edit — opens modal to update full_name, department, shift_name, bar_week
-- Deactivate / Reactivate — toggles is_active
+Not currently a concept anywhere in the system. Required so stock consumption can be attributed to a room (housekeeping, laundry). A rooms reference list must exist before §2.3 works. Room list (numbers or names) comes from Dhiren.
 
-**Business rules:**
-- Bar roles (bar1, bar2) require bar_week (A or B)
-- Non-rotating shifts auto-selected if only one available for the chosen department
-- Rotating shifts excluded from the shift dropdown
+### 2.3 Consumption ledger
+
+Every consumption event records three dimensions: **what** (item + quantity), **where** (department, and room for housekeeping/laundry), **who** (staff member who drew it). Named as a real current pain: they cannot see which rooms used which stock. Laundry history retained one year minimum — treat 12 months as the floor for the whole ledger.
 
 ---
 
-### Add User Tab
+## 3. INVENTORY MODULE
 
-**File:** `src/components/admin/AddUserTab.jsx`
+**File:** `src/pages/Inventory.jsx`
 
-**Form fields:** full_name (required), email (required), password (required, min 6 chars), role (required), department (optional), shift_name (conditional), bar_week (required for bar1/bar2 only)
+### Existing tabs [DONE unless marked]
 
-**Actions:**
-- Create User — POSTs to Edge Function `create-user` via direct fetch with anon key
+- **Stock Levels** — department filter, columns Item/SKU/Dept/Unit/Current Stock/Reorder/Status, "Low" badge when qty ≤ reorder. Read-only. *(An item with no `current_stock` row is invisible here, not shown as zero — any import must write a row per item.)*
+- **Log Delivery** — Item/Qty/Supplier/Date/Received By/Notes; inserts `stock_movements` (delivery) and adds to `current_stock`.
+- **Requisitions** — raise (Item/Dept/Qty/Reason); manager Approve → Reject → **Fulfil**. Stock deducts on **Fulfil only**. Non-managers see only their own.
+- **Transfers [BUG]** — records a matched movement pair (−from/+to) and, per the old design, does not touch `current_stock`. **Found not to deduct stock in browser test 27 July.** Under two-tier (§2.1) this is the core store→department mechanic and must move real balances. Fix here.
+- **Adjustments** — set new quantity; writes signed `stock_movements` (adjustment) + upserts `current_stock`.
+- **Delivery Log** — shows `movement_type = delivery` only. Open question: keep delivery-only or make a consolidated **Movement Ledger** (deliveries, adjustments, requisitions, transfers, event allocations, with +/− direction). Two-tier makes consolidation more attractive; if consolidated, widen `movement_type` CHECK to add `event_allocation`/`event_return`.
 
-**Display:**
-- Success box showing email, password, and role with instruction to share credentials securely
+### End-goal additions
 
-**Business rules:**
-- Bar Week field only shown for bar1/bar2 roles
-- Shift auto-selected if department has exactly one non-rotating shift
-- Form resets after successful creation
+- **Two-tier stock [NEW]** — per §2.1. Per-department sub-stores, per-department stock lists, store→department issue recorded, dual balances.
+- **Bar par levels + end-of-day cycle [NEW]** — each bar holds a minimum per item before opening. Nightly: bartender counts → reports levels → system computes shortfall against par → generates a refill requisition (confirm a pre-filled request, don't compose one) → fulfilled from main store before next open. Par quantities come from the bar heads.
+- **Consumption attribution [NEW]** — per §2.3. Draw-from-department writes a consumption row (what/where/who, room where relevant).
 
----
-
-### Departments Tab
-
-**File:** `src/components/admin/DepartmentsTab.jsx`
-
-**Data displayed:** Department name list
-
-**Actions:**
-- Add — text input creates new department
-- Edit — inline edit with Save/Cancel
-- Delete — requires window.confirm before deletion
+**[VERIFY]** `stock_movements.movement_type` CHECK: FOLLOWUPS (bar-import probe) says the live CHECK permits only `delivery/transfer/adjustment/requisition` and that migration 030 did **not** add `opening_balance`. HISTORY/ARTIFACTS say 030 *did* add `opening_balance`. **These contradict — probe the live CHECK before trusting either, and correct whichever doc is wrong.**
 
 ---
 
-### Stock Items Tab
+## 4. ATTENDANCE MODULE
 
-**File:** `src/components/admin/StockItemsTab.jsx`
+**File:** `src/pages/Attendance.jsx`
 
-**Columns:** Name · SKU · Unit · Department · Reorder Level · Status · Actions
+### Existing [DONE]
 
-**Data fields:** name, sku (auto-generated), unit, department, reorder_level, is_active (Active/Inactive badge)
+- **Clock In/Out** — states idle/working/break/done; live net hours. On Clock In, GPS compared to lodge coords (100 m); outside/unavailable → `unverified`; inside → `present`/`late` vs shift_start + late_threshold. **[VERIFY] the GPS behaviour against live code.**
+- **Today** (owner/manager/restaurant_manager) — Present/Late/Absent/Unverified/Not-arrived cards, department filter, Mark All Absent (after 11:00), Override, Note. Absence + coverage alerts.
+- **History** (same access) — Daily and Weekly Summary views, filters, 14-day default.
+- **Settings** (same access) — shift definitions per department (start/end/late threshold/days/type).
 
-**Actions:**
-- Edit — inline editing for name, unit, reorder_level
-- Deactivate / Reactivate — toggles is_active (no delete)
+### End-goal additions
 
-**Business rules:**
-- SKU auto-generated as `{DeptCode}-{PaddedCount}` (e.g. KIT-001)
-- Department codes: Kitchen→KIT, Restaurant Bar→RBA, Sports Bar→SBA, Restaurant→RST, Housekeeping→HSK, Grounds→GRD, Security→SEC, default→GEN
-- Unit defaults: Kitchen/Restaurant→kg, Bar→litres, else→units
+- **QR staff check-in [NEW]** — QR code per staff member, scanned at a **fixed on-premises station** (reception the obvious spot) at shift start/end. Scanner on site only → no remote check-in; combats lateness and no-shows. Scan writes clock-in/out; lateness computed vs roster; no scan by threshold after roster start → no-show flag. **Reuses the FM `public-checkin` pattern** (public endpoint, QR payload, scan writes a row). Confirm: does QR replace the manual clock-in flow or supplement it? Optional non-biometric hardening — capture a photo on scan to deter card-sharing (stores an image, doesn't match one) — offer, don't build unasked.
 
----
-
-## Attendance Module
-
-**File:** `src/pages/Attendance.jsx`  
-**Access:** All staff roles
-
-**Tabs by role:**
-- owner / manager: Today · History · Settings
-- restaurant_manager: Today · Clock In/Out
-- All other roles: Clock In/Out only
+**Doctrine note:** the standing rule "manual clock in/out only" is superseded by the QR decision. QR is not biometrics, so no conflict there.
 
 ---
 
-### Clock In/Out Tab
+## 5. EVENTS MODULE
 
-**File:** `src/components/attendance/ClockInOutTab.jsx`
+**File:** `src/pages/Events.jsx` · Access: owner, manager (target: owner, admin)
 
-**Data displayed:** full_name, department, shift_name, bar_week, shift_start, shift_end, current state (idle/working/break/done), GPS status, live net hours (refreshes every 5 s)
+### Existing [DONE unless marked]
 
-**States and actions:**
-- Idle → Clock In button
-- Working → Start Break · Clock Out buttons
-- Break → End Break button
-- Done → Summary of Clock In, Clock Out, break duration, net hours
+- **Events List** — summary strip, status/deposit filters, sort, amber highlight for ≤7-day or confirmed-unpaid. View/Edit/Delete.
+- **Create Event** — full form; new events `enquiry`, `deposit_paid=false`.
+- **Event Detail** — status pipeline (enquiry→confirm→start→complete, cancel); info grid; **BEO checklists** auto-generated on confirm/in_progress, grouped by department, progress bars.
+- **Bill Section** — categorised line items, bill total.
+- **Payments Section [BUG for edit]** — summary cards (Bill Total/Total Paid/Balance Due); add payment (Deposit/Balance/Additional/Refund); deposit auto-sets `deposit_paid`. `recorded_by` is written but not displayed.
 
-**Business rules:**
-- On Clock In, GPS compared to lodge coordinates (within 100 m radius)
-- If outside radius or GPS unavailable: status set to `unverified`, flagged for manager review
-- If within radius: status set to `present` or `late` based on shift_start + late_threshold
-- Final break and net hours calculated and displayed after clock-out
+### End-goal fixes
 
----
-
-### Today Tab
-
-**File:** `src/components/attendance/TodayTab.jsx`  
-**Access:** owner, manager, restaurant_manager only
-
-**Summary cards:** Present · Late · Absent · Unverified · Not Yet Arrived
-
-**Controls:** Department filter dropdown
-
-**Columns (per department group):** Staff Name · Shift · Clock In · Clock Out · Hours · Break · Status · Radius · Actions
-
-**Status logic:**
-- If no record before 11:00 → "not_arrived"
-- If no record after 11:00 → "absent"
-- Radius: ⚑ if outside, ✓ if verified, — if null
-
-**Actions:**
-- Mark All Absent button — creates absent records for all unclockedstaff; visible only after 11:00 and only to owner/manager
-- Override — modal to change individual status
-- Note — modal to add/edit notes
-
-**Business rules:**
-- Consecutive absence alert: highlights staff absent 2+ days in last 3 days
-- Coverage alert: "Dept: no coverage" shown if no present/late staff during a shift window
-- owner/manager excluded from the staff list displayed
+- **Payments tab editable [NEW]** — payments can be recorded but not corrected. Add edit; decide delete vs reversing-entry. If editable, surface `recorded_by` / last-amended-by (stops being cosmetic).
+- **Revenue display [NEW — BLOCKED]** — "revenue should be different." Not specific enough to build. Three readings: recognise on payment received vs net-of-cost vs break-down-by-line. **Resolve with Dhiren** (point at the number on screen) or build toggleable and let him choose. Do not guess.
 
 ---
 
-### History Tab
+## 6. TABLE BOOKINGS MODULE [DONE]
 
-**File:** `src/components/attendance/HistoryTab.jsx`  
-**Access:** owner, manager, restaurant_manager only
+**File:** `src/pages/TableBookings.jsx` · Access target: owner, admin
 
-**Filters:** Staff · Department · Status · From Date · To Date · Clear
-
-**Default range:** Last 14 days to today
-
-**View modes (toggle):**
-- Daily — grouped by week; columns: Date · Staff Name · Dept · Shift · Clock In · Clock Out · Break · Net Hours · Mins Late · Status · Radius · Notes; week total row
-- Weekly Summary — one row per person per week; columns: Staff Name · Department · Week · Present · Late · Absent · Total Hours · Avg Clock-in
-
-**Business rules:**
-- Records still clocked in (no clock_out) marked as "Active"
+Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated/completed/cancelled/no_show; locations Indoor/Outdoor/Terrace/Private Room. Walk-ins seat immediately; 45-min conflict + no-show flagging; party size ≤ table capacity. No Phase 2 changes requested. Leave as-is.
 
 ---
 
-### Settings Tab
+## 7. FARMERS MARKET MODULE
 
-**File:** `src/components/attendance/SettingsTab.jsx`  
-**Access:** owner, manager, restaurant_manager only
+**File:** `src/pages/FarmersMarket.jsx`
 
-**Columns:** Department · Shift Name · Start · End · Late Threshold (min) · Days/Week · Type · Actions
+### Existing [DONE]
 
-**Actions:**
-- Edit — inline row editing
-- Delete — removes shift_settings row
-- Add Shift — form to create new shift definition
+- **Market Day** — date picker, live indicator, market-conditions autosave, fee reconciliation strip, holders table (check-in / log fee / remove), realtime on `fm_visits`+`fm_payments`. Market day = last Saturday of month.
+- **Holders** — summary strip, at-risk banner, filter tabs, per-holder expand, Edit, QR code (→ `/checkin?holder={id}`), Approve, Deactivate. **At-risk auto-flag: active >90 days with 0 visits in last 3 market days.**
+- **Add Holder** — Name/Business/Stall/Type/Phone/Email/Notes; **[VERIFY] stall regex `/^[A-Za-z]+\d{2}$/` is two-digit but live stalls are three-digit `A001`–`A347`; if the code regex is still two-digit, the 305 imported stalls can't be edited/re-added — check the code.**
+- **Payments** — Application/Registration fees; visit fees logged from Market Day.
+- **Public QR check-in** (`CheckIn.jsx`) — public, `holder` param, within 1 day of market day, duplicate-blocked.
 
-**Data fields:** department, shift_name, shift_start (HH:MM), shift_end, late_threshold (mins), days_per_week, shift_type (standard / rotating badge)
+### End-goal additions
 
----
-
-## Events Module
-
-**File:** `src/pages/Events.jsx`  
-**Access:** owner, manager  
-**Tabs:** Events · Create Event (plus detail overlay when viewing an event)
+- **3-month attendance history + waiting-list forfeiture [NEW]** — a clear attended/not-attended view over 3 months (off `fm_visits`), not a raw log. Holder with no attendance for 3 months forfeits their stall, which passes to the next waiting-list entry, recorded. Confirm whether a waiting list exists today and where. Extend the existing at-risk concept (already ~90 days), don't start a second.
+- **3-level product taxonomy [NEW]** — Category → Product type → Item (e.g. Crafts → Paintings → oil/wax). Replaces the coarse 5-value `stall_type` and the `fm_holders.products` text blob. Hangs off `fm_approved_items`. Closes two FOLLOWUPS items (uniform `stall_type='Other'`; un-normalised products) — selection from a controlled list removes the comma-splitting problem.
+- **Fee schedule [NEW]** — product change **MWK 10,000** (raised by the change action itself, or it won't get charged), ID cards **MWK 30,000** (inclusive of 2), replacement card **MWK 20,000**. Sits inside the full fee schedule — get the existing stall/other fees from Dhiren so these don't stand alone.
 
 ---
 
-### Events List Tab
+## 8. ADMIN MODULE
 
-**File:** `src/components/events/EventsListTab.jsx`
+**File:** `src/pages/Admin.jsx` · Access: owner
 
-**Summary strip:** Events This Month · Confirmed & Unpaid Deposit · Events in Next 7 Days
+### Existing [DONE]
 
-**Filters:** Status (All / Enquiry / Confirmed / In Progress / Completed / Cancelled) · Deposit (All / Paid / Unpaid)
+- **Users** — list + Edit + Deactivate/Reactivate.
+- **Add User** — creates via `create-user` Edge Function (authenticated, owner-only, CORS pinned). **[VERIFY]** old spec references bar1/bar2 `bar_week` logic — those roles are gone; confirm the form no longer branches on them.
+- **Departments** — add/edit/delete (plain text).
+- **Stock Items** — list, inline edit, deactivate; SKU auto-gen `{DeptCode}-{PaddedCount}`.
 
-**Sort options:** Date · Deposit Status · Guest Count
+### End-goal additions
 
-**Columns:** Event Name · Type · Date · Time · Guests · Venue · Deposit · Checklist · Status · Actions
-
-**Row highlighting:** Amber if event is within 7 days (and not cancelled) or status=confirmed with unpaid deposit
-
-**Actions:**
-- View — opens EventDetailTab overlay
-- Edit — modal to edit event fields (owner/manager only)
-- Delete — confirmation modal; permanently removes event, checklists, payments, and bill items
+- **Expanded role model [NEW]** — per §1 (owner/admin/department_head/hr). Add-User and Users must support assigning `department_head` scoped by department, and `hr`. Confirm the model before the migration.
+- **Rooms management [NEW]** — per §2.2. A place to maintain the rooms reference list.
 
 ---
 
-### Create Event Tab
+## 9. CROSS-MODULE RULES
 
-**File:** `src/components/events/CreateEventTab.jsx`
-
-**Form fields:** Event Name (required), Event Type (required: wedding/conference/birthday/corporate/private_dinner/other), Event Date (required, defaults to today), Start Time, End Time, Guest Count, Venue Area (Main Hall/Garden/Pool Deck/Restaurant/Other), Organiser Name, Organiser Phone, Organiser Email, Special Requirements, Notes
-
-**Actions:** Create Event button
-
-**Business rules:**
-- New events created with status=enquiry and deposit_paid=false
-- BEO checklists are not generated at this stage; shown as info message
-- Form resets after success
-
----
-
-### Event Detail Tab
-
-**File:** `src/components/events/EventDetailTab.jsx`
-
-**Header:** Event name, status badge, deposit badge, task progress (X/Y tasks), Back button
-
-**Status pipeline actions:**
-- enquiry → Confirm Event
-- confirmed → Start Event
-- in_progress → Complete Event
-- Any non-terminal status → Cancel Event
-
-**Info grid:** Type · Date · Time · Guests · Venue · Organiser · Contact · Email · Created · Special Requirements · Notes (all read-only)
-
-**BEO Checklists section:** Auto-generated when status changes to confirmed or in_progress; grouped by department (Kitchen, Bar, Grounds, Front Desk); each task has a checkbox, name, due_time, assigned_to, and completed_by with date; overall and per-department progress bars shown
-
-**Business rules:**
-- If status=enquiry and no checklists: info message shown, no checklist rendered
-- If status=confirmed/in_progress and no checklists exist, generateBEO() inserts default tasks from BEO_TASKS constant
+| Rule | Where | Status |
+|---|---|---|
+| Stock deducts on Fulfil only (not submit/approve) | Inventory → Requisitions | [DONE] |
+| Event allocations deduct on Confirm | Events | [DONE] |
+| Market day = last Saturday of month | Farmers Market | [DONE] |
+| Mark All Absent only after 11:00 | Attendance → Today | [DONE] |
+| No-show flag >45 min past booking | Table Bookings | [DONE] |
+| BEO auto-generated on Confirm/Start | Events | [DONE] |
+| At-risk auto-flag >90 days, 0 recent visits | Farmers Market | [DONE] |
+| GPS outside radius → unverified clock-in | Attendance | [VERIFY] |
+| One inflow, many outflows (main store → depts) | Inventory | [NEW] |
+| Bar par level enforced before open | Inventory / bars | [NEW] |
+| Consumption records what/where/who | Inventory / consumption | [NEW] |
+| 3-month no-attendance → stall forfeit to waiting list | Farmers Market | [NEW] |
+| Product change raises 10k fee at point of change | Farmers Market | [NEW] |
+| QR scan writes clock-in/out at fixed station | Attendance | [NEW] |
 
 ---
 
-### Event Bill Section
+## 10. ITEMS REQUIRING LIVE VERIFICATION (do not trust the doc — probe)
 
-**File:** `src/components/events/EventBillSection.jsx`
-
-**Columns:** Category · Description · Amount · Delete (manager only)
-
-**Bill Total row:** Sum of all amounts in MWK
-
-**Add item form (owner/manager only):** Category (Venue Hire/Catering/Beverages/Accommodation/Equipment & AV/Decoration & Setup/Security/Grounds & Outdoor Setup/Staff Service Charge/Other), Description, Amount (MWK)
-
-**Business rules:**
-- Description required if category is "Other"
+1. **`stock_movements.movement_type` CHECK** — does it permit `opening_balance`? FOLLOWUPS and HISTORY/ARTIFACTS contradict each other. First thing to settle; one of those docs is wrong.
+2. **GPS clock-in geofence** — does the 100 m radius / `unverified` logic exist in live code?
+3. **Stall-number regex** in Add Holder — two-digit or three-digit? If two-digit, the 305 imported stalls are un-editable through the form.
+4. **Add User role branching** — does it still reference the dead bar1/bar2 `bar_week` logic?
 
 ---
 
-### Event Payments Section
+## 11. WHAT THIS DOC IS NOT
 
-**File:** `src/components/events/EventPaymentsSection.jsx`
-
-**Summary cards:** Bill Total · Total Paid (with refund breakdown) · Balance Due (red if outstanding, green if paid in full)
-
-**Payment history columns:** Date · Type · Method · Amount · Reference · Received By
-
-**Add payment form (owner/manager only):** Payment Type (Deposit/Balance/Additional/Refund), Amount, Payment Date, Payment Method (Cash/Card/Bank Transfer/TNM Mpamba/Airtel Money), Reference, Received By (staff dropdown), Notes
-
-**Business rules:**
-- Recording a Deposit payment automatically sets events.deposit_paid=true
-- totalPaid = sum of non-refund payments minus sum of refund payments
-- balanceDue = max(0, billTotal − totalPaid)
-
----
-
-## Farmers Market Module
-
-**File:** `src/pages/FarmersMarket.jsx`  
-**Access:** owner, manager, farmers_market_admin  
-**Tabs:** Market Day · Holders · Add Holder · Payments
-
-**Constants:**
-- Stall Types: Produce, Crafts, Food & Beverages, Clothing, Other
-- Payment Methods: Cash, Bank Transfer, TNM Mpamba, Airtel Money
-- Payment Types & Fees: Application Fee (MWK 10,000), Registration Fee (MWK 20,000), Visit Fee (MWK 10,000)
-- Market day = last Saturday of the month
-
----
-
-### Market Day Tab
-
-**File:** `src/components/farmers-market/MarketDayTab.jsx`
-
-**Controls:** Date picker · Live indicator · Add Holder button (manager) · Checked-in count badge
-
-**Market Conditions field:** Free-text textarea; auto-saves after 1.5 s debounce; read-only for past dates
-
-**Fee Reconciliation strip (shown when at least one check-in exists):** Expected · Collected · Outstanding (red if > 0)
-
-**Holders table columns:** Stall No · Name · Business · Type · Check In · Log Fee · Remove (manager only)
-
-**Actions:**
-- Check In — creates fm_visits record; disabled if already checked in; shows time if already done; note icon if visit notes exist
-- Log Fee — records payment for checked-in holder; shows "✓ Paid" once paid; manager only
-- Remove — deletes visit and any associated fee payments; manager only
-
-**Modals:** Add Holder (list of unregistered holders to add) · Log Fee (amount + method) · Visit Notes (textarea after check-in) · Remove confirmation
-
-**Business rules:**
-- Realtime updates via Supabase channel on fm_visits and fm_payments for the selected date
-
----
-
-### Holders Tab
-
-**File:** `src/components/farmers-market/HoldersTab.jsx`
-
-**Summary strip:** Active Holders (by stall type) · Outstanding Fees · At Risk count (red if > 0) · Total Holders
-
-**Last market day summary:** Vendors attended · Collected (MWK) · No-shows
-
-**At Risk banner:** Lists at_risk holders with "Mark Contacted" button and last_contacted date
-
-**Filter tabs:** All · Pending Review · Active · At Risk · Inactive
-
-**Columns:** Stall No · Name · Business · Type · Phone · Status · App Paid · Reg Fee Paid · Visits (YTD) · Outstanding · Actions
-
-**Actions:**
-- View / chevron — expands row to show contact details, payment history, visit history
-- Edit — modal with all holder fields (manager only)
-- QR Code — shows QR pointing to /checkin?holder={id}; Print and Download buttons (manager only)
-- Approve — moves pending_review holder to accepted
-- Deactivate — moves active/at_risk/accepted holder to inactive
-
-**Business rules:**
-- At-risk auto-flag: active holders registered >90 days ago with 0 visits in last 3 market days are automatically set to status=at_risk
-
----
-
-### Add Holder Tab
-
-**File:** `src/components/farmers-market/AddHolderTab.jsx`
-
-**Form fields:** Full Name (required), Business Name, Stall Number (required, format A01 or FM01), Stall Type (required), Phone (required), Email, Notes
-
-**Actions:** Add Holder button
-
-**Business rules:**
-- New holders created with status=pending_review, application_paid=false, acceptance_paid=false
-- Stall number validated against regex /^[A-Za-z]+\d{2}$/ and checked for duplicates (case-insensitive, excluding inactive holders)
-- Stall number auto-uppercased on blur
-- Info message: application fee of MWK 10,000 must be logged separately in Payments tab
-
----
-
-### Payments Tab
-
-**File:** `src/components/farmers-market/PaymentsTab.jsx`
-
-**Summary cards:** Total This Month · Application Fee total · Registration Fee total
-
-**Payment form fields:** Holder (required, non-inactive only), Payment Type (Application/Registration), Amount (auto-filled from type, editable), Payment Date (required), Method (required), Reference, Notes
-
-**Actions:** Record Payment button
-
-**Payment history filters:** Holder · From Date · To Date · Clear
-
-**Payment history columns:** Date · Holder · Stall No · Type · Amount · Method · Reference · Recorded By
-
-**Business rules:**
-- Recording Application Fee sets fm_holders.application_paid=true
-- Recording Registration Fee sets fm_holders.acceptance_paid=true
-- Visit fees are logged from the Market Day tab, not here
-
----
-
-## Inventory Module
-
-**File:** `src/pages/Inventory.jsx`  
-**Access:** owner, manager, store_supervisor, bar1, bar2  
-**Tabs:** Stock Levels · Log Delivery · Requisitions · Transfers · Adjustments · Delivery Log
-
----
-
-### Stock Levels Tab
-
-**File:** `src/components/inventory/StockLevelsTab.jsx`
-
-**Controls:** Department filter dropdown
-
-**Columns:** Item Name · SKU · Department · Unit · Current Stock · Reorder Level · Status (Low / OK badge)
-
-**Business rules:** Read-only; "Low" badge if quantity ≤ reorder_level
-
----
-
-### Log Delivery Tab
-
-**File:** `src/components/inventory/LogDeliveryTab.jsx`  
-**Access:** owner, manager, store_supervisor only
-
-**Form fields:** Item (required), Quantity (required), Supplier (required), Date (required), Received By (required, staff dropdown), Notes, Logged By (read-only, current user)
-
-**Actions:** Log Delivery button
-
-**Behavior:** Inserts stock_movements row with movement_type=delivery; adds quantity to current_stock
-
----
-
-### Requisitions Tab
-
-**File:** `src/components/inventory/RequisitionsTab.jsx`
-
-**Raise form fields:** Item (required), Department (auto-filled if user has a department), Quantity (required), Reason
-
-**Actions:** Submit Requisition button
-
-**Requisition list columns:** Item · Dept · Qty · Requested By (manager view only) · Reason · Date · Status · Actions (manager only)
-
-**Manager actions:**
-- Approve — moves status to approved
-- Reject — moves status to rejected
-- Fulfil — deducts quantity from stock, logs stock_movements row, moves status to fulfilled
-
-**Business rules:**
-- Non-managers see only their own requisitions
-- Stock is deducted only on Fulfil, not on submission or approval
-
----
-
-### Transfers Tab
-
-**File:** `src/components/inventory/TransfersTab.jsx`  
-**Access:** owner, manager, store_supervisor only
-
-**Form fields:** Item (required), From Department (required), To Department (required), Quantity (required), Received By (required, staff dropdown), Notes, Transferred By (read-only, current user)
-
-**Actions:** Record Transfer button
-
-**Business rules:**
-- From and To departments cannot be the same
-- Creates two stock_movements rows (one negative, one positive); does not change central current_stock
-
----
-
-### Adjustments Tab
-
-**File:** `src/components/inventory/AdjustmentsTab.jsx`  
-**Access:** owner, manager only
-
-**Form fields:** Item (required), New Quantity (required, ≥ 0), Reason (required), Recorded By (read-only, current user); current stock shown after item selection
-
-**Actions:** Record Adjustment button
-
-**Behavior:** Calculates diff = new − current; creates stock_movements row with movement_type=adjustment; upserts current_stock; shows flash "Stock set to X (+/−Y)"
-
----
-
-### Delivery Log Tab
-
-**File:** `src/components/inventory/DeliveryLogTab.jsx`
-
-**Filters:** Item · From Date · To Date · Clear
-
-**Columns:** Date · Item · SKU · Quantity · Supplier · Performed By
-
-**Business rules:** Shows only movement_type=delivery rows; Supplier extracted by parsing the notes field
-
----
-
-## Table Bookings Module
-
-**File:** `src/pages/TableBookings.jsx`  
-**Access:** owner, manager, restaurant_manager, bar1, bar2, head_waiter, waiter  
-**Tabs:** Today · Upcoming · New Booking · All Bookings
-
-**Statuses:** pending · confirmed · seated · completed · cancelled · no_show  
-**Locations:** Indoor · Outdoor · Terrace · Private Room
-
----
-
-### Today Tab
-
-**File:** `src/components/table-bookings/TodayTab.jsx`  
-**Access (manage actions):** owner, manager, restaurant_manager only
-
-**Controls:** Date picker (defaults to today) · "+ Walk In" button (manager only)
-
-**Summary cards:** Total Covers · Confirmed · Seated · Completed · Cancelled · No Shows
-
-**Columns:** Time · Guest Name · Party Size · Table · Status · Actions (manager only)
-
-**Row highlighting:** Amber if potential no-show (confirmed booking >45 min past booking_time)
-
-**Manager actions per booking:**
-- pending → Confirm or Cancel
-- confirmed → Seat, No Show, or Cancel
-- seated → Complete
-
-**Walk-in modal fields:** Guest Name (required), Phone (required), Party Size (defaults to 2), Table (optional, filtered by capacity ≥ party_size)
-
-**Business rules:**
-- Walk-ins created with status=seated immediately, booking_time set to current time
-- Potential no-show: status=confirmed and booking_time is >45 min ago on today or a past date
-
----
-
-### New Booking Tab
-
-**File:** `src/components/table-bookings/NewBookingTab.jsx`  
-**Access:** owner, manager, restaurant_manager only
-
-**Form fields:** Guest Name (required), Email, Phone (required), Date (required), Time (required), Party Size (required), Table (optional), Special Requests, Notes
-
-**Actions:** Create Booking button
-
-**Business rules:**
-- Created with status=pending; must be confirmed from Today tab
-- Real-time conflict check: if table + date + time provided, warns if another confirmed/seated booking is within 45 min
-- Party size cannot exceed table capacity
-
----
-
-### Upcoming Tab
-
-**File:** `src/components/table-bookings/UpcomingTab.jsx`
-
-Displays future confirmed/pending bookings. Structure mirrors Today Tab with date filtering for upcoming dates.
-
----
-
-### All Bookings Tab
-
-**File:** `src/components/table-bookings/AllBookingsTab.jsx`
-
-Historical and full booking list with filtering. Structure mirrors Today Tab across all dates and statuses.
-
----
-
-## QR Check-in Page (Farmers Market)
-
-**File:** `src/pages/CheckIn.jsx`  
-**Access:** Public (no authentication required)  
-**URL param:** `holder` (fm_holders.id)
-
-**Data displayed:** Holder full name, business name, stall number, stall type, relevant market date, days until next market day
-
-**Actions:** Check In button — creates fm_visits record with fee_paid=false
-
-**Business rules:**
-- Market day = last Saturday of the month
-- Check-in only allowed within 1 day of the market day
-- Duplicate check-in for the same holder on the same market day is blocked
-- Displays "Already checked in" if a visit record already exists
-
----
-
-## Cross-Module Business Rules Summary
-
-| Rule | Where Applied |
-|------|--------------|
-| Stock deducted on Fulfil only (not submission/approval) | Inventory → Requisitions |
-| Market day = last Saturday of month | Farmers Market throughout |
-| "Mark All Absent" visible only after 11:00 | Attendance → Today Tab |
-| Potential no-show flag after >45 min past booking time | Table Bookings → Today Tab |
-| BEO checklists auto-generated on Confirm or Start Event | Events → Detail Tab |
-| Deposit payment auto-sets deposit_paid on event | Events → Payments Section |
-| At-risk flag auto-applied after 90 days with no visits | Farmers Market → Holders Tab |
-| GPS outside lodge radius flags clock-in as unverified | Attendance → Clock In/Out |
-| Bar Week required for bar1/bar2 roles only | Admin → Add User / Users Tab |
-| Shift auto-selected if department has exactly one non-rotating shift | Admin → Add User / Users Tab |
+Not a data-accuracy spec — real data is out of scope until Dhiren verifies the modules. Not a sequencing plan — build order lives in STATE / the session. Not doctrine — measured against `STREAMLINE_BUILD_STANDARD.md` and the meeting record, not the other way round. When a [NEW] feature is built, its screen/field/rule detail gets written back here at the level the existing modules are documented.

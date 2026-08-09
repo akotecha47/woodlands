@@ -10,45 +10,52 @@
 ## Authoritative doctrine
 Every session obeys **STREAMLINE_BUILD_STANDARD.md v1.5** (in repo root). Read it before making any technical decision.
 
-## Current state
-Read **WOODLANDS_STATE.md** (in repo root) at the start of any substantive session. It is the source of truth for what's live, what's blocking, and what's next.
+## The current goal
+The build is in **Phase 2**: turning the hardened six-module system into the full system Dhiren asked for at the 27 July feedback meeting. The target is a **fully functioning app on placeholder data by the week of 11 August** — every screen works and is populated. Real data (bar stocktake, department stock lists, staff reconciliation, menus, real stallholder details) is **out of scope** until Dhiren verifies the modules work.
+
+Read these three, in this order, to know what to build:
+1. **WOODLANDS_STATE.md** — current state, what's live, what's blocking, what's next. Source of truth at the start of any session.
+2. **WOODLANDS_FUNCTIONAL_SPEC.md** — the **end-goal system**, module by module, with [DONE]/[BUG]/[NEW]/[VERIFY] markers. This is what "finished" looks like.
+3. **WOODLANDS_MEETING_FEEDBACK_2026-07-27.md** — Dhiren's own words; the source the spec is built from.
+
+## The gate — do this before new schema work
+**Migration history reconciliation is Priority 1 and blocks the Phase 2 schema.** Remote history records only 001–007 while 001–030 have run; `supabase db push` is disqualified (would replay migration 016 and duplicate 62 staff). Phase 2 adds 8–12 tables — hand-applying them repeats the exact cause of five ghost-schema bugs. Fix history, prove `db push`, then build. See STATE and FUNCTIONAL_SPEC §0.
 
 ## Followups log
-Small deferred items live in **WOODLANDS_FOLLOWUPS.md** (in repo root). Add to it when a sprint consciously defers something rather than losing it in a commit message.
+Open items live in **WOODLANDS_FOLLOWUPS.md** (repo root). Add to it when a sprint consciously defers something.
 
-## Audits
-- `WOODLANDS_AUDIT.md` — 4 July 2026 (first audit, pre-dates Standard v1.0)
-- `WOODLANDS_AUDIT_2.md` — 26 July 2026 (second audit, against Standard v1.5) — **current audit of record**
+## Audits — historical snapshots, NOT current state
+- `WOODLANDS_AUDIT.md` — 4 July 2026
+- `WOODLANDS_AUDIT_2.md` — 26 July 2026
 
-Both are on disk. The newer one supersedes the older for finding status. Neither is deleted — they sit side-by-side as the diff record.
+Both are **dated read-only snapshots**, kept side-by-side as the diff record and as provenance for a future AUDIT_3. **Do not read them as the current state of the system** — for that, use STATE and FUNCTIONAL_SPEC. The next audit supersedes; the old ones are never rewritten.
 
-## Functional spec (not an audit)
-`WOODLANDS_FUNCTIONAL_SPEC.md` — module-by-module inventory of screens, fields, and business rules. Written 31 May 2026, renamed 26 July from `SYSTEM_AUDIT.md`. Its Route Access Control table is stale (lists roles that don't exist); refresh at Sprint E.
+## Modules
+**Six built and hardened:** Inventory, Attendance, Events, Table Bookings, Farmers Market, Admin.
 
-## Modules (6)
-- **Inventory** — stock items, deliveries, requisitions, transfers, adjustments
-- **Attendance** — manual GPS-flagged clock in/out, breaks, shift settings (no biometrics this phase)
-- **Events** — enquiry → confirmed → in_progress → completed/cancelled; BEO, bill, payments, stock allocation
-- **Table Bookings** — reservations with capacity + no-show/conflict checks
-- **Farmers Market** — stall holders, monthly market day, public QR check-in, fees, ID cards
-- **Admin** — users, staff, departments, stock items
+**Phase 2 additions (see FUNCTIONAL_SPEC):** two-tier inventory (main store → per-department sub-stores), bar par levels + end-of-day refill cycle, consumption attribution (what/where/who + rooms + 1-year laundry), expanded role model, QR staff attendance, Farmers Market 3-month attendance history + waiting-list forfeiture + 3-level product taxonomy + fee schedule, and two Events UX fixes (payments editable, revenue display).
 
-## Roles (4) — authoritative in `src/lib/roles.js`
-`owner`, `manager`, `kitchen_manager`, `restaurant_manager`
+## Roles
+**Current (authoritative in `src/lib/roles.js`):** `owner`, `manager`, `kitchen_manager`, `restaurant_manager`.
 
-The `staff` table (62 rows) is disjoint from login roles — it's the roster the manager-facing Attendance screens operate on. No FK to `user_profiles`.
+**Target (Phase 2, PROPOSED — confirm before the role migration runs):** `owner`, `admin` (front desk), `department_head` (scoped by `department`, multiple per department), `hr`. One scoped role, not a role per department. See FUNCTIONAL_SPEC §1 for the collapse mapping.
+
+The `staff` table (62 rows) is disjoint from login roles — the roster the manager-facing Attendance screens operate on. No FK to `user_profiles`.
 
 ## Standing rules
 - **Department references are plain text**, never FK to a `departments` table.
 - **Stock deduction triggers:**
   - Requisitions deduct on **Fulfil** (a distinct step *after* Approve). Not on Approve, not on submission.
   - Event allocations deduct on **Confirm**.
-- **No biometrics this phase** — manual clock in/out only.
-- **Do not re-read all files on session start** — read STATE and only the files the session needs.
+- **QR staff check-in supersedes "manual clock in/out only."** QR is not biometrics, so no biometrics rule is broken — but attendance is no longer manual-only. Still no biometrics this phase.
+- **Placeholder data is fine, blank screens are not.** Every new table ships with placeholder seed as part of its build step.
+- **Do not re-read all files on session start** — read STATE, then only the files the session needs.
+- **Verify against live, don't trust the doc, for anything marked [VERIFY]** in FUNCTIONAL_SPEC (movement_type CHECK, GPS clock-in, stall regex, Add-User role branching).
 
 ## Superseded files — DO NOT FOLLOW
-- `src/lib/standards.md` — pre-dates Standard v1.5 and mandates `supabaseAdmin` in browser code, which the Standard now forbids. Being rewritten in Sprint B. Treat as archival.
+- Nothing currently. (`src/lib/standards.md` was rewritten in Sprint B and is now current — it mandates the anon client + Edge Functions and carries the §4 verification lessons. Follow it.)
 
 ## Environment
-- Real client data (62-row staff roster) is already live per migration `016`. Standard §2.7 applies — the project is no longer free to break. Snapshot before any schema or policy change.
-- Ownership: to be transferred to Dhiren's own accounts at handover per Standard §6.
+- Real client data (62-row staff roster, 305 stallholders, 559 bar items) is live. Standard §2.7 applies — snapshot before any schema or policy change.
+- All migrations from 021 on applied by hand via the SQL Editor until the reconciliation gate closes.
+- Ownership transfers to Dhiren's own accounts at handover per Standard §6.

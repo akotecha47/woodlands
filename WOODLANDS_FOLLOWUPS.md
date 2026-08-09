@@ -4,6 +4,18 @@
 
 ---
 
+## NOTE — ITEMS NOW ABSORBED INTO PHASE 2 (tagged 9 August)
+
+Some items below are no longer loose cleanup — they are part of the Phase 2 build specified in `WOODLANDS_FUNCTIONAL_SPEC.md`. Build them there, not as standalone followups:
+
+- **Delivery Log → consolidated Movement Ledger**, and the **`movement_type` CHECK widening** for `event_allocation` / `event_return` — the two-tier inventory work makes store→department issues exactly what a delivery-only view hides, so consolidation is now in scope. See FUNCTIONAL_SPEC §3.
+- **The five empty department stock lists** (Kitchen, Restaurant, Housekeeping, Grounds, Security) plus **Laundry** — these get populated as departmental sub-stores under two-tier inventory, on placeholder data first. See FUNCTIONAL_SPEC §2.1 / §3.
+- **QR raw-UUID / signed-token weakness** (originally FM-only, below) now also applies to **QR staff attendance**, which reuses the `public-checkin` pattern. See FUNCTIONAL_SPEC §4.
+
+Everything else below stays a genuine followup.
+
+---
+
 ## FARMERS MARKET REGISTER — DATA QUALITY (for Rose, post-meeting)
 
 *From the 26 July 2026 import of the Feb 2026 register. 305 of 319 stalls are live; the gaps below are source-data issues, not import faults.*
@@ -77,13 +89,15 @@
 
 - **`stock_movements.movement_type` CHECK matches migration 008 exactly — no drift.** Live definition is `CHECK (movement_type = ANY (ARRAY['delivery','transfer','adjustment','requisition']))`. It does **not** permit `event_allocation`, `event_return` or `opening_balance`, and `stock_movements_movement_type_check_v2` does not exist. Recorded explicitly because a session brief asserted the live CHECK was already wider than documented; it is not. The Sprint C Task 4 item to widen for `event_allocation` / `event_return` therefore **remains fully open** — migration 030 does not address it.
 
+  **⚠ CONTRADICTION (flagged 9 August).** `WOODLANDS_HISTORY.md` and `WOODLANDS_ARTIFACTS.md` both state migration 030 widened `movement_type` to permit `opening_balance` for the bar import. This finding says the opposite. Both cannot be true, and 559 bar items were imported somehow. **Probe the live CHECK before trusting either doc**, then correct whichever is wrong. Until settled, treat the bar import's movement typing as unverified.
+
 - **`stock_items` has no DELETE policy, for any role except `service_role`.** RLS is enabled; policies are `SELECT` (authenticated), `stock_items_owner_insert` (INSERT, authenticated), `stock_items_owner_update` (UPDATE, authenticated), and `service role full access` (ALL, service_role). DELETE is fail-closed for every application user, which is why the data-ops wipe can only run through the Management API or an Edge Function. Probably correct as an operational default, but the asymmetry — INSERT and UPDATE present, DELETE simply absent rather than deliberately denied — looks unplanned. **Post-meeting: confirm intent and make it explicit either way.**
 
   Note for whoever audits this: the Management API query endpoint runs privileged and bypasses RLS entirely. Running a statement successfully through it proves nothing about what `anon` or `authenticated` may do. Policy claims must be tested as the role in question.
 
 - **Stock Levels' department filter lists all 7 departments regardless of stock.** Populated from the `departments` table (`InventoryUI.jsx:69`), not from `DISTINCT stock_items.department`. After the bar-only import, Housekeeping / Kitchen / Grounds / Restaurant / Security will still appear in the dropdown, each showing "No items in this department." Cosmetic, and consistent with the "waiting on your other stock lists" framing — but worth knowing before demoing rather than discovering live. The `departments` table is deliberately untouched by the import: Transfers and Requisitions need all 7.
 
-- **`WOODLANDS_HISTORY.md` does not exist.** Named as required reading in this session's brief. Not in the repo root, not anywhere in the tree. This is the third confident citation of a missing document in this project, after `WOODLANDS_DEMO_PREP.md` and AUDIT_2 §0. **Either write these files or stop citing them.**
+- **~~`WOODLANDS_HISTORY.md` does not exist.~~ — RESOLVED.** It exists in the repo and was updated 9 August. (Was: the third confident citation of a missing document, after `WOODLANDS_DEMO_PREP.md` and AUDIT_2 §0. The general lesson stands — write files before citing them.)
 
 ### Deferred to Dhiren / Rose, post-meeting
 
@@ -109,17 +123,17 @@ Three ghost-schema bugs in a single night, all tracing to the same root cause �
 
 Plus two ghost columns found earlier: `event_stock_allocations.returned_qty` (`024`) and `fm_market_days` not existing at all (`026`).
 
-**Why it keeps happening:** the remote migration history table records only versions 001–007, while 008–028 have run. `supabase db push` is therefore unusable — it would replay `016_staff_restructure.sql` and duplicate all 62 real staff rows — so every migration since has been applied by hand through the SQL editor or Management API. Hand application is where "never applied" and "applied out of order" come from, and nothing detects either.
+**Why it keeps happening:** the remote migration history table records only versions 001–007, while 008–030 have run. `supabase db push` is therefore unusable — it would replay `016_staff_restructure.sql` and duplicate all 62 real staff rows — so every migration since has been applied by hand through the SQL editor or Management API. Hand application is where "never applied" and "applied out of order" come from, and nothing detects either.
 
 **Until this closes, Standard §2.6's rebuild-from-migrations test keeps failing**, and the Sprint F audit will keep failing it. Three tables (`event_checklists`, `shift_settings`, `tables`) still cannot be created from the files at all.
 
-**Scope of the fix:** `supabase migration repair --status applied` for 008–028; write the three missing `CREATE TABLE` migrations; renumber the duplicate `008` pair; then verify `db push` is safe and prove the schema is rebuildable. After that, migrations get applied by `db push` and drift stops being silent.
+**Scope of the fix:** `supabase migration repair --status applied` for 008–030; write the three missing `CREATE TABLE` migrations; renumber the duplicate `008` pair; then verify `db push` is safe and prove the schema is rebuildable. After that, migrations get applied by `db push` and drift stops being silent.
 
 ---
 
 ## FROM AUDIT #2 (2026-07-26) — DEFERRED
 
-- **WOODLANDS_FUNCTIONAL_SPEC.md route/role table is stale.** Lists seven roles that don't exist. Refresh at Sprint E fit-and-finish. Source: rename commit, 26 July.
+- **~~WOODLANDS_FUNCTIONAL_SPEC.md route/role table is stale.~~ — RESOLVED 9 August.** The whole spec was rewritten to the end-goal system (correct roles, Phase 2 modules, [DONE]/[BUG]/[NEW]/[VERIFY] markers). Two claims carried into it are marked [VERIFY] rather than trusted: the GPS clock-in geofence and the two-digit stall-number regex — probe both against live code.
 
 ---
 

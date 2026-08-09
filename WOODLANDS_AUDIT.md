@@ -1,3 +1,6 @@
+> **⚠ HISTORICAL SNAPSHOT — dated 4 July 2026. NOT the current state of the system.**
+> This is a read-only audit from a point in time, kept as a diff record and as provenance for a future AUDIT_3. Much of it has since been fixed (see Sprints A–E in `WOODLANDS_HISTORY.md`). **For the current system, read `WOODLANDS_STATE.md` and `WOODLANDS_FUNCTIONAL_SPEC.md`.** Do not treat findings here as live. Never rewrite this file — audits are superseded, not edited.
+
 # WOODLANDS SYSTEM AUDIT — 2026-07-04
 
 Auditor note: read-only analysis of `src/`, `supabase/migrations/`, `supabase/functions/`, config files, and the built bundle in `dist/`. No files were modified. `npm audit` was run (read-only). Findings are grounded in specific files; where I could not confirm something without running SQL against the live DB, it is marked **UNVERIFIED**.

@@ -1,3 +1,6 @@
+> **⚠ HISTORICAL SNAPSHOT — dated 26 July 2026. NOT the current state of the system.**
+> This is a read-only audit from a point in time, kept as a diff record and as provenance for a future AUDIT_3. Findings drove Sprints A–E; most are closed (see `WOODLANDS_HISTORY.md` and `WOODLANDS_FOLLOWUPS.md`). **For the current system, read `WOODLANDS_STATE.md` and `WOODLANDS_FUNCTIONAL_SPEC.md`.** Do not treat findings here as live. Never rewrite this file — audits are superseded, not edited.
+
 # WOODLANDS SYSTEM AUDIT #2 — 2026-07-26
 
 **Read-only audit.** No source files modified. No SQL run against the live database. The only write performed was `npm run build`, which regenerates the gitignored `dist/` directory (explicitly authorised in the audit brief).

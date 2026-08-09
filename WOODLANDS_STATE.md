@@ -2,7 +2,7 @@
 
 *Current state, live commitments, next action. Updated at the end of every session that changed state.*
 
-**Last updated: 26 July 2026**
+**Last updated: 9 August 2026**
 **Governing doctrine:** STREAMLINE_BUILD_STANDARD.md v1.5, STREAMLINE_MATERIALS.md v2.4, STREAMLINE_SESSION.md v2.0.
 
 ---
@@ -14,177 +14,125 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 - **Owner:** Dhiren (Aman's uncle)
 - **Ops manager:** Rose Ngalawango
 - **HR:** Martin Lisilira
-- **Staff:** 62 in staff table (real names, employee numbers — real client PII, already committed to git via migration `016`)
-- **Modules built (6):** Inventory, Events, Farmers Market, Table Bookings, Attendance, Admin
-- **Roles (4) — authoritative in `src/lib/roles.js`:** owner, manager, kitchen_manager, restaurant_manager
-- **System logins:** 4
+- **Staff:** 62 in `staff` table
+- **Modules built (6):** Inventory, Attendance, Events, Table Bookings, Farmers Market, Admin
+- **Roles (4):** `owner`, `manager`, `kitchen_manager`, `restaurant_manager`
+- **System users:** 4
+
+---
+
+## THE GOAL — PHASE 2, FUNCTIONAL-COMPLETE ON PLACEHOLDER DATA
+
+**Target: a fully functioning app on placeholder data by the week of 11 August (deadline 15th).** Every screen works and is populated. Once Dhiren verifies the modules work to his satisfaction, real data goes in — not before.
+
+**The end-goal system is specified in `WOODLANDS_FUNCTIONAL_SPEC.md`.** Scope source is `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md`. Read the spec for what "finished" looks like module by module.
+
+**Client framing decision (Dhiren, 27 July):** prove the modules work before perfecting the data. Existing real data (305 stallholders, 62 staff, 559 stock items) stays as the test bed; the missing-data chase (bar stocktake, department stock lists, staff reconciliation, menus, 12 missing phone numbers) is off the critical path for this week.
 
 ---
 
 ## COMMERCIAL SHAPE — GIFT BUILD
 
-**Aman is not charging Dhiren.** Uncle. Decided.
+**Aman is not charging Dhiren.** Uncle. Decided at inception.
 
-- Build delivered no different from a paying client — full working system, security compliance, professional handover.
-- The exchange for Streamline: a delivered testimonial, and referrals to Dhiren's contacts.
-- Woodlands functions as: (a) proof Streamline can deliver a real hospitality system, (b) a hospitality template that can be re-used commercially for a future paying lodge client, (c) a relationship-based reference source.
-- **Internal-only reference value:** a paid-client version of this scope (6 modules, 4 roles, 62 staff, real operational scope) would price under the Materials methodology at approximately MWK 6–9M. Knowing this shapes how much polish time is warranted — full professional delivery, not infinite polish.
-
----
-
-## STAGE
-
-**5 — HARDEN.** Sprints D and E complete (26 July 2026 evening), including five bugs found and fixed in browser testing. All fixes retested and confirmed by Aman. System is demo-ready for the feedback session Monday 27 July, 11am.
+- Delivered no different from a paying client — full working system, security compliance, professional handover.
+- Exchange: a delivered testimonial, and referrals to Dhiren's contacts.
+- Reference value under Materials methodology for an equivalent paying client: ~MWK 6–9M. Internal only, never quoted. Shapes polish budget — full professional delivery, not infinite polish.
 
 ---
 
 ## STACK
 
-- React + Vite + Tailwind + Supabase + Vercel
-- Supabase ref: `gttsjmxltrxxfplqjans`
-- Repo: `akotecha47/woodlands`
+- React + Vite + Tailwind + Supabase (Pro, ref `gttsjmxltrxxfplqjans`) + Vercel
 - Live: `woodlands-beta.vercel.app`
-- Auth: Supabase Auth + `user_profiles` table (role as plain text, department as plain text)
+- Repo: `akotecha47/woodlands`
+- Auth: Supabase Auth on `sb_publishable_*` + `sb_secret_*` key pair. Legacy JWT keys disabled 26 July — the previously-exposed key is permanently invalid.
+- Departments plain text, never FK.
 
 ---
 
-## COMPLIANCE VS STANDARD (v1.5)
+## WHAT'S LIVE — REAL VS PLACEHOLDER
 
-Per WOODLANDS_AUDIT_2.md (26 July 2026):
+**Real:** 305 Farmers Market stallholders (via `scripts/data-ops/001`); 559 bar item catalogue — 276 Restaurant Bar + 283 Sports Bar (via `scripts/data-ops/002`), names + SKUs real; 62 staff roster; 4 system users.
 
-**Still open:** the service-key findings (§2.1, §2.1b, §2.4) — Sprint B. Money/quantity guards (§3 DoD 6) — Sprint C. Schema reconciliation (§2.6) — Sprint D. `/inventory` route mismatch (§2.5a) — Sprint E.
+**Placeholder / demo:** bar stock quantities (pending stocktake); attendance (2–3 seed days); 1 seeded event; a few table bookings.
 
-- **7 CRITICAL/HIGH from AUDIT (4 July) — all still open.** Zero source commits between audits.
-- **7 new findings** in AUDIT_2. Highlights: service_role key also in git history via `scripts/seed-attendance.mjs:14`; `events`/`event_payments`/`table_bookings` have RLS on with zero policies (fail-closed today, but a prerequisite dependency for stripping the service key); `staff` table writable by any authenticated user via a stale `004` blanket policy; `is_active` never enforced (deactivation is cosmetic); Inventory module unreachable due to `/inventory` vs `/` route key mismatch; stock clamp + full-quantity return creates phantom inventory on cancel; `src/lib/standards.md` mandates the anti-pattern that produced the service-key spread.
+**Empty / not there:** Kitchen, Restaurant, Housekeeping, Grounds, Security stock lists (departments exist, items don't); Laundry (not yet a department); Farmers Market visits + payments; menu items from POS PDFs.
 
-**Updated post-Sprint A (26 July 2026):**
-- Sprint A closed: RLS policies written and verified against live DB (migration 021); create-user Edge Function authenticated + CORS pinned; is_active enforced in RouteGuard, Login, and SQL via current_app_role() SECURITY DEFINER function.
-- AUDIT_2 §2.2 corrections (source vs live-DB reality): events, event_payments and user_profiles already had partial policies; table_bookings was the only genuinely-zero case; event_checklists, shift_settings, tables had unreachable policies due to missing GRANTs (now granted).
-- **New finding, LIVE PRODUCTION BUG:** `fm_market_days` table does not exist in the DB at all. MarketDayTab.jsx reads/writes it on every render. Farmers Market monthly notes are broken in production. Sprint D must CREATE this table (not just its policies).
+---
 
-**Updated post-Sprint B (26 July 2026):**
-- Sprint B closed: service_role key removed from browser and bundle (verified by grep of built JS — zero matches); standards.md rewritten to mandate anon client + Edge Functions; migration 022 added policies + authenticated DML grants for 14 additional tables (11 had unreachable policies due to missing grants — a defect invisible to source-only audits); legacy JWT-based API keys disabled; migrated to sb_publishable / sb_secret key pair; SERVICE_ROLE_KEY project secret rotated.
-- **Five CRITICALs, open since 4 July — now closed.** §2.1 (key in bundle), §2.1b (key in git history), §2.4 (only anon key client-side), the unauthenticated `create-user` endpoint (AUDIT_2 §4.4), and §2.2's structural closure via migrations 021 + 022 (RLS is now the access control layer, not JSX).
-- Standard §6 "no service role key in client bundle (checked in built JS)" — green.
-- **All 36 files migrated off `supabaseAdmin`.** 35 to the anon client, plus CheckIn.jsx to a new `public-checkin` Edge Function. Access control now genuinely lives in RLS rather than in JSX.
-- **Zero `anon` policies exist in this database, deliberately.** Public `/checkin` reaches `fm_holders`/`fm_visits` only through the Edge Function, which keeps holder PII off a public read policy.
-- **New finding, pre-existing since 28 May:** Event Add Payment has never worked. `event_payments.received_by` FKs to `auth.users(id)` while the dropdown populates from `staff`. Not a Sprint B regression (confirmed by `git blame`) — constraints are enforced regardless of which key issues the insert. Sprint C.
-- `.env.local` held stale legacy anon key post-rotation; corrected same day. Vercel env was updated correctly during Sprint B Task 5 recovery.
+## THE GATE — MIGRATION HISTORY RECONCILIATION (P1, blocks new schema)
 
-**Updated post-Sprint C (26 July 2026):**
-- Sprint C closed AUDIT_2 §3 DoD 6 in full, plus the Add Payment FK bug found in the Sprint B smoke test. Standard §6 "money and quantity logic guarded against negatives, double-inserts and date-boundary bugs" is now green **except** the attendance date-boundary item, deliberately deferred — see below.
-- **Add Payment fixed** (broken for every role since 28 May). `received_by` dropdown now reads `user_profiles`, matching both the `auth.users` FK and the existing read path. No migration needed.
-- **Migration 023 — positive-amount CHECK constraints** on `event_payments`, `fm_payments`, `event_bill_items`. Pre-validated (0 violating rows, 0 nulls) so all three are `validated`, applying to existing rows too. Verified by probe: negatives and zero are rejected, a control positive row still inserts. A `COMMENT` on the `event_payments` constraint records that refunds are stored positive, so nobody relaxes it on that reasoning.
-- **Migration 024 — `returned_qty` and `deducted_qty`** on `event_stock_allocations`, both with column comments. `returned_qty` was computed and displayed but never persisted, and the column did not exist. `deducted_qty` is new and was required to implement "return what was actually deducted"; nullable, where NULL means "deducted pre-Sprint C, amount unknown".
-- **All three stock clamps now fail closed.** The `Math.max(0, …)` clamp-and-continue is gone from `EventDetailTab`, `EventStockSection` and `shiftStock`. Confirming an event against insufficient stock is now refused rather than silently under-deducting and then over-returning on cancel — the phantom-inventory bug. A read-only pre-flight runs before the event status is written, because `changeStatus` wrote status *before* touching stock, so throwing later would have left an event confirmed-but-undeducted.
-- **Migration 025 — atomic stock via two Postgres functions.** `apply_stock_delta` (five delta sites) and `set_stock_quantity` (the absolute stock-take in `AdjustmentsTab`, a fourth site the sprint brief did not anticipate). Both take a row lock and write `current_stock` + `stock_movements` in one transaction. `SECURITY INVOKER`, so migration 022's owner/manager policies still decide who may move stock. `shiftStock` deleted; zero direct `current_stock` writes remain in `src/`.
-- **Not closed, do not assume otherwise:** multi-item event confirm is still not transactional (each item is atomic, the loop is not); event stock movements are typed `'adjustment'` pending a widened CHECK; 4 legacy allocations carry an unreconstructable historical deduction. All in `WOODLANDS_FOLLOWUPS.md`.
-- **Attendance UTC date boundary / `shift_date` deliberately deferred** to Sprint D per the sprint brief — it needs the live DDL settled first (`010` and `seed.sql` disagree on whether `shift_date` has a default).
+Remote history records only 001–007 while 001–030 have run. `supabase db push` is disqualified — it would replay migration 016's staff INSERT and duplicate all 62 staff. Every migration from 021 on applied by hand via the SQL Editor. Five ghost-schema bugs have come from this.
 
-**Updated post-demo-prep (26 July 2026, evening):**
-- **Migration 026 — `fm_market_days` created.** The table the Farmers Market module has read and written since it was built did not exist in the live DB at all, so market-conditions notes were silently discarded. Schema derived from the code line by line; RLS, service_role policy, grants and owner/manager write policies all in the same migration per Standard §2.2. `market_date` is UNIQUE because the component's `.maybeSingle()` errors on more than one match. Round-trip probed and rolled back.
-- **`/inventory` route mismatch fixed.** `ROUTE_ACCESS` keyed `/inventory` while the route is mounted at `/`, so `ROUTE_ACCESS['/']` was undefined, the guard failed closed and **the entire Inventory module was unreachable for every role** with its nav link hidden. One key change. AUDIT_2 §2.5(a) closed. The `*` wildcard now lands on Inventory instead of the old dead route.
-- **Dead `store_supervisor` gates removed** from `LogDeliveryTab`, `TransfersTab` and `fetchStaffUsers`. No behaviour change — no user could hold the role — but the misleading affordance is gone. AUDIT_2 §4.1 closed.
-- **Farmers Market Dashboard cards gated to owner/manager.** kitchen_manager no longer sees "Next Market Day" or at-risk holder counts. KPI grid column count follows the card count so no empty slot appears.
-- **`event_payments.recorded_by` now populated** on insert. Every prior payment has it NULL; new ones carry the entering user. `received_by` (who took the money) and `recorded_by` (who keyed it in) are now both meaningful.
-- **Dashboard "Needs Attention" cards navigate correctly.** The reported case — the low-stock card pointing at the unreachable `/` — is fixed by the route change. Verifying the other targets found a second instance the brief did not anticipate: `/attendance` and `/events` cards rendered for all four roles but are owner/manager-only, so kitchen_manager and restaurant_manager still bounced to `/login`. Cards are now filtered against `ROUTE_ACCESS` for the current role, which covers every present and future item.
-- **Deliberately untouched for the demo**, per brief: notification bell and search bar (placeholder UI, to be framed as such), the three remaining ghost tables, migration-history reconciliation, dead-table drops, attendance UTC boundary, delete-user Edge Function, password reset, hardcoded URLs, FUNCTIONAL_SPEC route table, and test-data purge.
+Phase 2 adds 8–12 tables. Hand-applying them guarantees more ghost schema. **Fix the history, prove `db push`, then build.** Until this closes, Standard §2.6 rebuild-from-migrations keeps failing (three tables — `event_checklists`, `shift_settings`, `tables` — still uncreatable from files).
 
-**Browser-test bug round (26 July 2026, evening) — five bugs, all fixed and retested:**
-- **Bug 1 — manager attendance path was completely broken.** Override, Mark All Absent and Save Note all violated `attendance_records.date` NOT NULL; three inserts set only `shift_date`. Fixed app-side. Reading the live DDL to choose the fix also **resolved AUDIT_2 §2.6(e)/§3 DoD 6(e)**: `date` is NOT NULL with no default and `shift_date` defaults to `CURRENT_DATE`, so the live table matches `seed.sql`, not `010`.
-- **Bug 2 — Dashboard cross-role leakage.** kitchen_manager and restaurant_manager saw Today's Attendance and Upcoming Events cards for modules they cannot open. An earlier fix had gated only the Needs Attention links, not the cards. All panels — KPI cards, attention items and the bookings section — now gate through one `canAccess()` helper reading `ROUTE_ACCESS`.
-- **Bug 3 — Market Conditions field was uneditable.** Not a wiring fault: `disabled={!canManage || isPast}`, and the tab opens on the current month's market day, so the field was locked from the day after market day until month end — 29 days in 30. `isPast` gated nothing else, while check-in and fee collection have always worked on past dates. Also fixed a silent-failure path that cleared the "Saving…" hint identically on success and failure.
-- **Bug 4 — all Edge Functions were down.** `SERVICE_ROLE_KEY` still held the legacy `service_role` JWT after legacy keys were disabled, so QR check-in and Add User were both broken. Fixed by rotating to a fresh `sb_secret_atywb…` key; no redeploy needed. The function's own error handling had conflated an infrastructure failure with "business not found", which is why it presented as a data problem — now separated.
-- **Bug 5 — QR check-in write path failed.** `migration 014_fm_visits_checkin_checkout.sql` **existed in the repo and had never been applied**, so `fm_visits` had no `checked_in_at`/`checked_out_at` and every scan failed with `undefined_column`. Applied 014 as written. Error reporting on `/checkin` now surfaces the real message rather than a generic "Something went wrong".
-- **Migration 027 — `fm_visits.notes`**, a second ghost column (after `event_stock_allocations.returned_qty`), used by the manager Market Day notes flow and present in no migration. Added.
-- **Verified end to end by Aman in the browser:** QR check-in scan → check in → check out from a phone; manager market-day check-in with a persisted note; Admin → Add User. Not inferred from probes.
+---
 
-**Data changeover (26 July 2026, evening) — test data out, real roster in:**
-- **Test data purged.** All 16 transactional tables cleared in FK-dependency order (`event_payments` before `events` — that FK is `NO ACTION` and would otherwise block). `current_stock` rows kept and zeroed rather than deleted, since they record which items exist. Preserved and verified unchanged: `user_profiles` 4, `staff` 62, `stock_items` 25, `departments` 7, `shift_settings` 12, `tables` 12.
-- **Starter seed loaded** so no demo screen is empty: 15 attendance rows across 3 recent days and 5 staff (mixed present/late/absent, both `date` and `shift_date` set), one confirmed wedding on 15 August with 3 bill items totalling 800,000 MWK and no payments, and 3 table bookings including one today.
-- **305 real Farmers Market stallholders imported** from the Feb 2026 register (`migration 029` for `fm_holders.products`; the import itself is data, in `scripts/data-ops/`). Stall numbers `A001`–`A347`. Coverage: phone 305/305, products 289, email 277, business_name 141, notes 146.
-- **Row arithmetic:** 319 register stalls − 1 (stall 205, no holder name) − 1 (duplicate stall 226) − 12 (no phone number) = **305**.
-- **The supplied import SQL could not run as written.** The Task 0 schema diff found six mismatches, four fatal: `name` vs `full_name`, no `products` column, `stall_type` NOT NULL and absent from source, `phone` NOT NULL against 12 NULL rows, plus a UNIQUE violation on duplicate stall 226 and an integer/text stall-number format clash. All six resolved by Aman's decisions before any SQL ran.
-- **An encoding defect nearly shipped.** The first import wrote mojibake into all 305 rows — PowerShell 5.1's `Get-Content` decoded a BOM-less UTF-8 file as Windows-1252. Caught in read-back, both readers fixed, rows deleted and re-imported. Verified by stored codepoints rather than rendered text, because the console misrepresented the data *after* the fix as well. Methodology recorded in `src/lib/standards.md` §4.
-- **Browser-verified by Aman across five screens:** Businesses list with notes rendering cleanly, Market Day showing 305 active businesses with a live QR check-in, Monthly Messages generating across all 305 (apostrophes and all-caps clean), Payments aggregating MWK 12,200,000 outstanding, and a full QR scan → check in → check out roundtrip from a phone.
-- **Deferred, in `WOODLANDS_FOLLOWUPS.md`:** staff reconciliation with Martin; bar stock import pending Dhiren's two-bar decision; the 12 phone-less stallholders and stall 205 for Rose; duplicate stall 226; 125 register rows with EMAIL/PRODUCTS swapped at source; `stall_type` reclassification off the products text; normalising `products` into `fm_approved_items`; and Dhiren's sign-off on the `A001` stall-number format.
+## KNOWN BUGS / BROKEN PATHS
 
-See `WOODLANDS_AUDIT_2.md` for full findings and file/line references.
+- **Transfers don't deduct stock.** Found 27 July browser test. Requisitions deduct correctly; department transfers don't. Directly relevant to two-tier inventory — store→department movement is the core mechanic.
+- **Events payments tab not editable.** Recordable, not correctable. Phase 2 UX fix.
+- **`public-checkin` returns an internal `detail` field on failure.** Aids diagnosis; drop before handover.
 
-Standing rules from CLAUDE.md (rewritten 26 July to match code):
-- All department references are plain text, never FK to a departments table
-- Requisitions deduct on **Fulfil**, event allocations deduct on **Confirm** (not on approval or submission)
-- No biometrics this phase — manual clock in/out only
+---
+
+## VERIFY-AGAINST-LIVE (don't trust the docs)
+
+- **`stock_movements.movement_type` CHECK** — FOLLOWUPS says it does NOT permit `opening_balance` and migration 030 didn't add it; HISTORY/ARTIFACTS say 030 did. **Contradiction — probe the live CHECK, correct the wrong doc.**
+- **GPS clock-in geofence** — does the 100 m radius / `unverified` logic exist in live code?
+- **Stall-number regex** in Add Holder — two-digit vs live three-digit `A001`–`A347`.
+- **Add User** — does it still branch on dead bar1/bar2 `bar_week` logic?
+
+---
+
+## PHASE 2 SCOPE (see FUNCTIONAL_SPEC for detail)
+
+Two-tier inventory + per-department stock lists · bar par levels + end-of-day refill cycle · consumption attribution (what/where/who) + rooms + 1-year laundry retention · expanded role model (`department_head` scoped, `admin`, `hr`) · QR staff attendance · Farmers Market 3-month attendance history + waiting-list forfeiture + 3-level product taxonomy + fee schedule (10k / 30k / 20k) · Events payments editable + revenue display.
 
 ---
 
 ## LIVE COMMITMENTS
 
 - **Full working system delivered no different from a paying client.**
-- **Handover-track** — meeting with Dhiren showing a proper working version of his system. Post-meeting: he decides if he wants to proceed to formal handover.
+- **Something to show on return, and a call with Dhiren.** Made 27 July. Aman back in Malawi; call likely early in the week of 11 August, exact day TBC.
 - **Testimonial + referrals** post-handover. Nothing specific discussed yet.
-- **Post-Sprint-B restore point:** Take a fresh manual backup before Sprint C begins. Previous backup (26 July 02:30 UTC automatic) predates Sprints A and B and no longer represents current state.
 
 ---
 
-## REAL DATA STATUS — §2.7 APPLIES
+## CADENCE
 
-**Real client data is already live.** Migration `016_staff_restructure.sql` seeded 62 real employee records (names, employee numbers, departments, hire dates) committed to git. Per Standard §2.7 the project is no longer free to break — snapshot before any schema or policy change; breaking changes go through a Supabase database branch or scheduled maintenance window.
-
-Test users and test attendance rows also exist (`scripts/seed-attendance.mjs`) and must be purged before final go-live.
-
-**Do not run `supabase db push` until migration history is repaired.** Remote history records only 001–007; 008–020 ran but were never recorded. A push would replay `016_staff_restructure.sql` and duplicate all 62 real staff rows. Migration `021` was applied via the Management API query endpoint instead. Repair is a Sprint D item — see WOODLANDS_FOLLOWUPS.md.
-
----
-
-## OPEN QUALITY ITEMS / KNOWN GAPS
-
-- Both audit files now tracked and committed (`WOODLANDS_AUDIT.md` 4 July, `WOODLANDS_AUDIT_2.md` 26 July). AUDIT_2 supersedes for finding status; both retained side-by-side for the diff.
-- Four-role walkthrough — substantially exercised across the 26 July browser rounds: owner, manager, kitchen_manager and restaurant_manager dashboards were all checked, and the manager attendance and Farmers Market flows were driven end to end. **Still not confirmed:** a deactivated user being refused (the `is_active` gate from Sprint A has never been tested against a real login).
-- **Inventory stock operations have had no runtime exercise.** The route is fixed (`bcab3bf`) so the module is now reachable, but no requisition fulfil, delivery or stock adjustment has been performed in the browser since Sprint C replaced all three with the `apply_stock_delta` / `set_stock_quantity` RPCs. Those functions were verified by SQL probe only. **This is the largest untested surface in the system** — it is money-adjacent and it is the module Dhiren is most likely to open first.
-- `npm audit` returned malformed registry response during AUDIT_2 — dependency CVE status UNVERIFIED, re-run pending.
-
----
-
-## SPRINT PLAN — being revised per AUDIT_2
-
-**Original W1–W4 sequence (superseded):** strip service key → kill public signup → RLS rewrite → schema reconciliation.
-
-**Revised sequence (Sprint A–F, per audit's dependency graph):**
-
-- **Sprint A — Foundations. ✅ DONE 26 July 2026.** Commits `6b56bdd`, `8a22e1c`, `aabb620`. Migration `021_sprint_a_policies.sql` applied to the live DB and verified by `pg_policies` query; `create-user` Edge Function authenticated and redeployed; `is_active` enforced in RouteGuard and Login. Build clean. Additive only — nothing dropped except the stale `004` blanket policy on `staff`, which was in scope. Per-role login testing outstanding (Dhiren-facing, Sprint F).
-- **Sprint B — Strip the service role key. ✅ DONE 26 July 2026.** Commits `d88387b` (standards.md rewrite), `e7b9df0` (CheckIn → `public-checkin` Edge Function), `516cd2a` (migration `022`, 14 tables), `6cb8e25`/`155461b`/`78300f0`/`ce1e06e`/`4cda9c4`/`e59c400` (35 files, six module commits), `22a3a89` (key rotation + cleanup). Verified by grep and JWT decode of a fresh `dist/`: zero service_role, one anon JWT. Migration `022` applied via SQL, not `db push`.
-- **Sprint C — Money and quantity guards. ✅ DONE 26 July 2026.** Commits `6605016` (Add Payment FK), `0fe4e76` (migration `023` amount CHECKs), `24bd7fb` (migration `024` + fail-closed clamps + `returned_qty`), `e7d1050` (migration `025` atomic stock, six call sites). Attendance UTC date boundary + `shift_date` **deferred to Sprint D** per the brief — it needs the live DDL settled first.
-- **Sprint D — Schema reconciliation. ✅ DEMO SCOPE COMPLETE 26 July 2026 evening.** `fm_market_days` created (migration `026`, commit `6244cc0`) — the only one of the four ghost tables that did not exist at all. `fm_visits.notes` ghost column added (`027`, `712c9c5`). `migration 014` (`checked_in_at`/`checked_out_at`) applied, having never been run. `returned_qty` landed in Sprint C (`024`). **Still open, post-demo:** migrations for `event_checklists` / `shift_settings` / `tables`, migration-history reconciliation (008–027 unrecorded), duplicate `008` renumber, dead-table drops, attendance UTC boundary. **Standard §2.6 rebuild-from-migrations test still fails** — three tables remain uncreatable from the files.
-- **Sprint E — Fit and finish. ✅ DEMO SCOPE COMPLETE 26 July 2026 evening.** `/inventory` route fix (`bcab3bf`), dead `store_supervisor` gates deleted (`c920d01`), Farmers Market Dashboard cards gated (`6fff308`), `recorded_by` populated (`569cf1e`), Needs Attention navigation (`a793e9a`), plus the five browser-test bugs (`471e467`, `acae3c2`, `d860b1c`, `d2eae09`, `fc344d5`). **Still open, post-demo:** notification bell + search bar are placeholder UI, password reset flow, un-hardcode project URL, refresh WOODLANDS_FUNCTIONAL_SPEC.md route table, delete-user path, "Recorded By" column display, drop the `detail` field from `public-checkin` error responses.
-- **Sprint F — Final audit + handover prep.** Fresh Fable audit (`WOODLANDS_AUDIT_3.md`); walk Standard §6 Pre-Handover Checklist; transfer Supabase/Vercel/GitHub ownership to Dhiren; one-page reference; testimonial + referrals ask; write `WOODLANDS_RETROSPECTIVE.md` (Standard §Stage 7).
+- **26–27 July** — hardening (Sprints A–E) + FM import + bar import + feedback meeting.
+- **28 July – 7 August** — Aman travelling (South Africa, medical). No dev work.
+- **9 August (today)** — docs brought current to the end goal; build planning.
+- **9–15 August** — Phase 2 build to functional-complete on placeholder data. Deadline 15th.
+- **Call with Dhiren** — early in the week, day TBC; then the full working app for verification.
+- **After Dhiren verifies** — real data goes in (joint session with Rose + Martin), then `WOODLANDS_AUDIT_3.md` against real data, then Sprint F handover mechanics.
 
 ---
 
 ## NEXT ACTION
 
-**Meeting Monday 27 July, 11am.** Post-meeting: staff reconciliation (Martin), bar stock import after Dhiren's two-bar decision, migration history reconciliation, stall 205 data fill (Rose).
+Build order, gate first:
+1. **Migration history reconciliation** (the gate).
+2. **UX fixes** — Events payments editable (quick); revenue (blocked on Dhiren — resolve or build toggleable).
+3. **Role model** — `department_head` scoped + `admin` + `hr`; rooms concept. Precedes module work.
+4. **Two-tier inventory + per-department stock lists** — folds in the transfers bug.
+5. **Bar par levels + end-of-day cycle** — on top of two-tier.
+6. **Consumption attribution + rooms + laundry retention** — on top of two-tier.
+7. **Farmers Market taxonomy + waiting list + fees** — self-contained.
+8. **QR attendance** — self-contained, reuses `public-checkin` pattern.
 
-Demo-ready with real data: 305 Farmers Market stallholders live, test data purged, realistic starter state seeded for Attendance, Events and Table Bookings.
-
-Verified in the browser on 26 July, not inferred: manager attendance Override; the four role dashboards; Market Day conditions persisting; QR check-in scan → check in → check out from a phone; manager market-day check-in with a persisted visit note; Admin → Add User.
-
-**Highest-value thing left before the meeting, if there is time:** drive one **Inventory** stock operation — a requisition fulfil, a delivery, or an adjustment. Sprint C rerouted all three through the `apply_stock_delta` / `set_stock_quantity` RPCs, and those have been verified by SQL probe only, never through the UI. It is the largest untested surface, it is money-adjacent, and Inventory is the module Dhiren is most likely to open first. Watch for double `stock_movements` rows, which is the signature of an incomplete refactor.
-
-Also unconfirmed: a **deactivated user** being refused at login. The `is_active` gate has shipped since Sprint A and has never been tested against a real account.
-
-Post-demo, in order: remaining three ghost tables (`event_checklists`, `shift_settings`, `tables`) → migration-history reconciliation (008–027 unrecorded, so `supabase db push` stays unsafe) → attendance UTC date boundary + `shift_date` → widen `stock_movements.movement_type` so event stock stops being logged as `'adjustment'` → dead-table drops → drop the `detail` field from `public-checkin` error responses.
-
-`.env.local` anon key updated to sb_publishable value on 26 July after Sprint B closeout — matches Vercel and current live site.
+Every new table ships with placeholder seed in its own step.
 
 ---
 
 ## BLOCKING
 
-Nothing external is blocking. Session time is the constraint.
+Revenue display is blocked on Dhiren (what "different" means). Everything else is internal — migration reconciliation is the gate in front of new schema.
 
 ---
 
 ## STATUS SUMMARY
 
-Retrofit hardening informed by a second audit (26 July). Sprint plan resequenced because policies must precede the service-key strip, and because `src/lib/standards.md` must be rewritten in the same change as the key removal or the fix regresses.
+Hardening done, real data live, docs now point at the end goal. Building Phase 2 to functional-complete on placeholder data by the 15th, migration reconciliation first, then role model, then the module work.
