@@ -63,9 +63,17 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 ## THE GATE — MIGRATION HISTORY RECONCILIATION (P1, blocks new schema)
 
-Remote history records only 001–007 while 001–030 have run. `supabase db push` is disqualified — it would replay migration 016's staff INSERT and duplicate all 62 staff. Every migration from 021 on applied by hand via the SQL Editor. Five ghost-schema bugs have come from this.
+Remote history records only 001–007 while 001–030 have run. Every migration from 021 on applied by hand via the SQL Editor. **Live diagnosis (9 August) found the gate is bigger than "reconcile history":**
 
-Phase 2 adds 8–12 tables. Hand-applying them guarantees more ghost schema. **Fix the history, prove `db push`, then build.** Until this closes, Standard §2.6 rebuild-from-migrations keeps failing (three tables — `event_checklists`, `shift_settings`, `tables` — still uncreatable from files).
+- **`db push` would destroy the 305 stallholders before it reaches the staff duplication.** It replays `009_farmers_market.sql` (`DROP TABLE fm_holders CASCADE` — 305 holders + visits + payments + id_cards + approved_items) before `016` (duplicates 62 staff — no ON CONFLICT). `028` also drops `requisitions`. The old "016 is the reason" framing was incomplete — **009 is the bigger bomb.**
+- **Duplicate `008`** (`event_bill_items` + `inventory` both numbered 008) must be resolved by **merge before any repair** — `version` is a PK, repair records only one.
+- **`supabase/seed.sql` is a misfiled migration** carrying schema DDL + four ghost GPS columns; it breaks `db reset` and blocks §2.6 independently of the ghost tables.
+- **Three attendance migrations drifted** (`010` partial, `012` never applied — leaves a blanket RLS policy on real staff data, `017` partial). Reconcile before repairing or the hole is frozen. **012's auth work is its own session.**
+- **Three ghost tables** (`event_checklists`, `shift_settings`, `tables`) — DDL captured, hold live data, need `CREATE TABLE IF NOT EXISTS`.
+
+Full findings and corrected repair order in `WOODLANDS_FOLLOWUPS.md`. **Do not run `db push` before the repair completes** — three destructive replays sit in the path.
+
+Phase 2 adds 8–12 tables. Hand-applying them guarantees more ghost schema. **Snapshot, fix the history in the corrected order, prove `db push` clean on staging, then build.**
 
 ---
 
@@ -79,8 +87,8 @@ Phase 2 adds 8–12 tables. Hand-applying them guarantees more ghost schema. **F
 
 ## VERIFY-AGAINST-LIVE (don't trust the docs)
 
-- **`stock_movements.movement_type` CHECK** — FOLLOWUPS says it does NOT permit `opening_balance` and migration 030 didn't add it; HISTORY/ARTIFACTS say 030 did. **Contradiction — probe the live CHECK, correct the wrong doc.**
-- **GPS clock-in geofence** — does the 100 m radius / `unverified` logic exist in live code?
+- **~~`stock_movements.movement_type` CHECK~~ — SETTLED 9 August.** Live constraint permits `opening_balance`; migration 030 ran. FOLLOWUPS was the wrong doc (a stale pre-apply probe); HISTORY/ARTIFACTS were right. Now corrected.
+- **GPS clock-in geofence** — the four GPS columns exist live (from `seed.sql`, not any migration) and three attendance components read them. Confirm the geofence *logic* in code before relying on it.
 - **Stall-number regex** in Add Holder — two-digit vs live three-digit `A001`–`A347`.
 - **Add User** — does it still branch on dead bar1/bar2 `bar_week` logic?
 

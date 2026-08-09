@@ -19,7 +19,7 @@ Read these three, in this order, to know what to build:
 3. **WOODLANDS_MEETING_FEEDBACK_2026-07-27.md** — Dhiren's own words; the source the spec is built from.
 
 ## The gate — do this before new schema work
-**Migration history reconciliation is Priority 1 and blocks the Phase 2 schema.** Remote history records only 001–007 while 001–030 have run; `supabase db push` is disqualified (would replay migration 016 and duplicate 62 staff). Phase 2 adds 8–12 tables — hand-applying them repeats the exact cause of five ghost-schema bugs. Fix history, prove `db push`, then build. See STATE and FUNCTIONAL_SPEC §0.
+**Migration history reconciliation is Priority 1 and blocks the Phase 2 schema.** Remote history records only 001–007 while 001–030 have run. **Do not run `db push` before the repair completes** — it replays three destructive migrations: `009` drops `fm_holders CASCADE` (all 305 stallholders) *before* `016` duplicates 62 staff, and `028` drops `requisitions`. Live diagnosis (9 August) also found: a duplicate `008` that must be merged before any repair; `supabase/seed.sql` is a misfiled migration (schema DDL + ghost GPS columns) that breaks `db reset`; and three attendance migrations (`010`/`012`/`017`) drifted — `012` never applied, leaving a blanket RLS policy on real staff data. **012's auth reconciliation gets its own session.** Snapshot first. Full findings and corrected repair order in `WOODLANDS_FOLLOWUPS.md`; summary in STATE and FUNCTIONAL_SPEC §0.
 
 ## Followups log
 Open items live in **WOODLANDS_FOLLOWUPS.md** (repo root). Add to it when a sprint consciously defers something.

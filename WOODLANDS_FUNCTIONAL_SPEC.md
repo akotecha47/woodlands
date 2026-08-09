@@ -23,9 +23,15 @@ The target for end of the week of 11 August: **every screen works on placeholder
 
 ## 0. THE GATE — MIGRATION HISTORY RECONCILIATION [NEW / P1]
 
-**Nothing schema-heavy below is safe until this is done.** Remote migration history records only versions 001–007 while 001–030 have run. `supabase db push` is disqualified — it would replay migration 016's staff INSERT and duplicate all 62 real staff rows — so every migration from 021 on has been applied by hand through the SQL Editor. Five ghost-schema bugs have already come from that.
+**Nothing schema-heavy below is safe until this is done.** Remote migration history records only versions 001–007 while 001–030 have run; every migration from 021 on was applied by hand. Live diagnosis (9 August) found this is bigger than a history reconcile:
 
-Phase 2 adds roughly 8–12 tables (departmental stock, par levels, rooms, consumption, taxonomy, waiting list, fees). Hand-applying that many guarantees more ghost schema. Fix the history, get `db push` working and proven, then build. Scope: `supabase migration repair --status applied` for 008–030; write the three missing `CREATE TABLE` migrations (`event_checklists`, `shift_settings`, `tables`); renumber the duplicate `008` pair; verify `db push` is safe and the schema rebuilds from files alone (closes Standard §2.6).
+- **`db push` would `DROP TABLE fm_holders CASCADE` (009) — all 305 stallholders — before it reaches the 62-staff duplication (016).** `028` also drops `requisitions`. Three destructive replays sit in the push path. The old "016 is the reason" framing understated it.
+- **Duplicate `008`** (`event_bill_items` + `inventory`) must be **merged before any repair** — `version` is a PK.
+- **`supabase/seed.sql` is a misfiled migration** (schema DDL + four ghost GPS columns) that breaks `db reset`; §2.6 can't pass while it stands.
+- **`010`/`012`/`017` (attendance) drifted** — `012` never applied, leaving a blanket `ALL/authenticated/USING(true)` RLS policy on real staff attendance. Reconcile before repair; **012's auth work is its own session**.
+- **Three ghost tables** (`event_checklists`, `shift_settings`, `tables`) — DDL captured, hold live data, `CREATE TABLE IF NOT EXISTS`.
+
+Corrected order: snapshot → merge 008 → write ghost-table CREATEs → write 010/012/017 + GPS-column reconciliation → split/neutralise `seed.sql` → `migration repair --status applied` (drifted attendance only after their reconciliation runs) → prove `db push --dry-run` clean → prove rebuild on a **throwaway staging project** (Docker down, no local reset). Full detail in `WOODLANDS_FOLLOWUPS.md`.
 
 ---
 
@@ -110,7 +116,7 @@ Every consumption event records three dimensions: **what** (item + quantity), **
 - **Bar par levels + end-of-day cycle [NEW]** — each bar holds a minimum per item before opening. Nightly: bartender counts → reports levels → system computes shortfall against par → generates a refill requisition (confirm a pre-filled request, don't compose one) → fulfilled from main store before next open. Par quantities come from the bar heads.
 - **Consumption attribution [NEW]** — per §2.3. Draw-from-department writes a consumption row (what/where/who, room where relevant).
 
-**[VERIFY]** `stock_movements.movement_type` CHECK: FOLLOWUPS (bar-import probe) says the live CHECK permits only `delivery/transfer/adjustment/requisition` and that migration 030 did **not** add `opening_balance`. HISTORY/ARTIFACTS say 030 *did* add `opening_balance`. **These contradict — probe the live CHECK before trusting either, and correct whichever doc is wrong.**
+**[VERIFIED 9 Aug]** `stock_movements.movement_type` CHECK is `..._check_v2`, permitting `delivery/transfer/adjustment/requisition/opening_balance`. Migration 030 ran. Still open: widening for `event_allocation`/`event_return` if the Movement Ledger (above) is built.
 
 ---
 
@@ -221,8 +227,8 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 
 ## 10. ITEMS REQUIRING LIVE VERIFICATION (do not trust the doc — probe)
 
-1. **`stock_movements.movement_type` CHECK** — does it permit `opening_balance`? FOLLOWUPS and HISTORY/ARTIFACTS contradict each other. First thing to settle; one of those docs is wrong.
-2. **GPS clock-in geofence** — does the 100 m radius / `unverified` logic exist in live code?
+1. **~~`stock_movements.movement_type` CHECK~~ — SETTLED 9 August.** Live constraint permits `opening_balance`; migration 030 ran. FOLLOWUPS was the stale doc, now corrected.
+2. **GPS clock-in geofence** — the four GPS columns exist live (from `seed.sql`); confirm the geofence *logic* in code.
 3. **Stall-number regex** in Add Holder — two-digit or three-digit? If two-digit, the 305 imported stalls are un-editable through the form.
 4. **Add User role branching** — does it still reference the dead bar1/bar2 `bar_week` logic?
 

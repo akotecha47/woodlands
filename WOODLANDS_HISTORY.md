@@ -97,6 +97,8 @@ Commitment to Dhiren: something to show on return, and a call on Monday 10 Augus
 **9 August 2026 — Docs brought current to the end goal.**
 Aman back in Malawi; deadline set as functional-complete on placeholder data by 15 August. All repo-facing markdown updated so Claude Code reads toward the end goal, not backward: `WOODLANDS_FUNCTIONAL_SPEC.md` rewritten from the stale 31 May version into the full end-goal system spec (target modules, [DONE]/[BUG]/[NEW]/[VERIFY] markers); `CLAUDE.md` re-pointed at Phase 2 as the current goal, roles/scope corrected, audits marked historical, QR-supersedes-manual rule added; `WOODLANDS_STATE.md` re-dated and re-aligned to the end goal; `WOODLANDS_FOLLOWUPS.md` reconciled (migration-030/`opening_balance` contradiction flagged for live probe, resolved items marked, Phase 2 absorptions tagged); the two audits given historical-snapshot banners rather than being rewritten. Four items flagged for live verification rather than trusted: the `movement_type` CHECK contradiction, GPS clock-in, the stall-number regex, and Add-User role branching.
 
+**9 August 2026 — Migration reconciliation: read-only live diagnosis (Claude Code, Fable 5).** Probe before repair, nothing mutated. Settled the `movement_type` question (030 ran; FOLLOWUPS was the stale doc). Found four things the docs missed or understated: (1) `009_farmers_market.sql` opens `DROP TABLE fm_holders CASCADE` and would destroy all 305 stallholders on `db push` *before* `016` duplicates staff — every doc had named only `016`; (2) the duplicate `008` must be merged before any repair because `version` is a PK; (3) `supabase/seed.sql` is a misfiled migration carrying schema DDL and four ghost GPS columns, breaking `db reset`; (4) attendance migrations `010`/`012`/`017` drifted, with `012` never applied — a blanket `ALL/authenticated/USING(true)` RLS policy still on real staff attendance. Repair not run — strategic docs corrected first (this session). Repair queued as its own Claude Code session, snapshot first, 012's auth work split out.
+
 ---
 
 ## EXEC DECISIONS
@@ -119,6 +121,8 @@ Aman back in Malawi; deadline set as functional-complete on placeholder data by 
 ---
 
 ## LESSONS EARNED
+
+**⚑ DOCTRINE FLAG (for Workspace) — a disqualified `db push` must enumerate EVERY destructive replay, not the first one found.** For weeks every Woodlands doc stated "`db push` is disqualified because `016` duplicates 62 staff." The 9 August diagnosis found `009` drops all 305 stallholders and runs *before* `016`, and `028` drops requisitions — so anyone who "handled 016" and then pushed would still have lost the largest body of real data. The failure was analytical: naming a representative hazard instead of scanning the whole migration set for `DROP`/`INSERT`-without-`ON CONFLICT`/`DELETE`. Candidate Standard rule: when `db push` is disqualified, the disqualifying analysis must list all destructive statements across all unrecorded migrations before the reason is considered documented. Belongs in the Standard's migration/rebuild section, not just this project.
 
 **Security concerns is the biggest thing.** Aman's own single-line takeaway from the original build. The public create-user vulnerability specifically — anyone finding the URL can create themselves a privileged account — is the kind of thing that would have been caught at Stage 3 (SET UP) under the Standard, not discovered at Stage 5 by an audit. A direct piece of the argument for building Standard-native from Stage 1.
 
