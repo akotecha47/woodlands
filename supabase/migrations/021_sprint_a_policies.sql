@@ -264,79 +264,37 @@ DROP POLICY IF EXISTS "authenticated can access staff" ON staff;
 
 
 -- ==================================================================
--- 7. event_checklists   (exists in live DB; CREATE TABLE is Sprint D)
+-- 7 / 8 / 9. event_checklists, shift_settings, tables — MOVED OUT
 -- ==================================================================
--- authenticated held NO table-level grant here (only REFERENCES/TRIGGER/
--- TRUNCATE), so the existing SELECT policy was unreachable. Granting.
-GRANT ALL ON event_checklists TO service_role;
-GRANT SELECT, INSERT, UPDATE ON event_checklists TO authenticated;
-
-DROP POLICY IF EXISTS "service_role_all_event_checklists" ON event_checklists;
-CREATE POLICY "service_role_all_event_checklists" ON event_checklists
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "authenticated_read_event_checklists" ON event_checklists;
-CREATE POLICY "authenticated_read_event_checklists" ON event_checklists
-  FOR SELECT TO authenticated USING (true);
-
-DROP POLICY IF EXISTS "event_checklists_manage_insert" ON event_checklists;
-CREATE POLICY "event_checklists_manage_insert" ON event_checklists
-  FOR INSERT TO authenticated
-  WITH CHECK (public.current_app_role() IN ('owner', 'manager'));
-
-DROP POLICY IF EXISTS "event_checklists_manage_update" ON event_checklists;
-CREATE POLICY "event_checklists_manage_update" ON event_checklists
-  FOR UPDATE TO authenticated
-  USING      (public.current_app_role() IN ('owner', 'manager'))
-  WITH CHECK (public.current_app_role() IN ('owner', 'manager'));
-
-
--- ==================================================================
--- 8. shift_settings   (exists in live DB; CREATE TABLE is Sprint D)
--- ==================================================================
-GRANT ALL ON shift_settings TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON shift_settings TO authenticated;
-
-DROP POLICY IF EXISTS "service_role_all_shift_settings" ON shift_settings;
-CREATE POLICY "service_role_all_shift_settings" ON shift_settings
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "authenticated_read_shift_settings" ON shift_settings;
-CREATE POLICY "authenticated_read_shift_settings" ON shift_settings
-  FOR SELECT TO authenticated USING (true);
-
-DROP POLICY IF EXISTS "shift_settings_manage_insert" ON shift_settings;
-CREATE POLICY "shift_settings_manage_insert" ON shift_settings
-  FOR INSERT TO authenticated
-  WITH CHECK (public.current_app_role() IN ('owner', 'manager'));
-
-DROP POLICY IF EXISTS "shift_settings_manage_update" ON shift_settings;
-CREATE POLICY "shift_settings_manage_update" ON shift_settings
-  FOR UPDATE TO authenticated
-  USING      (public.current_app_role() IN ('owner', 'manager'))
-  WITH CHECK (public.current_app_role() IN ('owner', 'manager'));
-
-DROP POLICY IF EXISTS "shift_settings_manage_delete" ON shift_settings;
-CREATE POLICY "shift_settings_manage_delete" ON shift_settings
-  FOR DELETE TO authenticated
-  USING (public.current_app_role() IN ('owner', 'manager'));
-
-
--- ==================================================================
--- 9. tables   (exists in live DB; CREATE TABLE is Sprint D)
--- ==================================================================
--- Read-only from the UI. No write policy is written because no code path
--- writes this table. The roster is maintained directly in Supabase today.
-GRANT ALL ON tables TO service_role;
-GRANT SELECT ON tables TO authenticated;
-
-DROP POLICY IF EXISTS "service_role_all_tables" ON tables;
-CREATE POLICY "service_role_all_tables" ON tables
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "authenticated_read_tables" ON tables;
-CREATE POLICY "authenticated_read_tables" ON tables
-  FOR SELECT TO authenticated USING (true);
+-- These three sections previously issued GRANT + CREATE POLICY against
+-- event_checklists, shift_settings and tables, on the assumption that the
+-- tables already existed live (they did — they are the AUDIT_2 §2.6 "ghost"
+-- tables, whose CREATE TABLE statements were absent from every migration).
+--
+-- MOVED 9 August 2026, migration-history reconciliation. Those statements
+-- now live alongside the CREATE TABLE they depend on:
+--
+--   event_checklists -> 031_event_checklists.sql
+--   shift_settings   -> 032_shift_settings.sql
+--   tables           -> 033_tables.sql
+--
+-- WHY: on a from-files rebuild of an empty database, migrations run in
+-- version order, so this file (021) executed BEFORE 031-033 created the
+-- tables — and GRANT against a non-existent relation aborts the rebuild.
+-- That failure blocked Standard §2.6's rebuild-from-migrations test
+-- independently of the missing CREATE TABLEs themselves. Co-locating each
+-- table's grants and policies with its CREATE TABLE makes the order valid.
+--
+-- LIVE IS UNAFFECTED by this edit: 021 was never recorded in the remote
+-- migration history, its grants/policies were applied by hand and are
+-- already present live, and `migration repair` records a version number
+-- without re-executing the file. 031-033 re-assert the same canonical
+-- policy names idempotently.
+--
+-- The legacy-named duplicate policies on these three tables
+-- ("authenticated read {t}", "service role full access {t}") remain live
+-- and are still NOT dropped by any file — see the additive-only note in
+-- this file's header and WOODLANDS_FOLLOWUPS.md.
 
 
 -- ==================================================================

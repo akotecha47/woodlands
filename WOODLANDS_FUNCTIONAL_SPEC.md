@@ -21,17 +21,11 @@ The target for end of the week of 11 August: **every screen works on placeholder
 
 ---
 
-## 0. THE GATE — MIGRATION HISTORY RECONCILIATION [NEW / P1]
+## 0. THE GATE — MIGRATION HISTORY RECONCILIATION [P1]
 
-**Nothing schema-heavy below is safe until this is done.** Remote migration history records only versions 001–007 while 001–030 have run; every migration from 021 on was applied by hand. Live diagnosis (9 August) found this is bigger than a history reconcile:
+**Session A executed (9 August) — gate NOT yet closed. Session B (012 auth) closes it.** History repaired to 001–035 minus 010/012/017; duplicate 008 merged; ghost tables migrated (031/032/033); missing attendance indexes created (034); GPS columns migrated (035); 021 rebuild-order bug fixed; 010 FK documented to live. Real data unchanged.
 
-- **`db push` would `DROP TABLE fm_holders CASCADE` (009) — all 305 stallholders — before it reaches the 62-staff duplication (016).** `028` also drops `requisitions`. Three destructive replays sit in the push path. The old "016 is the reason" framing understated it.
-- **Duplicate `008`** (`event_bill_items` + `inventory`) must be **merged before any repair** — `version` is a PK.
-- **`supabase/seed.sql` is a misfiled migration** (schema DDL + four ghost GPS columns) that breaks `db reset`; §2.6 can't pass while it stands.
-- **`010`/`012`/`017` (attendance) drifted** — `012` never applied, leaving a blanket `ALL/authenticated/USING(true)` RLS policy on real staff attendance. Reconcile before repair; **012's auth work is its own session**.
-- **Three ghost tables** (`event_checklists`, `shift_settings`, `tables`) — DDL captured, hold live data, `CREATE TABLE IF NOT EXISTS`.
-
-Corrected order: snapshot → merge 008 → write ghost-table CREATEs → write 010/012/017 + GPS-column reconciliation → split/neutralise `seed.sql` → `migration repair --status applied` (drifted attendance only after their reconciliation runs) → prove `db push --dry-run` clean → prove rebuild on a **throwaway staging project** (Docker down, no local reset). Full detail in `WOODLANDS_FOLLOWUPS.md`.
+**Session B remaining:** drop the blanket `ALL/authenticated/USING(true)` policy live on `attendance_records`; reconcile 017's policy drift + the unfiled "staff can… own" policies; clean seed.sql's flagged block; decide the two 010 default divergences (`shift_date`, `within_radius`); then `repair 010/012/017`, `db push --dry-run`, staging rebuild proof = gate closed. **Do NOT run `db push` before Session B reconciles 010/012/017.** Full detail in `WOODLANDS_FOLLOWUPS.md`.
 
 ---
 

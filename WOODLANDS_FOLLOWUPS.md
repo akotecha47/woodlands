@@ -134,7 +134,18 @@ Plus two ghost columns found earlier: `event_stock_allocations.returned_qty` (`0
 
 **Until this closes, Standard §2.6's rebuild-from-migrations test keeps failing.**
 
-**Scope of the fix (corrected order):** snapshot first (Sprint B skipped it — don't repeat) → resolve duplicate 008 by merge (files only) → write the three ghost-table CREATEs from captured DDL → write reconciliation migrations for 010/012/017 drift + the ghost GPS columns → split/neutralise `seed.sql` → `migration repair --status applied` for the genuinely-applied set (010/012/017 only after their reconciliation migrations run and verify live) → prove `db push --dry-run` is clean → prove rebuild-from-files on a throwaway staging project (Docker is down, no local reset). The 012 auth reconciliation is its own session, never bundled.
+**Scope of the fix (corrected order) — SESSION A DONE 9 August:**
+snapshot ✅ → merge 008 ✅ → ghost-table CREATEs 031/032/033 ✅ (applied live, no-op, rows preserved) → 034/035 attendance indexes + GPS columns ✅ (034 created 2 indexes for real; 035 no-op) → seed.sql rebuild-landmines removed ✅ → 021 ordering bug fixed ✅ → 010 FK documented to live ✅ → `migration repair --status applied` for 001–035 minus 010/012/017 ✅ (verified on fresh connection).
+
+**SESSION B (012 auth) — REMAINING, closes the gate:**
+1. Drop the blanket `"authenticated can access attendance_records"` (`ALL/authenticated/USING(true)`) — still live.
+2. Reconcile the three unfiled `"staff can … own attendance"` policies (INSERT/SELECT/UPDATE) + 017's name drift (`service_role_all_attendance` absent; live has legacy `"service role full access attendance_records"`).
+3. Clean seed.sql's flagged attendance policy block (left in place, marked in-file for Session B).
+4. **Decide two 010 default divergences found in Session A** — live has `shift_date date DEFAULT CURRENT_DATE` and `within_radius boolean DEFAULT false` (both from seed.sql); 010's file declares neither, so a from-files rebuild produces them without defaults and §2.6 diffs on it. Recommend document-to-live (add the defaults to 010's file text). File-only.
+5. `migration repair --status applied 010 012 017` — only after 1–4 applied and verified live.
+6. `db push --dry-run`, then staging-project rebuild proof (Docker down locally). **Gate closed.**
+
+Still un-scripted (either session or later): legacy-duplicate policy pairs on the three ghost tables and elsewhere; dead-table drop decision for `deliveries`, `inventory_items`, `stock_adjustments`, `stock_transfers` (`stock_transfers` collides with Phase 2 naming).
 
 ---
 

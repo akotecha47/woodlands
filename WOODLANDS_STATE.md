@@ -2,7 +2,7 @@
 
 *Current state, live commitments, next action. Updated at the end of every session that changed state.*
 
-**Last updated: 9 August 2026**
+**Last updated: 10 August 2026**
 **Governing doctrine:** STREAMLINE_BUILD_STANDARD.md v1.5, STREAMLINE_MATERIALS.md v2.4, STREAMLINE_SESSION.md v2.0.
 
 ---
@@ -61,19 +61,29 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 ---
 
-## THE GATE — MIGRATION HISTORY RECONCILIATION (P1, blocks new schema)
+## THE GATE — MIGRATION HISTORY RECONCILIATION (P1)
 
-Remote history records only 001–007 while 001–030 have run. Every migration from 021 on applied by hand via the SQL Editor. **Live diagnosis (9 August) found the gate is bigger than "reconcile history":**
+**Session A executed (history repaired) — gate NOT yet closed. Session B (012 auth) closes it.**
 
-- **`db push` would destroy the 305 stallholders before it reaches the staff duplication.** It replays `009_farmers_market.sql` (`DROP TABLE fm_holders CASCADE` — 305 holders + visits + payments + id_cards + approved_items) before `016` (duplicates 62 staff — no ON CONFLICT). `028` also drops `requisitions`. The old "016 is the reason" framing was incomplete — **009 is the bigger bomb.**
-- **Duplicate `008`** (`event_bill_items` + `inventory` both numbered 008) must be resolved by **merge before any repair** — `version` is a PK, repair records only one.
-- **`supabase/seed.sql` is a misfiled migration** carrying schema DDL + four ghost GPS columns; it breaks `db reset` and blocks §2.6 independently of the ghost tables.
-- **Three attendance migrations drifted** (`010` partial, `012` never applied — leaves a blanket RLS policy on real staff data, `017` partial). Reconcile before repairing or the hole is frozen. **012's auth work is its own session.**
-- **Three ghost tables** (`event_checklists`, `shift_settings`, `tables`) — DDL captured, hold live data, need `CREATE TABLE IF NOT EXISTS`.
+**Done in Session A:**
+- Duplicate `008` resolved (merged to one file, one version).
+- Ghost tables `event_checklists`/`shift_settings`/`tables` now have real CREATE migrations (`031`/`032`/`033`), applied live as no-ops (tables + rows preserved).
+- Missing attendance indexes created for real (`034`): `attendance_records` went 1 → 3 indexes.
+- Ghost GPS columns migrated out of `seed.sql` into `035`; `seed.sql` rebuild landmines removed (`bar_week_config`, `shift_settings` blocks, GPS columns).
+- `021` ordering bug fixed (ghost-table grants/policies moved to `031`–`033`) so a from-files rebuild orders correctly.
+- `010` FK documented to live (`auth.users(id)`), file-only, no live ALTER.
+- History repaired to **001–035 minus 010, 012, 017** — verified on a fresh connection. `030` confirmed to widen the `movement_type` CHECK (not just comment).
+- Real data unchanged: 559 stock items, 305 stallholders, 62 staff.
 
-Full findings and corrected repair order in `WOODLANDS_FOLLOWUPS.md`. **Do not run `db push` before the repair completes** — three destructive replays sit in the path.
+**Remaining — Session B (012 auth, closes the gate):**
+- Drop the blanket `ALL/authenticated/USING(true)` policy still live on `attendance_records`.
+- Reconcile the three unfiled "staff can… own attendance" policies + `017`'s policy-name drift.
+- Clean `seed.sql`'s flagged attendance policy block.
+- Decide the two `010` default divergences (`shift_date DEFAULT CURRENT_DATE`, `within_radius DEFAULT false`) — recommend document-to-live.
+- Then `migration repair --status applied 010 012 017`, then `db push --dry-run` + staging rebuild proof = **gate closed**.
+- `db push` was deliberately NOT run this session — with `010/012/017` unrecorded and below `031`–`035`, a push would execute `012` and rewrite live attendance RLS. The dry-run and staging proof are Session B's, after `010/012/017` reconcile.
 
-Phase 2 adds 8–12 tables. Hand-applying them guarantees more ghost schema. **Snapshot, fix the history in the corrected order, prove `db push` clean on staging, then build.**
+Full detail and the two un-scripted cleanups (legacy-duplicate policies, dead-table drops) in `WOODLANDS_FOLLOWUPS.md`.
 
 ---
 
@@ -88,7 +98,7 @@ Phase 2 adds 8–12 tables. Hand-applying them guarantees more ghost schema. **S
 ## VERIFY-AGAINST-LIVE (don't trust the docs)
 
 - **~~`stock_movements.movement_type` CHECK~~ — SETTLED 9 August.** Live constraint permits `opening_balance`; migration 030 ran. FOLLOWUPS was the wrong doc (a stale pre-apply probe); HISTORY/ARTIFACTS were right. Now corrected.
-- **GPS clock-in geofence** — the four GPS columns exist live (from `seed.sql`, not any migration) and three attendance components read them. Confirm the geofence *logic* in code before relying on it.
+- **GPS clock-in geofence** — the four GPS columns are now migrated (035); three attendance components read them. Confirm the geofence *logic* in code before relying on it.
 - **Stall-number regex** in Add Holder — two-digit vs live three-digit `A001`–`A347`.
 - **Add User** — does it still branch on dead bar1/bar2 `bar_week` logic?
 
@@ -112,8 +122,9 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 
 - **26–27 July** — hardening (Sprints A–E) + FM import + bar import + feedback meeting.
 - **28 July – 7 August** — Aman travelling (South Africa, medical). No dev work.
-- **9 August (today)** — docs brought current to the end goal; build planning.
-- **9–15 August** — Phase 2 build to functional-complete on placeholder data. Deadline 15th.
+- **9 August** — docs brought current to end goal; migration diagnosis + Session A (history repaired).
+- **10 August (today)** — docs updated post-Session A; Session B (012 auth) next to close the gate.
+- **10–15 August** — Session B closes the gate, then Phase 2 build to functional-complete on placeholder data. Deadline 15th.
 - **Call with Dhiren** — early in the week, day TBC; then the full working app for verification.
 - **After Dhiren verifies** — real data goes in (joint session with Rose + Martin), then `WOODLANDS_AUDIT_3.md` against real data, then Sprint F handover mechanics.
 
@@ -122,7 +133,7 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 ## NEXT ACTION
 
 Build order, gate first:
-1. **Migration history reconciliation** (the gate).
+1. **Migration gate — Session B (012 auth).** Closes the gate: attendance RLS reconcile, then `repair 010/012/017`, then `db push --dry-run` + staging rebuild proof. Auth-sensitive, on the strongest model. This is the last gate step before new schema.
 2. **UX fixes** — Events payments editable (quick); revenue (blocked on Dhiren — resolve or build toggleable).
 3. **Role model** — `department_head` scoped + `admin` + `hr`; rooms concept. Precedes module work.
 4. **Two-tier inventory + per-department stock lists** — folds in the transfers bug.
