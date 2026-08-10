@@ -18,8 +18,14 @@ Read these three, in this order, to know what to build:
 2. **WOODLANDS_FUNCTIONAL_SPEC.md** — the **end-goal system**, module by module, with [DONE]/[BUG]/[NEW]/[VERIFY] markers. This is what "finished" looks like.
 3. **WOODLANDS_MEETING_FEEDBACK_2026-07-27.md** — Dhiren's own words; the source the spec is built from.
 
-## The gate — Session A done, Session B closes it
-**Migration reconciliation is Priority 1 and blocks the Phase 2 schema. Session A executed 9 August; the gate is NOT yet closed.** Session A repaired history to 001–035 minus 010/012/017, resolved the duplicate 008, migrated the three ghost tables (031/032/033), created the missing attendance indexes (034), moved the GPS columns into 035, fixed the 021 rebuild-order bug, and documented the 010 FK to live. Real data unchanged. **Session B (012 auth) is the remaining gate step and must run before new schema:** drop the blanket `ALL/authenticated/USING(true)` policy still live on `attendance_records`, reconcile 017's policy drift + the unfiled "staff can… own" policies, clean seed.sql's flagged block, decide the two 010 default divergences, then `repair 010/012/017`, then `db push --dry-run` + staging rebuild = gate closed. **Do NOT run `db push` until Session B has reconciled 010/012/017** — a push now would execute 012 and rewrite live attendance RLS. Full detail in `WOODLANDS_FOLLOWUPS.md`; summary in STATE.
+## The gate — Sessions A and B done; one proof outstanding
+**Migration reconciliation is Priority 1. Session A ran 9 August, Session B (012 auth) ran 10 August. Everything is done except the rebuild proof.**
+
+Session A repaired history, resolved the duplicate 008, migrated the three ghost tables (031/032/033), added the missing attendance indexes (034) and GPS columns (035), and fixed the 021 rebuild-order bug. Session B closed the RLS hole: `attendance_records` now carries exactly **7 canonical policies** (`036_attendance_rls_reconcile.sql` is their single owner) — service_role, three own-row (`user_id = auth.uid()`), three manager (`current_app_role() IN ('owner','manager')`), no DELETE policy, **no blanket `USING(true)` for `authenticated`**. seed.sql is now free of attendance DDL. History is **001–036 complete**, and `db push --dry-run` reports *"Remote database is up to date."* Real data unchanged throughout (15 attendance rows, 62 staff, 305 stallholders).
+
+**`db push` is no longer the standing hazard it was** — history is fully recorded, so a push has nothing to replay. The old warning about 009 destroying stallholders and 016 duplicating staff applied to a push against the *unrepaired* history; that condition is gone.
+
+**Still open — the one thing that would make this "closed":** Standard §2.6's rebuild-from-files proof has **not** been run. Docker is not installed here, so it needs a throwaway staging project (deferred on cost, 10 August). Until it runs, treat "the files rebuild the database" as unproven, not as true — a clean dry-run only proves history is *recorded*. Push to staging with `--db-url`, never by re-linking. Full detail and the exact remaining steps in `WOODLANDS_FOLLOWUPS.md`.
 
 ## Followups log
 Open items live in **WOODLANDS_FOLLOWUPS.md** (repo root). Add to it when a sprint consciously defers something.

@@ -216,9 +216,13 @@ alter table user_profiles
 
 **Rule:** No DDL through the Supabase SQL editor or dashboard without a corresponding numbered file in `supabase/migrations/`. The file is the blueprint; the database is its output.
 
-**Test:** if the database died tomorrow, could it be rebuilt from `supabase/migrations/` alone? Today the answer is no — see `WOODLANDS_FOLLOWUPS.md`. Do not add to that debt.
+**Test:** if the database died tomorrow, could it be rebuilt from `supabase/migrations/` alone? **Not yet demonstrated.** The migration history is now complete and every known ghost object has a file, but the rebuild itself has never been executed — see the deferred §2.6 proof in `WOODLANDS_FOLLOWUPS.md`. Do not add to that debt, and do not record the test as passing until a real rebuild has been diffed against production.
 
-**`supabase db push` is currently unsafe on this project.** Remote migration history records only 001–007 although 008–021 have run; a push would replay `016_staff_restructure.sql` and duplicate all 62 real staff rows. Apply migrations through the SQL editor until the history is repaired (Sprint D).
+**`supabase db push` — status corrected 10 August 2026.** This section previously read *"currently unsafe: remote history records only 001–007 although 008–021 have run; a push would replay `016_staff_restructure.sql` and duplicate all 62 real staff rows."* That was true when written and is now **stale**. Sessions A and B repaired the history: `supabase_migrations.schema_migrations` holds **001–036, complete**, verified by direct query, and `db push --dry-run` reports *"Remote database is up to date."* There is nothing left for a push to replay.
+
+Two things that have **not** changed:
+- **A dry-run proves the history table, not the files.** "Up to date" means every file is recorded as applied. It says nothing about whether those files would reproduce the database. That is the §2.6 rebuild proof, still outstanding.
+- **Prove a rebuild on a throwaway staging database, never production**, and push to it with `supabase db push --db-url <staging>`. Do **not** `supabase link` to staging to do it — the link persists, and the next `db push` anyone runs would hit the wrong database.
 
 **Authoritative:** `STREAMLINE_BUILD_STANDARD.md` §2.6.
 

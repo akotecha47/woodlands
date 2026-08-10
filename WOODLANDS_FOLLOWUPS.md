@@ -137,13 +137,56 @@ Plus two ghost columns found earlier: `event_stock_allocations.returned_qty` (`0
 **Scope of the fix (corrected order) — SESSION A DONE 9 August:**
 snapshot ✅ → merge 008 ✅ → ghost-table CREATEs 031/032/033 ✅ (applied live, no-op, rows preserved) → 034/035 attendance indexes + GPS columns ✅ (034 created 2 indexes for real; 035 no-op) → seed.sql rebuild-landmines removed ✅ → 021 ordering bug fixed ✅ → 010 FK documented to live ✅ → `migration repair --status applied` for 001–035 minus 010/012/017 ✅ (verified on fresh connection).
 
-**SESSION B (012 auth) — REMAINING, closes the gate:**
-1. Drop the blanket `"authenticated can access attendance_records"` (`ALL/authenticated/USING(true)`) — still live.
-2. Reconcile the three unfiled `"staff can … own attendance"` policies (INSERT/SELECT/UPDATE) + 017's name drift (`service_role_all_attendance` absent; live has legacy `"service role full access attendance_records"`).
-3. Clean seed.sql's flagged attendance policy block (left in place, marked in-file for Session B).
-4. **Decide two 010 default divergences found in Session A** — live has `shift_date date DEFAULT CURRENT_DATE` and `within_radius boolean DEFAULT false` (both from seed.sql); 010's file declares neither, so a from-files rebuild produces them without defaults and §2.6 diffs on it. Recommend document-to-live (add the defaults to 010's file text). File-only.
-5. `migration repair --status applied 010 012 017` — only after 1–4 applied and verified live.
-6. `db push --dry-run`, then staging-project rebuild proof (Docker down locally). **Gate closed.**
+**SESSION B (012 auth) — EXECUTED 10 August 2026. Steps 1–5 done and verified; step 6 half done.**
+
+1. ✅ Blanket `"authenticated can access attendance_records"` (`ALL/authenticated/USING(true) WITH CHECK(true)`) **dropped**. Re-queried on a fresh connection: no `authenticated` policy with a `true` qualifier remains.
+2. ✅ The three unfiled `"staff can … own attendance"` policies recreated under canonical names (`attendance_own_select/_insert/_update`) and the legacy names dropped. 017's `service_role_all_attendance` created; the legacy `"service role full access attendance_records"` dropped.
+3. ✅ seed.sql attendance block removed — scope turned out wider, see below.
+4. ✅ 010's two defaults documented to live (`shift_date DEFAULT CURRENT_DATE`, `within_radius DEFAULT false`). File-only, no live ALTER.
+5. ✅ `migration repair --status applied 010 012 017 036`. Read back from `supabase_migrations.schema_migrations` on a fresh connection: **001–036, 36 rows, nothing missing, nothing extra.**
+6. ⚠ `db push --dry-run` → *"Remote database is up to date."* **The staging rebuild proof was NOT run — see the deferral below. The gate is therefore NOT formally closed.**
+
+**Four findings Session B turned up that the plan did not anticipate:**
+
+- **🔴 There were TWO blanket policies, not one.** Alongside the `ALL` policy the plan named, live carried `"authenticated read attendance_records"` (`SELECT / authenticated / USING (true)`) from `supabase/seed.sql:56-58`. Dropping only the `ALL` policy would have left every authenticated user of every role still able to read every attendance row, while the diagnosis recorded the hole as closed. Both are now dropped.
+
+- **🔴 Read-only manager policies would have broken the app.** The planned target was service_role + own-row + manager *read*. But **all 15 live `attendance_records` rows have `staff_id` set and `user_id` NULL** — they are manager-written roster rows, so `user_id = auth.uid()` reaches none of them. `TodayTab.jsx` *writes*: Mark All Absent (`:177`), Override (`:212`/`:195`), Note (`:240`/`:233`). Those work today only because of the blanket policy. `012`'s own premise — *"manager access goes through supabaseAdmin, so no manager policy is needed"* — was true when written and false since Sprint B deleted the browser service-role client. Managers were given SELECT **+ INSERT + UPDATE** (confirmed by Aman before applying).
+
+- **🔴 Repairing 012 would have baked a permanent rebuild divergence.** `012_attendance_rls.sql:9,:14` create `"users can read own attendance_records"` and `"users can insert own attendance_records"`. They have never existed live (012 never ran), so `repair` is harmless to production — but a from-files rebuild *executes* 012, and nothing dropped those two names. The rebuild would finish with **nine** policies where production has **seven**, failing §2.6 on a table nobody had touched. `036` now drops both explicitly (section 4e). This is the exact class of fault the rebuild proof exists to catch, found by reading the files rather than by running it.
+
+- **⚠ seed.sql's `ALTER COLUMN date DROP NOT NULL` never took effect, and was a live-vs-file trap in the opposite direction.** Live `attendance_records.date` is still `NOT NULL` (matching `001_schema.sql:104`; no migration relaxes it). Keeping that statement would have made a rebuild produce a *nullable* `date`. Removed from seed.sql rather than adopted into 010. `TodayTab.jsx:169,:202` already document the live `NOT NULL`.
+
+**Final live policy set on `attendance_records` — 7, verified on a fresh connection after every step:**
+
+| Policy | Cmd | Role | Predicate |
+|---|---|---|---|
+| `service_role_all_attendance` | ALL | service_role | `true` / `true` |
+| `attendance_own_select` | SELECT | authenticated | `user_id = auth.uid()` |
+| `attendance_own_insert` | INSERT | authenticated | `user_id = auth.uid()` |
+| `attendance_own_update` | UPDATE | authenticated | `user_id = auth.uid()` (both) |
+| `attendance_manage_select` | SELECT | authenticated | `current_app_role() IN ('owner','manager')` |
+| `attendance_manage_insert` | INSERT | authenticated | `current_app_role() IN ('owner','manager')` |
+| `attendance_manage_update` | UPDATE | authenticated | `current_app_role() IN ('owner','manager')` (both) |
+
+No DELETE policy, deliberately: nothing in `src/` deletes an attendance record and `authenticated` holds no DELETE grant, so DELETE is fail-closed at the grant layer. Recorded as a decision, unlike the unplanned `stock_items` asymmetry noted earlier in this log.
+
+Role set is `('owner','manager')` = `ROUTE_ACCESS['/attendance']`, not the four-role set. `kitchen_manager` and `restaurant_manager` cannot open the module. **Note: `AT_MANAGE_ROLES` in `AttendanceUI.jsx:3` lists `restaurant_manager`, whom `RouteGuard` blocks before any tab renders — a dead role gate, same class as the `store_supervisor` gates already logged. Sprint E.**
+
+**Access proved by running as the roles themselves**, not through the Management API (which connects as `postgres`, `rolbypassrls = true` — a statement succeeding there proves nothing about what a role may do). 17 scenarios, each `SET LOCAL ROLE authenticated` with a real `sub` claim; the write scenarios wrapped in a transaction that rolled back, rollback re-verified on a fresh connection (still 15 rows, 0 with `user_id`, no test note). All passed: owner/manager read 15; kitchen_manager, restaurant_manager and an unknown-`sub` user read 0; a staff user can insert/read/update only their own row, cannot update another's (0 rows affected), cannot insert one attributed to another user (denied), cannot insert a roster row with `user_id` NULL (denied); a manager can insert and update roster rows; neither can DELETE.
+
+### ⏸ DEFERRED — the §2.6 rebuild proof (Aman's call, 10 August 2026)
+
+`db push --dry-run` reports clean, but **a clean dry-run only proves the history table is recorded — it does not prove the files rebuild the database.** The real proof is pushing all 36 migrations into an empty database and diffing it against production.
+
+Not run. Docker is not installed on this machine (not merely stopped — `docker` is not on PATH), so `supabase db reset` is unavailable locally and the only route is a throwaway cloud project. The "Streamline Systems" org already holds three projects (`woodlands`, `petroda-dev`, `phalombe-prod`) against a two-project free allowance, so a fourth is very likely billable; the token in use cannot read the org subscription to confirm (404). Aman deferred rather than provision it.
+
+**Still unproven, and must not be read as passing:**
+- that the 36 files rebuild production's schema from empty;
+- that the `021` rebuild-order fix actually holds (no *"relation does not exist"*);
+- that `030`'s `movement_type` CHECK lands at five values on a rebuild;
+- that `036`'s section-4e drops do close the 012 nine-vs-seven policy gap — reasoned from the files, not executed.
+
+**To close it:** create a throwaway project, then `supabase db push --db-url <staging>`. Use `--db-url`; do **not** re-link — re-linking points the local project at staging, and a later `db push` would then hit the wrong database. Diff `information_schema` + `pg_policies` against production, then delete the project.
 
 Still un-scripted (either session or later): legacy-duplicate policy pairs on the three ghost tables and elsewhere; dead-table drop decision for `deliveries`, `inventory_items`, `stock_adjustments`, `stock_transfers` (`stock_transfers` collides with Phase 2 naming).
 

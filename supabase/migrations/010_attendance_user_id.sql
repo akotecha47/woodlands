@@ -12,11 +12,26 @@
 -- event_checklists.assigned_to/completed_by and attendance_records.user_id
 -- already point at, and user_profiles.id satisfies it by construction.
 --
--- STILL DIVERGENT, NOT CHANGED HERE (out of scope this session, flagged for
--- Session B's rebuild proof): live carries defaults this file does not —
--- `shift_date date DEFAULT CURRENT_DATE` and `within_radius boolean DEFAULT
--- false`, both applied by seed.sql. A from-files rebuild would produce these
--- two columns without defaults. Decide and reconcile before the §2.6 proof.
+-- ------------------------------------------------------------------
+-- DEFAULTS CORRECTED TO MATCH LIVE — 10 August 2026, Session B (012 auth)
+-- ------------------------------------------------------------------
+-- The two divergences Session A flagged are resolved here, document-to-live:
+-- `shift_date` and `within_radius` below previously declared no DEFAULT,
+-- while live carries `DEFAULT CURRENT_DATE` and `DEFAULT false` respectively
+-- (re-verified against information_schema.columns on 10 August 2026). Both
+-- came from supabase/seed.sql, which is what actually ran.
+--
+-- Documented to live rather than altered live: these are real defaults on a
+-- table holding real attendance, nothing depends on their absence, and
+-- issuing DROP DEFAULT against production to make it match a file that never
+-- ran would be changing the system to fit the paperwork. seed.sql's copy of
+-- these column adds is removed in the same commit, so this file is now their
+-- only source and a from-files rebuild reproduces live exactly.
+--
+-- NOT relaxed here, and correctly so: `date` remains NOT NULL. seed.sql
+-- carried an `ALTER COLUMN date DROP NOT NULL` that never took effect — live
+-- is still NOT NULL, per 001_schema.sql:104 — and that statement is removed
+-- from seed.sql rather than adopted here.
 --
 -- The CREATE UNIQUE INDEX at the foot of this file also never ran live; it
 -- is now additionally created by 034_attendance_missing_indexes.sql. Both
@@ -30,10 +45,10 @@ ALTER TABLE attendance_records
 -- Add user-profile-linked columns (idempotent)
 ALTER TABLE attendance_records
   ADD COLUMN IF NOT EXISTS user_id     uuid REFERENCES auth.users(id),
-  ADD COLUMN IF NOT EXISTS shift_date  date,
+  ADD COLUMN IF NOT EXISTS shift_date  date DEFAULT CURRENT_DATE,
   ADD COLUMN IF NOT EXISTS break_start timestamptz,
   ADD COLUMN IF NOT EXISTS break_end   timestamptz,
-  ADD COLUMN IF NOT EXISTS within_radius boolean;
+  ADD COLUMN IF NOT EXISTS within_radius boolean DEFAULT false;
 
 -- Unique constraint so each user has at most one record per day
 CREATE UNIQUE INDEX IF NOT EXISTS attendance_records_user_shift_date_key
