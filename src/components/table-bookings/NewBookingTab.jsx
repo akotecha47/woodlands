@@ -4,7 +4,8 @@ import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
-import { TB_MANAGE_ROLES, todayStr, fmtTime, AccessDenied } from './TableBookingsUI'
+import { TB_MANAGE_ROLES } from '../../lib/roles'
+import { todayStr, fmtTime, AccessDenied } from './TableBookingsUI'
 
 const BLANK = {
   guest_name: '', guest_phone: '', guest_email: '',

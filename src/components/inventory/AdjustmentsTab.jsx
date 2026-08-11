@@ -4,8 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, AccessDenied, fetchActiveItems } from './InventoryUI'
 import { setStockQuantity } from '../../lib/stock'
-
-const ALLOWED = ['owner', 'manager']
+import { MANAGER_ROLES } from '../../lib/roles'
 
 export default function AdjustmentsTab() {
   // performed_by is set server-side from auth.uid() inside set_stock_quantity.
@@ -27,11 +26,11 @@ export default function AdjustmentsTab() {
   }
 
   useEffect(() => {
-    if (!ALLOWED.includes(profile?.role)) return
+    if (!MANAGER_ROLES.includes(profile?.role)) return
     loadData()
   }, [profile?.role])
 
-  if (!ALLOWED.includes(profile?.role)) return <AccessDenied />
+  if (!MANAGER_ROLES.includes(profile?.role)) return <AccessDenied />
 
   async function handleSubmit(e) {
     e.preventDefault()

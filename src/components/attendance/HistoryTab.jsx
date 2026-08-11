@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { AT_MANAGE_ROLES } from '../../lib/roles'
 import {
-  AT_MANAGE_ROLES, STATUS_CFG, ALL_STATUSES,
+  STATUS_CFG, ALL_STATUSES,
   todayStr, fmtDate, fmtTime, fmtDuration, fmtLate,
   breakMins, netMins, getShiftForDept, minsLateCalc,
   AccessDenied, StatusBadge,

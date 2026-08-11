@@ -25,8 +25,7 @@ export const HOLDER_STATUS_CFG = {
   at_risk:        { label: 'At Risk',        badge: 'bg-red-100 text-red-700'      },
 }
 
-// Roles allowed to check in on market day
-export const FM_MANAGE_ROLES = ['owner', 'manager']
+// Role gates (FM_MANAGE_ROLES etc.) live in src/lib/roles.js, not here.
 
 // ── date helpers ───────────────────────────────────────────────────────────────
 

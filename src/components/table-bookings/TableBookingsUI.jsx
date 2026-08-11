@@ -1,4 +1,4 @@
-export const TB_MANAGE_ROLES = ['owner', 'manager', 'restaurant_manager']
+// Role gates (TB_MANAGE_ROLES etc.) live in src/lib/roles.js, not here.
 
 export const STATUS_CFG = {
   pending:   { label: 'Pending',   badge: 'bg-yellow-100 text-yellow-700' },

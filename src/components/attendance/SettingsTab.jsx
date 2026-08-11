@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Toast, useFlash } from '../admin/AdminUI'
-import { AT_MANAGE_ROLES, fmtTime, AccessDenied } from './AttendanceUI'
+import { AT_MANAGE_ROLES } from '../../lib/roles'
+import { fmtTime, AccessDenied } from './AttendanceUI'
 
 const BLANK_ROW = {
   department: '', shift_name: '', shift_start: '08:30', shift_end: '16:30',

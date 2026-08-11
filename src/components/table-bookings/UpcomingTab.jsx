@@ -4,7 +4,8 @@ import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
-import { TB_MANAGE_ROLES, fmtDate, fmtTime, todayStr, StatusBadge } from './TableBookingsUI'
+import { TB_MANAGE_ROLES } from '../../lib/roles'
+import { fmtDate, fmtTime, todayStr, StatusBadge } from './TableBookingsUI'
 
 function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T12:00:00')

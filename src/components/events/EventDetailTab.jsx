@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { applyStockDelta } from '../../lib/stock'
 import { useAuth } from '../../contexts/AuthContext'
 import { Toast, useFlash } from '../admin/AdminUI'
+import { MANAGER_ROLES } from '../../lib/roles'
 import {
   EVENT_TYPES, STATUS_CFG, DEPT_ORDER,
   fmtDate, fmtTime,
@@ -17,7 +18,7 @@ import EventStockSection    from './EventStockSection'
 
 export default function EventDetailTab({ eventId, onBack }) {
   const { profile, session } = useAuth()
-  const canManage = ['owner', 'manager'].includes(profile?.role)
+  const canManage = MANAGER_ROLES.includes(profile?.role)
 
   const [event,      setEvent]      = useState(null)
   const [checklists, setChecklists] = useState([])

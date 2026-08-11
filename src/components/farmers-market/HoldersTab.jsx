@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { FM_FEES } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { FM_MANAGE_ROLES } from '../../lib/roles'
 import {
   STALL_TYPES, FM_PAY_TYPES, FM_PAY_METHODS, HOLDER_STATUS_CFG,
   fmtDate, fmtMWK,
@@ -29,7 +30,7 @@ const BLANK_EDIT = {
 
 export default function HoldersTab() {
   const { profile, session } = useAuth()
-  const canManage = ['owner', 'manager'].includes(profile?.role)
+  const canManage = FM_MANAGE_ROLES.includes(profile?.role)
 
   const [holders,          setHolders]          = useState([])
   const [yearVisits,       setYearVisits]        = useState([])

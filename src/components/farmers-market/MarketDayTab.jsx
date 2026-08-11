@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
-import { fmtDate, fmtMWK, defaultMarketDate, FM_MANAGE_ROLES, FM_PAY_METHODS, todayStr, isMarketDay, getMarketDayForMonth } from './FarmersMarketUI'
+import { FM_MANAGE_ROLES } from '../../lib/roles'
+import { fmtDate, fmtMWK, defaultMarketDate, FM_PAY_METHODS, todayStr, isMarketDay, getMarketDayForMonth } from './FarmersMarketUI'
 
 const VISIT_FEE = 10000
 
@@ -14,7 +15,7 @@ function fmtTime(ts) {
 export default function MarketDayTab() {
   const { profile, session } = useAuth()
   const canCheckIn = FM_MANAGE_ROLES.includes(profile?.role)
-  const canManage  = ['owner', 'manager'].includes(profile?.role)
+  const canManage  = FM_MANAGE_ROLES.includes(profile?.role)
 
   const [marketDate,      setMarketDate]      = useState(defaultMarketDate)
   const [holders,         setHolders]         = useState([])

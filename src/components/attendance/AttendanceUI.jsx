@@ -1,6 +1,5 @@
 // ── constants ──────────────────────────────────────────────────────────────────
-
-export const AT_MANAGE_ROLES = ['owner', 'manager', 'restaurant_manager']
+// Role gates (AT_MANAGE_ROLES etc.) live in src/lib/roles.js, not here.
 
 export const LODGE_LAT = -13.9623
 export const LODGE_LNG =  33.7852

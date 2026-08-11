@@ -4,8 +4,9 @@ import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { TB_MANAGE_ROLES } from '../../lib/roles'
 import {
-  TB_MANAGE_ROLES, STATUS_CFG, fmtDate, fmtTime,
+  STATUS_CFG, fmtDate, fmtTime,
   todayStr, currentTimeStr, isPotentialNoShow, StatusBadge,
 } from './TableBookingsUI'
 

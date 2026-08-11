@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { AT_MANAGE_ROLES, MANAGER_ROLES, RESTAURANT_MANAGER_ROLES } from '../lib/roles'
 import TodayTab      from '../components/attendance/TodayTab'
 import ClockInOutTab from '../components/attendance/ClockInOutTab'
 import HistoryTab    from '../components/attendance/HistoryTab'
@@ -10,14 +11,14 @@ export default function Attendance() {
   const role = profile?.role
 
   const TABS = (() => {
-    if (role === 'owner' || role === 'manager') {
+    if (MANAGER_ROLES.includes(role)) {
       return [
         { id: 'today',    label: 'Today'    },
         { id: 'history',  label: 'History'  },
         { id: 'settings', label: 'Settings' },
       ]
     }
-    if (role === 'restaurant_manager') {
+    if (RESTAURANT_MANAGER_ROLES.includes(role)) {
       return [
         { id: 'today', label: 'Today'          },
         { id: 'clock', label: 'Clock In / Out' },
@@ -26,7 +27,7 @@ export default function Attendance() {
     return [{ id: 'clock', label: 'Clock In / Out' }]
   })()
 
-  const [tab, setTab] = useState(role === 'owner' || role === 'manager' || role === 'restaurant_manager' ? 'today' : 'clock')
+  const [tab, setTab] = useState(AT_MANAGE_ROLES.includes(role) ? 'today' : 'clock')
 
   return (
     <div className="space-y-5">

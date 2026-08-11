@@ -4,6 +4,7 @@ import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
+import { FM_MANAGE_ROLES } from '../../lib/roles'
 import { STALL_TYPES, todayStr, AccessDenied } from './FarmersMarketUI'
 
 const BLANK = {
@@ -13,7 +14,7 @@ const BLANK = {
 
 export default function AddHolderTab({ onCreated }) {
   const { profile, session } = useAuth()
-  const canAdd = ['owner', 'manager'].includes(profile?.role)
+  const canAdd = FM_MANAGE_ROLES.includes(profile?.role)
 
   const [form,       setForm]       = useState(BLANK)
   const [stallError, setStallError] = useState('')

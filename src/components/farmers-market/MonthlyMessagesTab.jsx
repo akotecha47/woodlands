@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { FM_FEES } from '../../lib/constants'
+import { FM_MANAGE_ROLES } from '../../lib/roles'
 import { fmtDate, getMarketDayForMonth, AccessDenied } from './FarmersMarketUI'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -20,7 +21,7 @@ function defaultMonthVal() {
 
 export default function MonthlyMessagesTab() {
   const { profile } = useAuth()
-  const canAccess = ['owner', 'manager'].includes(profile?.role)
+  const canAccess = FM_MANAGE_ROLES.includes(profile?.role)
 
   const [monthVal,  setMonthVal]  = useState(defaultMonthVal)
   const [holders,   setHolders]   = useState([])

@@ -3,10 +3,10 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { todayStr, itemLabel, AccessDenied, fetchActiveItems, fetchStaffUsers } from './InventoryUI'
 import { applyStockDelta } from '../../lib/stock'
+import { MANAGER_ROLES } from '../../lib/roles'
 
 // 'store_supervisor' removed — deleted from roles.js in June, so no user could
 // hold it and this tab was AccessDenied to everyone except owner/manager anyway.
-const ALLOWED = ['owner', 'manager']
 
 export default function LogDeliveryTab() {
   // performed_by is set server-side from auth.uid() inside apply_stock_delta,
@@ -22,12 +22,12 @@ export default function LogDeliveryTab() {
   })
 
   useEffect(() => {
-    if (!ALLOWED.includes(profile?.role)) return
+    if (!MANAGER_ROLES.includes(profile?.role)) return
     fetchActiveItems().then(setItems)
     fetchStaffUsers().then(setStaffUsers)
   }, [profile?.role])
 
-  if (!ALLOWED.includes(profile?.role)) return <AccessDenied />
+  if (!MANAGER_ROLES.includes(profile?.role)) return <AccessDenied />
 
   async function handleSubmit(e) {
     e.preventDefault()

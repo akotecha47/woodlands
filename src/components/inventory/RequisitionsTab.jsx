@@ -4,8 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, EmptyRow, TdBold, ReqStatusBadge, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
 import { applyStockDelta } from '../../lib/stock'
-
-const MANAGERS = ['owner', 'manager']
+import { MANAGER_ROLES } from '../../lib/roles'
 
 export default function RequisitionsTab() {
   const { profile, session } = useAuth()
@@ -18,7 +17,7 @@ export default function RequisitionsTab() {
   const flash = useFlash(setToast)
   const [form, setForm] = useState({ stock_item_id: '', department: '', quantity: '', reason: '' })
 
-  const isManager = MANAGERS.includes(profile?.role)
+  const isManager = MANAGER_ROLES.includes(profile?.role)
 
   async function fetchReqs() {
     if (!session?.user?.id) return

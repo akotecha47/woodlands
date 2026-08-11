@@ -3,6 +3,7 @@ import { Eye, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { MANAGER_ROLES } from '../../lib/roles'
 import {
   EVENT_TYPES, VENUES, EVENT_STATUSES,
   fmtDate, fmtTime,
@@ -91,7 +92,7 @@ const BLANK_EDIT = {
 
 export default function EventsListTab({ onView }) {
   const { profile } = useAuth()
-  const canManage = ['owner', 'manager'].includes(profile?.role)
+  const canManage = MANAGER_ROLES.includes(profile?.role)
 
   const [events,    setEvents]    = useState([])
   const [loading,   setLoading]   = useState(true)

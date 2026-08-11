@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, fmtDate, Toast, useFlash, Field, Inp, fieldCls } from './AdminUI'
+import { OWNER_ONLY_ROLES } from '../../lib/roles'
 
 const BLANK = {
   full_name:       '',
@@ -16,7 +17,7 @@ const BLANK = {
 
 export default function StaffTab() {
   const { profile } = useAuth()
-  const isOwner = profile?.role === 'owner'
+  const isOwner = OWNER_ONLY_ROLES.includes(profile?.role)
 
   const [staff,        setStaff]        = useState([])
   const [allDepts,     setAllDepts]     = useState([])

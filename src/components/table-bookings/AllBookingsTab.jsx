@@ -4,7 +4,8 @@ import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash, Field, Inp, Sel, fieldCls } from '../admin/AdminUI'
-import { TB_MANAGE_ROLES, BOOKING_STATUSES, STATUS_CFG, fmtDate, fmtTime, StatusBadge } from './TableBookingsUI'
+import { TB_MANAGE_ROLES } from '../../lib/roles'
+import { BOOKING_STATUSES, STATUS_CFG, fmtDate, fmtTime, StatusBadge } from './TableBookingsUI'
 
 export default function AllBookingsTab() {
   const { profile, session } = useAuth()
