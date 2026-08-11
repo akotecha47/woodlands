@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
-import { AT_MANAGE_ROLES, MANAGER_ROLES } from '../../lib/roles'
+import { AT_MANAGE_ROLES, MANAGE_ROLES } from '../../lib/roles'
 import {
   STATUS_CFG, ALL_STATUSES,
   todayStr, fmtDate, fmtTime, fmtDuration,
@@ -262,7 +262,7 @@ export default function TodayTab() {
         <h2 className="text-base font-semibold text-gray-800 mr-auto">
           {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </h2>
-        {afterEleven && MANAGER_ROLES.includes(profile?.role) && (
+        {afterEleven && MANAGE_ROLES.includes(profile?.role) && (
           <button
             onClick={() => setConfirmAbsent(true)}
             disabled={busy}

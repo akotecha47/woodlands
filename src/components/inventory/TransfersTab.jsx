@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, AccessDenied, fetchActiveItems, fetchDepartmentList, fetchStaffUsers } from './InventoryUI'
-import { MANAGER_ROLES } from '../../lib/roles'
+import { MANAGE_ROLES } from '../../lib/roles'
 
 // 'store_supervisor' removed — see LogDeliveryTab. Dead role, no behaviour change.
 
@@ -20,13 +20,13 @@ export default function TransfersTab() {
   })
 
   useEffect(() => {
-    if (!MANAGER_ROLES.includes(profile?.role)) return
+    if (!MANAGE_ROLES.includes(profile?.role)) return
     fetchActiveItems().then(setItems)
     fetchDepartmentList().then(setDepartments)
     fetchStaffUsers().then(setStaffUsers)
   }, [profile?.role])
 
-  if (!MANAGER_ROLES.includes(profile?.role)) return <AccessDenied />
+  if (!MANAGE_ROLES.includes(profile?.role)) return <AccessDenied />
 
   const deptError =
     form.from_department && form.to_department && form.from_department === form.to_department

@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase'
-import { MANAGER_ROLES } from '../../lib/roles'
+import { MANAGE_ROLES } from '../../lib/roles'
 
 // ── label helpers ──────────────────────────────────────────────
 export const todayStr = () => new Date().toISOString().slice(0, 10)
@@ -85,7 +85,7 @@ export async function fetchStaffUsers() {
   const { data } = await supabase
     .from('user_profiles')
     .select('id, full_name')
-    .in('role', MANAGER_ROLES)
+    .in('role', MANAGE_ROLES)
     .eq('is_active', true)
     .order('full_name')
   return data ?? []

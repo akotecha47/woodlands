@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
 import { EVENT_TYPES, VENUES, todayStr, AccessDenied, SERVICE_STYLES, CONFERENCE_SETUPS } from './EventsUI'
-import { MANAGER_ROLES } from '../../lib/roles'
+import { MANAGE_ROLES } from '../../lib/roles'
 
 const BLANK = {
   name: '', event_type: 'wedding', event_date: '', start_time: '', end_time: '',
@@ -39,7 +39,7 @@ export default function CreateEventTab({ onCreated }) {
   const [setupOpen, setSetupOpen] = useState(false)
   const [setupForm, setSetupForm] = useState(BLANK_SETUP)
 
-  if (!MANAGER_ROLES.includes(profile?.role)) return <AccessDenied />
+  if (!MANAGE_ROLES.includes(profile?.role)) return <AccessDenied />
 
   function f(field)   { return e => setForm(prev => ({ ...prev, [field]: e.target.value })) }
   function fs(field)  { return e => setSetupForm(prev => ({ ...prev, [field]: e.target.value })) }

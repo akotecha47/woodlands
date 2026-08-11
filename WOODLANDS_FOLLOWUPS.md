@@ -359,3 +359,50 @@ All three are now written into `src/lib/standards.md` §4 so the next session in
 ### Sprint B — carried from Task 2 setup
 
 - **No `supabase/config.toml` in the repo.** The deployed `verify_jwt` setting is still not expressible in source. The function no longer depends on it (it verifies the caller itself), but the setting remains undocumented. **Sprint D.**
+
+---
+
+## PHASE 2 ROLE MODEL — deferred items (11 August 2026)
+
+*From the role-model session: migrations 037–044, hand-applied to live and verified per file. Roles are now `owner`, `admin`, `department_head`, `hr`.*
+
+### Blocking department_head being genuinely useful
+
+- **The step-3 department re-tag has NOT run, and three different department vocabularies are live.** This is the single thing standing between the `department_head` policies and correct results. Current state:
+
+  | Source | Values |
+  |---|---|
+  | `departments` table (7) | Grounds, Housekeeping, Kitchen, Restaurant, **Restaurant Bar**, Security, Sports Bar |
+  | `staff.department` (10) | Administration, **Bar**, Front Office, Grounds & Landscape, Housekeeping, Kitchen, Maintenance, Restaurant, Security, Transport |
+  | `stock_items.department` (2) | **Restaurant Bar** (276), **Sports Bar** (283) — no Kitchen, no Restaurant |
+  | Canonical target (11) | Administration, **Main Bar**, Sports Bar, Front Office, Grounds & Landscape, Housekeeping, Kitchen, Maintenance, Restaurant, Security, Transport |
+
+  Consequence today: Mukesh (Kitchen head) sees **0 stock items** and 1 requisition; the Restaurant head sees 0 of both. This is expected and correct — the policies were proved working by temporarily re-pointing a head at `Sports Bar`, which returned all 283 items. **Do not widen the policies to make rows appear.** The re-tag must also decide `Restaurant Bar` → `Main Bar` and add the four departments the `departments` table lacks.
+
+- **`department_head` functional verification is still outstanding**, and cannot be meaningfully done until the re-tag lands. Re-run the migration 039 proof afterwards.
+
+### Gaps created or exposed by this session
+
+- **hr has `staff` write in RLS but no reachable UI.** `StaffTab.jsx` is mounted inside `/admin`, which is owner-only, so hr can write the table but cannot get to the screen. Needs either an HR page or `StaffTab` moved/duplicated onto an hr-reachable route. The RLS grant is correct as specified; the surface is missing.
+
+- **`RequisitionsTab` shows a `department_head` only their OWN requisitions, where RLS now permits their whole department.** `RequisitionsTab.jsx:28` does `if (!isManager) q = q.eq('requested_by', session.user.id)`. The decision was "raise + view own dept". The UI is the narrower gate, so this fails closed and is safe — but it does not yet match the spec. One-line fix once confirmed.
+
+- **`fetchUserMap()` degrades for `department_head`.** `InventoryUI.jsx:74` reads all of `user_profiles`; a head can now only see their own row, so requisitions raised by others in their department render with a blank requester name. Cosmetic, and a consequence of the own-row-only profile read that keeps login working.
+
+- **`hr` has no `/` (Inventory) access, and the catch-all route redirects there.** `App.jsx:45` sends any unknown path to `/`, which `GuardedPage` then denies, bouncing hr to `/login` while they hold a valid session. Not a loop (Login does not auto-redirect an authenticated visitor) but it reads like a session bug. Consider pointing the catch-all at `/dashboard`.
+
+- **`ClockInOutTab` has no reachable mount point.** It was already unreachable before Phase 2 — the two `Attendance.jsx` branches that rendered it required `restaurant_manager` or a role outside owner/manager, and `ROUTE_ACCESS['/attendance']` was `['owner','manager']`, so `GuardedPage` bounced both first. Those dead branches are now deleted. The component is retained for the QR staff attendance work in FUNCTIONAL_SPEC §4; it needs a real route.
+
+- **`create-user` `ALLOWED_ROLES` end-to-end test not performed.** The list was synced to the new four roles and redeployed (version 25, ACTIVE), and `AddUserTab` derives its dropdown from `Object.keys(ROLE_LABELS)` so it now offers exactly the four. But actually creating one user of each role requires an owner browser session, which this session had no credentials for. **Aman to confirm by logging in as owner and adding one `hr` (Martin) and one `department_head`.**
+
+### Pre-existing, noticed while working
+
+- **`user_profiles.email` is NULL for `kitchen@woodlands.com` (Mukesh).** The auth row has the address; the profile row does not. Migration 037 matched on `auth.users.email` for that reason. Harmless today, but any screen reading `user_profiles.email` shows a blank for that user.
+
+- **`public.handle_new_user()` still exists as an orphaned function.** standards.md §5 requires no such *trigger* on `auth.users`, and there is none (verified — `pg_trigger` returns nothing), so the rule holds. The function is dead code; dropping it was out of scope for an auth session.
+
+- **`departments` intentionally keeps its blanket authenticated read.** It is the only table that still has one. Every role needs it for department dropdowns (`AddUserTab`, `TransfersTab`, `RequisitionsTab`), and it holds nothing but names. Recorded so a future audit does not read it as a missed table.
+
+### Open question for Aman
+
+- **Does `owner` keep `attendance_records` access?** The Phase 2 brief said both "attendance_records: admin + hr ONLY" and "admin+hr replaces owner+manager"; read literally the second drops owner. Migration 043 **keeps owner** (`owner, admin, hr`), because dropping it would contradict owner-sees-everything, disagree with `AT_MANAGE_ROLES` in `src/lib/roles.js`, and let owner open `/attendance` to an empty screen. If owner really must be excluded, it is a one-word edit to each of the three `attendance_manage_*_v2` policies.

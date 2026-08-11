@@ -1,33 +1,25 @@
 import { useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
-import { AT_MANAGE_ROLES, MANAGER_ROLES, RESTAURANT_MANAGER_ROLES } from '../lib/roles'
-import TodayTab      from '../components/attendance/TodayTab'
-import ClockInOutTab from '../components/attendance/ClockInOutTab'
-import HistoryTab    from '../components/attendance/HistoryTab'
-import SettingsTab   from '../components/attendance/SettingsTab'
+import TodayTab    from '../components/attendance/TodayTab'
+import HistoryTab  from '../components/attendance/HistoryTab'
+import SettingsTab from '../components/attendance/SettingsTab'
+
+// ROUTE_ACCESS['/attendance'] is AT_MANAGE_ROLES (owner, admin, hr), so every
+// role that reaches this page manages attendance and gets the same three tabs.
+//
+// The two branches that used to live here were already dead before Phase 2:
+// one required `restaurant_manager` and the other any role outside
+// owner/manager, but ROUTE_ACCESS['/attendance'] was ['owner','manager'], so
+// GuardedPage bounced both to /login before this component rendered. Their
+// only content was a "Clock In / Out" tab, which is why ClockInOutTab has no
+// reachable mount point — see WOODLANDS_FOLLOWUPS.md.
+const TABS = [
+  { id: 'today',    label: 'Today'    },
+  { id: 'history',  label: 'History'  },
+  { id: 'settings', label: 'Settings' },
+]
 
 export default function Attendance() {
-  const { profile } = useAuth()
-  const role = profile?.role
-
-  const TABS = (() => {
-    if (MANAGER_ROLES.includes(role)) {
-      return [
-        { id: 'today',    label: 'Today'    },
-        { id: 'history',  label: 'History'  },
-        { id: 'settings', label: 'Settings' },
-      ]
-    }
-    if (RESTAURANT_MANAGER_ROLES.includes(role)) {
-      return [
-        { id: 'today', label: 'Today'          },
-        { id: 'clock', label: 'Clock In / Out' },
-      ]
-    }
-    return [{ id: 'clock', label: 'Clock In / Out' }]
-  })()
-
-  const [tab, setTab] = useState(AT_MANAGE_ROLES.includes(role) ? 'today' : 'clock')
+  const [tab, setTab] = useState('today')
 
   return (
     <div className="space-y-5">
@@ -46,7 +38,6 @@ export default function Attendance() {
 
       <div className="bg-white border border-gray-200 rounded-xl">
         {tab === 'today'    && <TodayTab />}
-        {tab === 'clock'    && <ClockInOutTab />}
         {tab === 'history'  && <HistoryTab />}
         {tab === 'settings' && <SettingsTab />}
       </div>

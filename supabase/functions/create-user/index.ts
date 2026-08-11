@@ -24,9 +24,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // Deployed origin only. Not '*' — this endpoint creates privileged accounts.
 const ALLOWED_ORIGIN = 'https://woodlands-beta.vercel.app'
 
-// Authoritative in src/lib/roles.js. Kept in sync manually; a role that is not
-// on this list cannot be assigned, whatever the request body says.
-const ALLOWED_ROLES = ['owner', 'manager', 'kitchen_manager', 'restaurant_manager']
+// Authoritative in src/lib/roles.js (APP_ROLES). Kept in sync MANUALLY — Deno
+// cannot import a browser module, so this is a deliberate duplicate and both
+// lists must change together (standards.md §9). A role that is not on this
+// list cannot be assigned, whatever the request body says.
+// Phase 2, 11 August 2026: manager -> admin; kitchen_manager and
+// restaurant_manager removed; department_head and hr added.
+const ALLOWED_ROLES = ['owner', 'admin', 'department_head', 'hr']
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
