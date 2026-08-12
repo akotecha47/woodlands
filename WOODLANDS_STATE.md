@@ -16,7 +16,7 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 - **HR:** Martin Lisilira
 - **Staff:** 62 in `staff` table
 - **Modules built (6):** Inventory, Attendance, Events, Table Bookings, Farmers Market, Admin
-- **Roles (4):** `owner`, `manager`, `kitchen_manager`, `restaurant_manager`
+- **Roles (4):** `owner`, `admin`, `department_head`, `hr`
 - **System users:** 4
 
 ---
@@ -102,7 +102,9 @@ Full detail — all four runs, every divergence found and fixed, and the residua
 
 ## PHASE 2 SCOPE (see FUNCTIONAL_SPEC for detail)
 
-Two-tier inventory + per-department stock lists · bar par levels + end-of-day refill cycle · consumption attribution (what/where/who) + rooms + 1-year laundry retention · expanded role model (`department_head` scoped, `admin`, `hr`) · QR staff attendance · Farmers Market 3-month attendance history + waiting-list forfeiture + 3-level product taxonomy + fee schedule (10k / 30k / 20k) · Events payments editable + revenue display.
+Two-tier inventory + per-department stock lists · bar par levels + end-of-day refill cycle · consumption attribution (what/where/who) + rooms + 1-year laundry retention · QR staff attendance · Farmers Market 3-month attendance history + waiting-list forfeiture + 3-level product taxonomy + fee schedule (10k / 30k / 20k) · Events payments editable + revenue display.
+
+**Role model (`department_head` scoped, `admin`, `hr`) — DONE**, out of open scope. See "NEXT ACTION" above.
 
 ---
 
@@ -128,17 +130,19 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 
 ## NEXT ACTION
 
-**Migration gate is CLOSED — no longer in front of new schema.** Two-tier inventory is the next build, on a proven-rebuildable base.
+**Migration gate closed, role model live, department vocabulary reconciled — none of these block anything anymore.** Two-tier inventory is the actual next build.
 
-Build order:
-1. ~~Migration gate — Session B (012 auth).~~ **DONE — closed 12 August 2026, verified by rebuild proof run 4.** See "THE GATE" above.
-2. **UX fixes** — Events payments editable (quick); revenue (blocked on Dhiren — resolve or build toggleable).
-3. **Role model** — `department_head` scoped + `admin` + `hr`; rooms concept. Precedes module work.
-4. **Two-tier inventory + per-department stock lists** — folds in the transfers bug.
-5. **Bar par levels + end-of-day cycle** — on top of two-tier.
-6. **Consumption attribution + rooms + laundry retention** — on top of two-tier.
-7. **Farmers Market taxonomy + waiting list + fees** — self-contained.
-8. **QR attendance** — self-contained, reuses `public-checkin` pattern.
+**Done since the last update (12 August 2026):**
+- **Migration gate — CLOSED.** See "THE GATE" above; `db push` trustworthy for new schema.
+- **Role model.** Migrations `037`–`044` applied and proven live — `owner` / `admin` / `hr` / `department_head` all verified in-browser (`department_head` scoped by `user_profiles.department`).
+- **Department vocabulary re-tag.** `scripts/data-ops/003_department_retag.sql` applied live — `departments` table, `staff.department` (62 rows), and `stock_items.department` (559 rows) reconciled to one canonical 11-value list. `department_head` scoping proven live: Main Bar head sees exactly 276 Main Bar items (0 Sports Bar), Sports Bar head exactly 283 (0 Main Bar), Kitchen head correctly sees 0 — confirmed as data-absence, not a policy failure.
+
+**Forward path — build order:**
+1. **Two-tier inventory + per-department stock lists** — folds in the transfers bug. Diagnosis done, the 6 design decisions locked, step-0 (department re-tag) already satisfied by the work above. This is the real next build.
+2. **Remaining Phase 2 features** — bar par levels + end-of-day cycle; consumption attribution + rooms + laundry retention; Farmers Market taxonomy + waiting list + fees; QR attendance; Events UX fixes (payments editable, revenue display — revenue blocked on Dhiren).
+3. **Per-role UI pass** — deferred to end.
+4. **Production cleanup** — drop the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`) from production. Cosmetic, not blocking.
+5. **045–050 rollout** — `supabase migration repair --status applied 045 046 047 048 049 050` (not `db push`) next time schema is touched.
 
 Every new table ships with placeholder seed in its own step.
 
@@ -146,10 +150,10 @@ Every new table ships with placeholder seed in its own step.
 
 ## BLOCKING
 
-Revenue display is blocked on Dhiren (what "different" means). Everything else is internal — migration reconciliation is the gate in front of new schema.
+Revenue display is blocked on Dhiren (what "different" means). Everything else is internal — the migration gate is closed and no longer blocks anything; two-tier inventory is next.
 
 ---
 
 ## STATUS SUMMARY
 
-Hardening done, real data live, docs now point at the end goal. Building Phase 2 to functional-complete on placeholder data by the 15th, migration reconciliation first, then role model, then the module work.
+Hardening done, real data live, migration gate closed, role model live, department vocabulary reconciled. Building Phase 2 to functional-complete on placeholder data by the 15th — two-tier inventory next, then the remaining module work.
