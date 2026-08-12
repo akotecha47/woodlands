@@ -368,18 +368,21 @@ All three are now written into `src/lib/standards.md` §4 so the next session in
 
 ### Blocking department_head being genuinely useful
 
-- **The step-3 department re-tag has NOT run, and three different department vocabularies are live.** This is the single thing standing between the `department_head` policies and correct results. Current state:
+- **~~The step-3 department re-tag has NOT run~~ — RESOLVED 12 August 2026.** All three sources now share the 11-value canonical vocabulary (Administration, Main Bar, Sports Bar, Front Office, Grounds & Landscape, Housekeeping, Kitchen, Maintenance, Restaurant, Security, Transport). Applied live via the Management API, verified after each sub-step, recorded in `scripts/data-ops/003_department_retag.sql` (data-ops, deliberately NOT a replaying migration — see that file's header for why). Baseline matched this table's prior entry exactly, no delta found at apply time.
 
-  | Source | Values |
-  |---|---|
-  | `departments` table (7) | Grounds, Housekeeping, Kitchen, Restaurant, **Restaurant Bar**, Security, Sports Bar |
-  | `staff.department` (10) | Administration, **Bar**, Front Office, Grounds & Landscape, Housekeeping, Kitchen, Maintenance, Restaurant, Security, Transport |
-  | `stock_items.department` (2) | **Restaurant Bar** (276), **Sports Bar** (283) — no Kitchen, no Restaurant |
-  | Canonical target (11) | Administration, **Main Bar**, Sports Bar, Front Office, Grounds & Landscape, Housekeeping, Kitchen, Maintenance, Restaurant, Security, Transport |
+  | Source | Before | After |
+  |---|---|---|
+  | `departments` table | 7, missing 4, `Restaurant Bar`/`Grounds` short forms | 11, exact canonical set, no duplicates |
+  | `staff.department` (62 rows) | 10 values incl. `Bar` (3) | 11 canonical values, `Bar` split (below) |
+  | `stock_items.department` (559 rows) | `Restaurant Bar` (276) / `Sports Bar` (283) | `Main Bar` (276) / `Sports Bar` (283), same totals |
 
-  Consequence today: Mukesh (Kitchen head) sees **0 stock items** and 1 requisition; the Restaurant head sees 0 of both. This is expected and correct — the policies were proved working by temporarily re-pointing a head at `Sports Bar`, which returned all 283 items. **Do not widen the policies to make rows appear.** The re-tag must also decide `Restaurant Bar` → `Main Bar` and add the four departments the `departments` table lacks.
+  **The `Bar` staff split:** Kondwani Jumbo → Sports Bar, **data-confirmed** (his `staff.position` already read "Sports Bar Bartender" before this ran — corrected to match existing data, not assigned). Benard Gama and Nenenji Khumbo Chikafa → Main Bar, **placeholder** (generic "Bartender" position, no bar indicated). To be finalised at real-data time with Rose.
 
-- **`department_head` functional verification is still outstanding**, and cannot be meaningfully done until the re-tag lands. Re-run the migration 039 proof afterwards.
+- **~~`department_head` functional verification is still outstanding~~ — RESOLVED 12 August 2026.** Migration 039 proof re-run post-re-tag, as the roles themselves (`SET LOCAL ROLE authenticated`, real `sub`, rolled back — never as `postgres`, which bypasses RLS):
+  - Main Bar head sees `stock_items` grouped to exactly `{Main Bar: 276}` — 0 Sports Bar visible.
+  - Sports Bar head sees exactly `{Sports Bar: 283}` — 0 Main Bar visible.
+  - Kitchen head (Mukesh) sees 0 stock items — confirmed **data-absence, not policy failure**: `stock_items WHERE department = 'Kitchen'` = 0, queried as `postgres`.
+  - No Main Bar / Sports Bar `department_head` profile exists yet, so the Kitchen-head and Restaurant-head profiles were temporarily re-pointed inside the same rolled-back transaction as each read; `user_profiles.department` re-queried after each rollback and confirmed unchanged (`Kitchen`, `Restaurant`).
 
 ### Gaps created or exposed by this session
 
