@@ -1,4 +1,4 @@
-﻿-- 050_default_privileges_reconcile.sql
+-- 050_default_privileges_reconcile.sql
 -- §2.6 reconciliation, part 5 of 5 — the GRANT layer.
 --
 -- Production restricts what anon / authenticated / service_role receive on a

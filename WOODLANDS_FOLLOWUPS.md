@@ -213,7 +213,32 @@ Fresh throwaway (`zhzcrqrkmipdpycsnnka`, `eu-west-3`), confirmed empty first. Sa
 
 **Why this whole class kept happening, and what the proof was for.** Every one of these — the 016 constraint, ~20 columns, an FK property, a grant-layer default — is hand-applied DDL that worked on production and was never written down. Sessions A and B reconciled *ghost tables and ghost columns* and did not check constraints, column-level nullability, FK properties, or grants. Those four categories are where all of today's findings live. **A future audit must diff `pg_constraint` (including `condeferrable`/`condeferred`), `information_schema.columns` (nullability AND defaults AND ordinal order), `pg_default_acl`, and the per-table grant matrix — existence checks alone would have passed every one of these.**
 
-**Status: fixes authored, §2.6 NOT yet closed.** 046–050 are files-only and have been run nowhere — not against production, not against staging. Nothing is proven until a 3rd run pushes 001–050 into a fresh empty project and the diff comes back clean.
+**Status: §2.6 PASSED — migration gate CLOSED (rebuild proof run 4, 12 August 2026).** 001–050 rebuild from empty matches production; `db push` now trustworthy for new schema.
+
+### Rebuild proof runs 3 and 4 — the fix validated and proven
+
+**Run 3 (12 August):** pushed 001–045 clean (016's fix held; 017–045 rebuild-tested for the first time and all cleared), then failed at `050_default_privileges_reconcile.sql`: `syntax error at or near "﻿"`. Cause: a leading UTF-8 BOM, introduced when `050` was assembled via PowerShell `Set-Content -Encoding utf8` rather than the tool used for every other file — checked `045`–`049` for the same defect, all clean. Not patched that session, per plan; the failure was reported as the finding. Everything reachable before the failure (001–049, covering all four run-2 fixes) diffed clean against production: 302/302 columns, 101/101 constraints (including the deferrable `user_profiles` FK and `event_payments_received_by_fkey`), 106/108 RLS policies (the same known residual, below). The BOM was fixed in a follow-up session — verified `045`–`050` all now start with a plain `--` byte, not `﻿`; `git diff` on `050` confirmed the fix touched exactly one line. `050`'s SQL content was read-reviewed (syntax, object names against the live 28-table list, the section 2/3 revoke-then-regrant structure, transactional safety) but had never executed anywhere as of the end of that session.
+
+**Run 4 (12 August) — PASS.** Fresh throwaway, `001`–`050` pushed clean through `050` for the first time — no BOM error, no SQL error behind it. Diff against production, byte-for-byte:
+
+| Object | Result |
+|---|---|
+| Tables | **28/28** exact |
+| Columns | **302/302** exact, zero diff |
+| Constraints | **101/101** exact, zero diff |
+| Indexes | **41/41** exact |
+| Grants | **435/435** exact, zero diff |
+| `pg_default_acl` | byte-identical |
+| Functions (`current_app_role`, `current_app_department`, `apply_stock_delta`, `set_stock_quantity`) | byte-identical |
+| RLS policies | 106/108 — the 2 known legacy duplicates only, below |
+
+Every prior finding confirmed fixed by direct re-check, not by count alone: the ~20 unfiled columns, `user_profiles_id_fkey` deferrable (`condeferrable=t, condeferred=t` on both sides), `event_payments.received_by` (FK'd to `auth.users(id)` on **both** sides — it has never been a bare uuid), and the full grant/default-privilege layer.
+
+**Two claims checked directly this run and found NOT to hold** — recorded so they aren't mistaken for real findings later: (1) *"`event_payments.received_by` has no FK, bare uuid"* — false, verified FK'd on both databases. (2) *"`event_checklists` has a CASCADE-vs-SET-NULL divergence, production stricter"* — false; `event_checklists_event_id_fkey` is `ON DELETE CASCADE` on **both** databases, byte-identical `pg_get_constraintdef`. No such residual was ever recorded in this log — checked before writing this entry — so there is nothing to remove; noted here only so the claim isn't reintroduced later.
+
+**The one real, expected residual — a production-cleanup item, not a file gap:** 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`), production-only. Functionally inert (`ALL/service_role/USING(true)`, identical to the canonical `service_role_all_*`). The Sprint A entry originally named six tables carrying this pattern; re-check the full set before dropping them from production.
+
+**The gate is closed.** `db push` is trustworthy for new schema going forward — every migration file `001`–`050` has been proven, not merely believed, to reproduce production from empty.
 
 #### 046–050 EXECUTION STATUS (12 August 2026) — read this before rolling them out
 
@@ -225,7 +250,7 @@ Fresh throwaway (`zhzcrqrkmipdpycsnnka`, `eu-west-3`), confirmed empty first. Sa
 
 *Recorded because it was briefly believed in review that 047 had applied live `ALTER DEFAULT PRIVILEGES ... REVOKE` statements to production. It had not, and no such statement was ever executed: `ALTER DEFAULT PRIVILEGES` appears only in **050**, only as file text, and the read-only guard would have refused it. Noted here so the question is answered in the record rather than re-litigated later.*
 
-**To close it:** review and commit 045–050, create a fresh throwaway, `supabase db push --db-url <staging>`, then re-run the full diff (tables, columns incl. nullability/defaults/ordinals, constraints incl. deferrable flags, indexes, RLS policy sets compared exactly, functions, grants, `pg_default_acl`). Expect the only remaining difference to be the two production-only legacy policies in item 5. Then delete staging and re-confirm the local link. When 045–050 are eventually rolled out to production's history, they are `supabase migration repair --status applied 045 046 047 048 049 050` — **not** `db push`; production already has all of it, and 050 in particular briefly strips DML from every table before restoring it, which is pointless risk against live data for a no-op end state.
+**Closed via run 4 (12 August 2026)** — the diff came back exactly as predicted: clean except the two production-only legacy policies in item 5. Staging deleted, local link re-confirmed unchanged. What remains is not proving the gate — that's done — but **rolling 045–050 into production's own migration history**, which is a separate, deliberately deferred step: `supabase migration repair --status applied 045 046 047 048 049 050` — **not** `db push`. Production already has every object these files describe; `050` in particular briefly strips DML from every table before restoring it, which is pointless risk against live data for a no-op end state. See the EXECUTION STATUS block above for the full detail.
 
 ### Prior deferral (10 August 2026) — superseded by the runs above
 

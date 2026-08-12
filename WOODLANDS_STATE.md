@@ -63,7 +63,7 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 ## THE GATE — MIGRATION HISTORY RECONCILIATION (P1)
 
-**Session A executed (history repaired) — gate NOT yet closed. Session B (012 auth) closes it.**
+**✅ CLOSED — schema provably rebuildable from files (001–050), verified 12 August 2026 by full rebuild-and-diff. `db push` trustworthy for new schema.**
 
 **Done in Session A:**
 - Duplicate `008` resolved (merged to one file, one version).
@@ -75,15 +75,11 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 - History repaired to **001–035 minus 010, 012, 017** — verified on a fresh connection. `030` confirmed to widen the `movement_type` CHECK (not just comment).
 - Real data unchanged: 559 stock items, 305 stallholders, 62 staff.
 
-**Remaining — Session B (012 auth, closes the gate):**
-- Drop the blanket `ALL/authenticated/USING(true)` policy still live on `attendance_records`.
-- Reconcile the three unfiled "staff can… own attendance" policies + `017`'s policy-name drift.
-- Clean `seed.sql`'s flagged attendance policy block.
-- Decide the two `010` default divergences (`shift_date DEFAULT CURRENT_DATE`, `within_radius DEFAULT false`) — recommend document-to-live.
-- Then `migration repair --status applied 010 012 017`, then `db push --dry-run` + staging rebuild proof = **gate closed**.
-- `db push` was deliberately NOT run this session — with `010/012/017` unrecorded and below `031`–`035`, a push would execute `012` and rewrite live attendance RLS. The dry-run and staging proof are Session B's, after `010/012/017` reconcile.
+**Done in Session B (012 auth):** blanket `ALL/authenticated/USING(true)` policy dropped from `attendance_records`; the three unfiled "staff can… own attendance" policies reconciled under canonical names; `017`'s policy-name drift fixed; `seed.sql`'s attendance block removed; the two `010` default divergences documented to live, file-only. History repaired to **001–036**.
 
-Full detail and the two un-scripted cleanups (legacy-duplicate policies, dead-table drops) in `WOODLANDS_FOLLOWUPS.md`.
+**Closed by the rebuild proof — 4 runs, 12 August 2026.** A clean `db push --dry-run` only proves the history table is recorded, not that the files reproduce the database — runs 1–3 found real unfiled drift a dry-run couldn't see: `016`'s `staff.full_name` nullability, ~20 unfiled columns on `events`/`table_bookings`/`event_payments`, `user_profiles`'s FK missing `DEFERRABLE INITIALLY DEFERRED`, and the GRANT/default-privileges layer — all hand-applied to production over months, never filed. Fixed as migrations `045`–`050`. **Run 4 pushed `001`–`050` into an empty throwaway and diffed byte-identical against production**: 28/28 tables, 302/302 columns, 101/101 constraints, 41/41 indexes, 435/435 grants, `pg_default_acl` and all four core functions byte-identical. RLS policies matched except 2 known production-only legacy duplicates (`departments`, `user_profiles`) — a production-cleanup item, not a file gap.
+
+Full detail — all four runs, every divergence found and fixed, and the residual cleanup item — in `WOODLANDS_FOLLOWUPS.md`. `045`–`050` are filed but **not yet rolled into production's migration history** (`supabase migration repair --status applied 045 046 047 048 049 050` — not `db push`); that rollout is separate from the gate being closed.
 
 ---
 
@@ -132,8 +128,10 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 
 ## NEXT ACTION
 
-Build order, gate first:
-1. **Migration gate — Session B (012 auth).** Closes the gate: attendance RLS reconcile, then `repair 010/012/017`, then `db push --dry-run` + staging rebuild proof. Auth-sensitive, on the strongest model. This is the last gate step before new schema.
+**Migration gate is CLOSED — no longer in front of new schema.** Two-tier inventory is the next build, on a proven-rebuildable base.
+
+Build order:
+1. ~~Migration gate — Session B (012 auth).~~ **DONE — closed 12 August 2026, verified by rebuild proof run 4.** See "THE GATE" above.
 2. **UX fixes** — Events payments editable (quick); revenue (blocked on Dhiren — resolve or build toggleable).
 3. **Role model** — `department_head` scoped + `admin` + `hr`; rooms concept. Precedes module work.
 4. **Two-tier inventory + per-department stock lists** — folds in the transfers bug.
