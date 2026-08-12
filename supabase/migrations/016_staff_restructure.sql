@@ -10,6 +10,17 @@ ALTER TABLE staff ADD COLUMN IF NOT EXISTS off_days        text[];
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS biometric_id   text;
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS notes          text;
 
+-- full_name NOT NULL (001_schema.sql:88) is relaxed here, immediately before
+-- the seed below needs it. Four real employees (WL02352, WL02354, WL02480A,
+-- WL02595 — see the SEED section) have no captured name yet; that is real
+-- data absence, not an import defect, and the name arrives with Dhiren's real
+-- staff data later. Naturally idempotent — a no-op if already nullable.
+-- Recorded as reconciled drift in 045_staff_full_name_nullable.sql; found by
+-- the §2.6 rebuild proof (12 August 2026), which failed here on an empty
+-- database because production had this relaxation applied by hand, unfiled
+-- in any migration.
+ALTER TABLE staff ALTER COLUMN full_name DROP NOT NULL;
+
 -- ============================================================
 -- 2. RLS + GRANTS  (idempotent — safe to re-run)
 -- ============================================================

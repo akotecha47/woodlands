@@ -174,19 +174,34 @@ Role set is `('owner','manager')` = `ROUTE_ACCESS['/attendance']`, not the four-
 
 **Access proved by running as the roles themselves**, not through the Management API (which connects as `postgres`, `rolbypassrls = true` — a statement succeeding there proves nothing about what a role may do). 17 scenarios, each `SET LOCAL ROLE authenticated` with a real `sub` claim; the write scenarios wrapped in a transaction that rolled back, rollback re-verified on a fresh connection (still 15 rows, 0 with `user_id`, no test note). All passed: owner/manager read 15; kitchen_manager, restaurant_manager and an unknown-`sub` user read 0; a staff user can insert/read/update only their own row, cannot update another's (0 rows affected), cannot insert one attributed to another user (denied), cannot insert a roster row with `user_id` NULL (denied); a manager can insert and update roster rows; neither can DELETE.
 
-### ⏸ DEFERRED — the §2.6 rebuild proof (Aman's call, 10 August 2026)
+### ⚠ §2.6 rebuild proof — RUN 12 August 2026, FAILED at migration 016. Fixed in files; proof not yet re-run.
 
-`db push --dry-run` reports clean, but **a clean dry-run only proves the history table is recorded — it does not prove the files rebuild the database.** The real proof is pushing all 36 migrations into an empty database and diffing it against production.
+Superseded the "Not run" state below — a throwaway staging project (`vymwuozlwfkwtgybpgvo`, `eu-west-3`) was created and used. `supabase db push --db-url <staging>` applied **001–015 cleanly**, then **016_staff_restructure.sql aborted**: `null value in column "full_name" of relation "staff" violates not-null constraint`. Not patched in that session — stopped and reported per plan, so the failure itself would be preserved as the finding. Staging deleted immediately after; production was read-only throughout (verified: local CLI link never left `gttsjmxltrxxfplqjans`, no `db push`/`db reset`/DDL/DML issued against it, only `SELECT`s via the Management API).
 
-Not run. Docker is not installed on this machine (not merely stopped — `docker` is not on PATH), so `supabase db reset` is unavailable locally and the only route is a throwaway cloud project. The "Streamline Systems" org already holds three projects (`woodlands`, `petroda-dev`, `phalombe-prod`) against a two-project free allowance, so a fourth is very likely billable; the token in use cannot read the org subscription to confirm (404). Aman deferred rather than provision it.
+**Two entangled defects, both diagnosed against production, read-only:**
 
-**Still unproven, and must not be read as passing:**
-- that the 36 files rebuild production's schema from empty;
-- that the `021` rebuild-order fix actually holds (no *"relation does not exist"*);
-- that `030`'s `movement_type` CHECK lands at five values on a rebuild;
-- that `036`'s section-4e drops do close the 012 nine-vs-seven policy gap — reasoned from the files, not executed.
+1. **016's own seed INSERT carries 4 rows with `full_name = NULL`** — `WL02352`, `WL02354`, `WL02480A`, `WL02595`. Real employees (Kitchen ×2, Security ×1, Restaurant ×1) whose names were never captured — one (`WL02480A`) is the file's own flagged "unnamed Security Guard." Confirmed live: production holds these same 4 rows with the same NULLs today, out of 62 total.
+2. **`staff.full_name` is `NOT NULL` in the files (`001_schema.sql:88`, never relaxed by any later migration — grepped all 44) but nullable in production right now** (`is_nullable = YES`, confirmed live). An unfiled hand-applied `ALTER TABLE staff ALTER COLUMN full_name DROP NOT NULL` — production drifted from every file's declared schema, undocumented. This is *why* 016 aborts on a clean rebuild: the empty database gets the NOT NULL the files describe, and immediately rejects the seed rows production has been carrying nullable all along.
 
-**To close it:** create a throwaway project, then `supabase db push --db-url <staging>`. Use `--db-url`; do **not** re-link — re-linking points the local project at staging, and a later `db push` would then hit the wrong database. Diff `information_schema` + `pg_policies` against production, then delete the project.
+**Decision (Aman): Option A — reconcile the files to match production.** Keep the 4 NULL rows as legitimate (names arrive with Dhiren's real staff data later, not invented). Do not touch production — it's already in the target state.
+
+**Fix applied (files only, not yet pushed anywhere):**
+- `016_staff_restructure.sql` — added `ALTER TABLE staff ALTER COLUMN full_name DROP NOT NULL;` in its schema section, immediately before the seed INSERT. Has to live here, not in a later-numbered file: 016 runs before any file after it on a fresh rebuild, so a `045` alone cannot help 016 succeed. Naturally idempotent (dropping NOT NULL on an already-nullable column is a silent no-op).
+- `045_staff_full_name_nullable_reconcile.sql` — new migration, same DDL, purely to give the drift its own dated entry in the migration history stream (the 010-defaults precedent from Session B: file-only, matches already-live state). **Not to be executed against production** — already true there; should be recorded via `supabase migration repair --status applied 045` when this is rolled out, not run as live DDL.
+
+**STEP 3 sanity-check (while in 016):** scanned the rest of the seed INSERT and the schema `staff` carries by migration 015 for any other constraint the 62-row seed could trip on a clean rebuild. Found none — `staff` has no CHECK constraints and no UNIQUE on `employee_number` (confirmed live via `pg_constraint`: only `staff_pkey` and the `user_profile_id` FK), so the file's own duplicate-employee-number comments were precautionary, not constraint-driven. Row count verified at exactly 62. `is_active` explicitly `true` on every row. No FK, CHECK, or UNIQUE hazard remains in 016.
+
+**New defect class this surfaces:** column-**constraint** drift (a hand-applied `ALTER … DROP NOT NULL`) — distinct from the ghost-table/ghost-column drift Sessions A and B reconciled. Neither session checked constraints; this one slipped through both. **Future audits should diff `pg_constraint`/`information_schema.columns.is_nullable`, not just table/column existence.**
+
+**Still open — the proof itself has not been re-run.** 001–015 are now proven-clean; 016 should clear on the next attempt; **017–044 remain completely unverified**, including the specific items flagged before: `030`'s `movement_type` CHECK at five values, the merged 008 objects, `034`'s attendance indexes, and every RLS policy set from `021` on (the `036` nine-vs-seven 012 gap in particular). Two-tier inventory work should not be treated as building on a proven baseline until this re-run passes clean through 044.
+
+**To close it:** commit this fix, create a fresh throwaway project, `supabase db push --db-url <staging>` again, and if 016 clears, continue the diff for 017–044 that this run never reached (schema, constraints, indexes, RLS policy sets *compared exactly, not by count*, functions, grants) — then delete staging and re-confirm the local link.
+
+### Prior deferral (10 August 2026) — superseded by the run above
+
+`db push --dry-run` reports clean, but **a clean dry-run only proves the history table is recorded — it does not prove the files rebuild the database.**
+
+Docker is not installed on this machine (not merely stopped — `docker` is not on PATH), so `supabase db reset` is unavailable locally and the only route is a throwaway cloud project. The "Streamline Systems" org already holds three projects (`woodlands`, `petroda-dev`, `phalombe-prod`) against a two-project free allowance, so a fourth is very likely billable; the token in use cannot read the org subscription to confirm (404). Aman deferred rather than provision it at the time — since resolved, a throwaway was provisioned for the run above.
 
 Still un-scripted (either session or later): legacy-duplicate policy pairs on the three ghost tables and elsewhere; dead-table drop decision for `deliveries`, `inventory_items`, `stock_adjustments`, `stock_transfers` (`stock_transfers` collides with Phase 2 naming).
 
