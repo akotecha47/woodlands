@@ -49,9 +49,12 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
         .select('id, name, sku, unit, department')
         .eq('is_active', true)
         .order('department').order('name'),
+      // Department tier only — see migration 051. Events draw from department
+      // stock, and this map is keyed by item, so it must stay one row per item.
       supabase
         .from('current_stock')
-        .select('stock_item_id, quantity'),
+        .select('stock_item_id, quantity')
+        .eq('tier', 'department'),
     ])
     const qtyMap = {}
     for (const row of (stockR.data ?? [])) qtyMap[row.stock_item_id] = row.quantity

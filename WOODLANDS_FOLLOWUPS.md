@@ -262,6 +262,114 @@ Still un-scripted (either session or later): legacy-duplicate policy pairs on th
 
 ---
 
+## TWO-TIER INVENTORY — DEFERRED TO THE REAL-DATA SESSION (13 August 2026)
+
+*From the two-tier FOUNDATION session (migrations 051–053). The structure is
+built; three things were deliberately not done. Read this before touching
+inventory again.*
+
+### 1. The catalogue is NOT deduped — 559 rows, 276 products duplicated
+
+`stock_items` still holds **559 rows: 276 Main Bar + 283 Sports Bar**, of which
+**276 products exist twice**, once per bar. The lodge buys centrally into one
+main store and distributes to both bars (Aman, Option A), so the end state is
+one catalogue row per product with per-location balances. The structure now
+supports that; **the merge itself waits for real data.**
+
+**Why deferred:** every one of the 559 quantities is placeholder pending
+Dhiren's stocktake, and real data will bring real SKUs. Merging placeholder
+pairs now means doing the same job twice. Consistent with the standing
+"prove the modules work before perfecting the data" framing.
+
+**Correcting the record on the merge key, because a wrong version of this was
+briefly in circulation and would cost a future session real time.** It was
+stated during the session that "no reliable auto-key exists — `BAR-*`/`RB-*`
+vs `SBA-*` are independent sequences." **That is not what production holds.**
+Measured live, 13 August 2026:
+
+- SKU prefixes are exactly two: `RBA-` (276) and `SBA-` (283). There is **no
+  `BAR-` or `RB-` prefix anywhere in the table.**
+- Keyed on the numeric SKU suffix: **283 distinct products, 276 appearing in
+  both bars, 7 Sports-only, 0 Main-only**, and no suffix appears more than
+  twice.
+- Across all 276 shared pairs: **name mismatches 0, unit mismatches 0, reorder
+  mismatches 0.** The only difference between a pair is `department` and `id`.
+
+So a lossless key **does** exist today. The deferral is a decision about *when*
+to merge, not an absence of a way to do it. Re-derive against real SKUs when
+the real catalogue lands — but do not go hunting for a key on the assumption
+none is available.
+
+**When it runs, it is a pure DATA operation — no schema change.** Because
+migration 051 put location on the balance row, the merge is: re-point each
+duplicate's children to the surviving catalogue row **keeping
+`current_stock.location` as-is**, then `is_active = false` on the duplicates
+(not DELETE). Ordering matters — `current_stock`, `stock_movements` and
+`requisitions` all FK to `stock_items` **ON DELETE CASCADE**, and
+`event_stock_allocations` is **ON DELETE RESTRICT**, so a naive DELETE would
+destroy balances, ledger history and requisitions. Children first, always.
+
+**Consequence visible until it runs:** the main-store tier holds a balance per
+*catalogue row*, so those 276 products appear **twice in the main store**
+(559 store rows, not 283). Accepted deliberately — collapsing them early would
+mean trusting the suffix key to decide product identity, which is the
+real-data session's judgement to make. Switching to one row per product is a
+`DELETE`, not a rebuild.
+
+### 2. The stock_catalogue / stock_locations split — same session, one operation
+
+The eventual split of identity from balance is **deferred to the same real-data
+session and done as one operation with the dedupe** (Aman, 13 August).
+
+From the current end state this is **two renames, not a retrofit**:
+`current_stock` already has the balance table's shape
+(`stock_item_id, location, sub_location, tier, quantity, reorder_level`), so it
+becomes `stock_locations`, `stock_items` becomes `stock_catalogue`, and the
+by-then-dead `department` column is dropped. A rename carries FKs, indexes,
+constraints and policies with it — none of the four inbound FKs need
+re-pointing.
+
+**The expensive version is the one to avoid:** keeping the OLD table names as
+compatibility *views* over the new tables. That would need FK re-points,
+`INSTEAD OF` triggers (the RPCs use `SELECT … FOR UPDATE` and `ON CONFLICT`,
+neither of which works through a join-backed view), `security_invoker = true`
+on every view — **without it a view runs with its owner's rights and silently
+bypasses RLS entirely** — and a full RLS rebuild, since policies belong to
+tables and the 10 policies on `stock_items`/`current_stock` would vanish with
+them. Migrate the components to the new names in the same pass instead.
+
+### 3. `stock_items.department` is deprecated but still load-bearing for RLS
+
+It is no longer the location authority — `current_stock.location` is — but it
+stays populated because migration 039's `stock_items_dept_select` and
+`current_stock_dept_select` both key on it. The invariant 051 established (for
+every pre-existing balance, `location` = that item's `department`) is what lets
+the RLS pass re-point those policies at `current_stock.location`, after which
+the column can be dropped.
+
+### 4. Known scope widening for department_head — one clause, deliberately not applied
+
+The main-store rows point at items tagged `Main Bar`/`Sports Bar`, so
+`current_stock_dept_select`'s `EXISTS` against `stock_items.department` matches
+them too. **Proved as the roles, 13 August:** the Sports Bar head sees 283
+department balances **plus 283 main-store rows**; a Main Bar head (proved via a
+rolled-back re-point, no such profile exists yet) sees 276 plus 276. Zero
+cross-department leakage in both cases.
+
+Not a rebuild and arguably useful — a head planning a requisition can see what
+the store holds — but it is a widening of what a head sees, and it was **not**
+applied silently. Suppressing it is one clause on one policy
+(`and current_stock.tier = 'department'`), which belongs to the RLS pass.
+
+### 5. Still not built, in order
+
+**transfer_stock primitive** (the store→department mechanic, and the fix for
+the transfers-don't-deduct bug) → **`movement_type` widening** for
+`event_allocation`/`event_return` → **Movement Ledger** → **RLS pass** →
+**real-data dedupe + table split**.
+
+---
+
 ## FROM AUDIT #2 (2026-07-26) — DEFERRED
 
 - **~~WOODLANDS_FUNCTIONAL_SPEC.md route/role table is stale.~~ — RESOLVED 9 August.** The whole spec was rewritten to the end-goal system (correct roles, Phase 2 modules, [DONE]/[BUG]/[NEW]/[VERIFY] markers). Two claims carried into it are marked [VERIFY] rather than trusted: the GPS clock-in geofence and the two-digit stall-number regex — probe both against live code.

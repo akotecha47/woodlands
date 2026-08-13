@@ -110,9 +110,12 @@ export default function OwnerDashboard() {
           .select('status')
           .eq('date', today),
 
+        // Department tier only — see migration 051. Counting the main-store
+        // tier here as well would roughly double the low-stock figure.
         supabase
           .from('current_stock')
-          .select('quantity, stock_items(id, department, reorder_level, is_active)'),
+          .select('quantity, stock_items(id, department, reorder_level, is_active)')
+          .eq('tier', 'department'),
 
         supabase
           .from('events')

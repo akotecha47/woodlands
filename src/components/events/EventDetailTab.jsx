@@ -79,9 +79,14 @@ export default function EventDetailTab({ eventId, onBack }) {
 
     const shortfalls = []
     for (const alloc of (pending ?? [])) {
+      // tier='department' is load-bearing, not a filter for tidiness: after
+      // migration 051 an item has a main-store balance as well, and
+      // maybeSingle() throws on more than one row — this pre-flight would fail
+      // for every allocation.
       const { data: cs, error: csErr } = await supabase
         .from('current_stock').select('quantity')
-        .eq('stock_item_id', alloc.stock_item_id).maybeSingle()
+        .eq('stock_item_id', alloc.stock_item_id)
+        .eq('tier', 'department').maybeSingle()
       if (csErr) throw csErr
       const available = Number(cs?.quantity ?? 0)
       const required  = Number(alloc.allocated_qty)
@@ -107,9 +112,11 @@ export default function EventDetailTab({ eventId, onBack }) {
         .eq('status', 'pending')
       if (pendingErr) throw pendingErr
       for (const alloc of (pending ?? [])) {
+        // Department tier only — same reason as the pre-flight above.
         const { data: cs, error: readErr } = await supabase
           .from('current_stock').select('quantity')
-          .eq('stock_item_id', alloc.stock_item_id).maybeSingle()
+          .eq('stock_item_id', alloc.stock_item_id)
+          .eq('tier', 'department').maybeSingle()
         if (readErr) throw readErr
         const available = Number(cs?.quantity ?? 0)
         const required  = Number(alloc.allocated_qty)

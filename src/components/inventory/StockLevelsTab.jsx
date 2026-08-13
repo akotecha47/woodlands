@@ -2,39 +2,48 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { EmptyRow, TdBold, StockBadge, fetchDepartmentList } from './InventoryUI'
+import { stockLocations } from '../../lib/constants'
 
 export default function StockLevelsTab() {
   const [rows,        setRows]        = useState([])
-  const [departments, setDepartments] = useState([])
-  const [deptFilter,  setDeptFilter]  = useState('')
+  const [locations,   setLocations]   = useState([])
+  const [locFilter,   setLocFilter]   = useState('')
   const [toast,       setToast]       = useState(null)
   const flash = useFlash(setToast)
 
+  // Two-tier (migration 051): balances are per (item, location), so an item
+  // appears once per location it is held at — main store AND each department.
+  // This is the one screen that deliberately shows both tiers; every other
+  // current_stock reader filters to tier='department'.
   async function fetchStock() {
     const { data, error } = await supabase
       .from('current_stock')
-      .select('quantity, stock_items(id, name, sku, unit, department, reorder_level)')
+      .select('id, quantity, location, sub_location, reorder_level, stock_items(id, name, sku, unit, reorder_level)')
     if (error) { flash(error.message, false); return }
     const flat = (data ?? [])
       .map(r => ({
-        id:            r.stock_items.id,
+        id:            r.id,            // the BALANCE row id — stock_items.id is
+                                        // no longer unique across rows
         name:          r.stock_items.name,
         sku:           r.stock_items.sku,
         unit:          r.stock_items.unit,
-        department:    r.stock_items.department,
-        reorder_level: r.stock_items.reorder_level,
+        location:      r.sub_location ? `${r.location} → ${r.sub_location}` : r.location,
+        locationKey:   r.location,
+        // Per-tier threshold, falling back to the catalogue default exactly as
+        // the column comment specifies.
+        reorder_level: r.reorder_level ?? r.stock_items.reorder_level,
         quantity:      r.quantity,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.locationKey.localeCompare(b.locationKey))
     setRows(flat)
   }
 
   useEffect(() => {
     fetchStock()
-    fetchDepartmentList().then(setDepartments)
+    fetchDepartmentList().then(d => setLocations(stockLocations(d)))
   }, [])
 
-  const visible = deptFilter ? rows.filter(r => r.department === deptFilter) : rows
+  const visible = locFilter ? rows.filter(r => r.locationKey === locFilter) : rows
 
   return (
     <div className="p-6">
@@ -42,12 +51,12 @@ export default function StockLevelsTab() {
       <div className="flex items-center justify-between gap-4 mb-4">
         <h2 className="text-base font-semibold text-gray-800">Current Stock</h2>
         <select
-          value={deptFilter}
-          onChange={e => setDeptFilter(e.target.value)}
+          value={locFilter}
+          onChange={e => setLocFilter(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
         >
-          <option value="">All Departments</option>
-          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+          <option value="">All Locations</option>
+          {locations.map(name => <option key={name} value={name}>{name}</option>)}
         </select>
       </div>
 
@@ -55,7 +64,7 @@ export default function StockLevelsTab() {
         <table className="w-full">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
-              <Th>Item Name</Th><Th>SKU</Th><Th>Department</Th><Th>Unit</Th>
+              <Th>Item Name</Th><Th>SKU</Th><Th>Location</Th><Th>Unit</Th>
               <Th>Current Stock</Th><Th>Reorder Level</Th><Th>Status</Th>
             </tr>
           </thead>
@@ -64,7 +73,7 @@ export default function StockLevelsTab() {
               <tr key={item.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                 <TdBold>{item.name}</TdBold>
                 <Td>{item.sku}</Td>
-                <Td>{item.department}</Td>
+                <Td>{item.location}</Td>
                 <Td>{item.unit}</Td>
                 <TdBold>{item.quantity}</TdBold>
                 <Td>{item.reorder_level}</Td>
@@ -77,7 +86,7 @@ export default function StockLevelsTab() {
               <EmptyRow cols={7} msg={
                 rows.length === 0
                   ? 'No stock items yet. Add items in Admin → Stock Items.'
-                  : 'No items in this department.'
+                  : 'No items at this location.'
               } />
             )}
           </tbody>

@@ -19,7 +19,10 @@ export default function AdjustmentsTab() {
   async function loadData() {
     const [activeItems, { data: cs }] = await Promise.all([
       fetchActiveItems(),
-      supabase.from('current_stock').select('stock_item_id, quantity'),
+      // tier='department' keeps this map one-row-per-item after migration 051
+      // added the main-store tier. Without it the map would silently take
+      // whichever tier came back last.
+      supabase.from('current_stock').select('stock_item_id, quantity').eq('tier', 'department'),
     ])
     setItems(activeItems)
     if (cs) setStockMap(Object.fromEntries(cs.map(r => [r.stock_item_id, r.quantity])))
