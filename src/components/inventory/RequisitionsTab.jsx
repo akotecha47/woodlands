@@ -3,8 +3,9 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, EmptyRow, TdBold, ReqStatusBadge, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
-import { applyStockDelta } from '../../lib/stock'
+import { issueStock } from '../../lib/stock'
 import { MANAGE_ROLES } from '../../lib/roles'
+import { MAIN_STORE } from '../../lib/constants'
 
 export default function RequisitionsTab() {
   const { profile, session } = useAuth()
@@ -71,19 +72,28 @@ export default function RequisitionsTab() {
 
   async function handleFulfil(req) {
     try {
-      // One atomic call: locks the balance, deducts, and writes the
-      // stock_movements row. Do NOT insert a movement alongside it.
-      // performed_by is set server-side from auth.uid().
-      await applyStockDelta(req.stock_item_id, -Number(req.quantity), {
+      // Two-tier (migration 055): fulfilling a requisition ISSUES stock from
+      // the main store to the requesting department — one atomic call that
+      // deducts the store balance and credits the department, and writes both
+      // ledger rows. performed_by is set server-side from auth.uid().
+      //
+      // This previously called applyStockDelta(-qty) with no location, which
+      // deducted the item's OWN department tier and credited nobody: fulfilling
+      // the live Kitchen requisition deducted Sports Bar. The store was never
+      // touched.
+      //
+      // Fail-closed: if the store cannot cover the full quantity the call is
+      // rejected and nothing moves. No partial issue — logged in FOLLOWUPS as
+      // a Dhiren-revisit, since that is an operational preference.
+      await issueStock(req.stock_item_id, MAIN_STORE, req.department, Number(req.quantity), {
         movementType: 'requisition',
-        toDepartment: req.department,
         reason:       req.reason || null,
       })
       const { error } = await supabase.from('requisitions')
         .update({ status: 'fulfilled', reviewed_by: session.user.id, updated_at: new Date().toISOString() })
         .eq('id', req.id)
       if (error) throw error
-      flash('Fulfilled — stock deducted')
+      flash(`Fulfilled — issued from ${MAIN_STORE} to ${req.department}`)
       fetchReqs()
     } catch (err) { flash(err.message, false) }
   }

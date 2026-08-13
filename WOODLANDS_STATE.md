@@ -148,8 +148,18 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 - **App pass:** 5 `current_stock` readers filtered to `tier='department'` (two were `maybeSingle()` calls that would have thrown on every event confirm); Stock Levels now shows a Location column and filters by location.
 - **Deferred as one real-data operation:** catalogue dedupe (559 → 283) **and** the `stock_catalogue`/`stock_locations` split. See FOLLOWUPS — and note the merge key **does** exist (`RBA-`/`SBA-` + shared numeric suffix, 0 attribute mismatches across all 276 pairs); the deferral is about timing, not feasibility.
 
+**Done 13 August 2026 — store→department issuing (`055`):**
+- **`issue_stock`** moves stock between any two locations atomically, orchestrating two `apply_stock_delta` calls in deterministic lock order — no duplicated locking or fail-closed logic. Store **depletes**: proved live 100 → 90 with Sports Bar 17 → 27 on one 10-unit call.
+- **`movement_type = 'issue'` widened in all three places** in the one migration: table CHECK `_v3` (replacing `_v2`), the RPC allowlist, and `MOVEMENT_TYPES` in `src/lib/stock.js`.
+- **Requisition Fulfil rewired** — previously deducted the item's *own* department tier and credited nobody (fulfilling the Kitchen requisition deducted Sports Bar); now issues Main Store → the requesting department.
+- **Fail-closed, no partial issue** (Dhiren-revisit logged). Department→store returns deferred; `issue_stock` is already direction-agnostic.
+- **`pg_proc`: one signature per function, no overloads.** `apply_stock_delta` was replaced in place with a byte-identical parameter list, so its grants survived.
+
+**🔴 Blocker found by those proofs — see FOLLOWUPS 4c.** A department that is issued stock **cannot see it**: `current_stock_dept_select` still scopes on the deprecated `stock_items.department` rather than `current_stock.location`, so the Kitchen head sees 0 balance rows after receiving 10 units. One clause fixes it; RLS was fenced out of the session.
+
 **Forward path — build order:**
-1. **transfer_stock primitive** — the store→department mechanic and the fix for the transfers-don't-deduct bug. The foundation is in; this is the next build. Then `movement_type` widening → Movement Ledger → RLS pass → real-data dedupe + table split.
+1. **RLS pass** — now first, because it is blocking (FOLLOWUPS 4c). Then the one-line `TransfersTab` wiring, `movement_type` widening for events, Movement Ledger, bar par levels, real-data dedupe + table split.
+2. **⚠ The transfers-don't-deduct bug is still open** — re-verified live 13 August with evidence (FOLLOWUPS item 6). `TransfersTab` still writes ledger rows only; no `record_stock_transfer` function exists.
 2. **Remaining Phase 2 features** — bar par levels + end-of-day cycle; consumption attribution + rooms + laundry retention; Farmers Market taxonomy + waiting list + fees; QR attendance; Events UX fixes (payments editable, revenue display — revenue blocked on Dhiren).
 3. **Per-role UI pass** — deferred to end.
 4. **Production cleanup** — drop the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`) from production. Cosmetic, not blocking.

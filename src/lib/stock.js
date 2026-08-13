@@ -25,7 +25,12 @@ import { supabase } from './supabase'
  * use it without importing across feature folders.
  */
 
-const MOVEMENT_TYPES = ['delivery', 'transfer', 'adjustment', 'requisition']
+// Kept in step with the table CHECK (stock_movements_movement_type_check_v3)
+// and the allowlist inside apply_stock_delta. All three are widened in the
+// same migration or they drift — 'issue' was added in 055.
+// Note 'opening_balance' is permitted by the table but deliberately absent
+// here and in the RPC: it is import-only (scripts/data-ops/002).
+const MOVEMENT_TYPES = ['delivery', 'transfer', 'adjustment', 'requisition', 'issue']
 
 /**
  * Add `delta` to an item's balance. Negative to deduct.
@@ -58,6 +63,39 @@ export async function applyStockDelta(stockItemId, delta, {
  * Records an 'adjustment' movement for the difference, and no movement at all
  * when the value is unchanged. Returns the new quantity.
  */
+/**
+ * Move stock from one location to another — the two-tier issue path.
+ * Primary case is MAIN_STORE -> a department: the store balance is deducted
+ * and the department balance credited, atomically (migration 055).
+ *
+ * Fail-closed: if the source cannot cover the FULL quantity the call is
+ * rejected and nothing moves. There is no partial issue.
+ *
+ * Returns { from_location, to_location, quantity, from_quantity, to_quantity }.
+ */
+export async function issueStock(stockItemId, fromLocation, toLocation, quantity, {
+  movementType = 'issue',
+  reason = null,
+  fromSubLocation = null,
+  toSubLocation = null,
+} = {}) {
+  if (!MOVEMENT_TYPES.includes(movementType)) {
+    throw new Error(`issueStock: movementType must be one of ${MOVEMENT_TYPES.join(', ')}`)
+  }
+  const { data, error } = await supabase.rpc('issue_stock', {
+    p_stock_item_id:     stockItemId,
+    p_from_location:     fromLocation,
+    p_to_location:       toLocation,
+    p_quantity:          quantity,
+    p_reason:            reason,
+    p_movement_type:     movementType,
+    p_from_sub_location: fromSubLocation,
+    p_to_sub_location:   toSubLocation,
+  })
+  if (error) throw error
+  return data
+}
+
 export async function setStockQuantity(stockItemId, newQty, reason = null) {
   const { data, error } = await supabase.rpc('set_stock_quantity', {
     p_stock_item_id: stockItemId,

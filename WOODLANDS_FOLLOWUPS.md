@@ -361,12 +361,106 @@ the store holds — but it is a widening of what a head sees, and it was **not**
 applied silently. Suppressing it is one clause on one policy
 (`and current_stock.tier = 'department'`), which belongs to the RLS pass.
 
+### 4b. Store→department ISSUING — BUILT (migration 055, 13 August 2026)
+
+`issue_stock(item, from_location, to_location, quantity, reason, movement_type,
+from_sub_location, to_sub_location)` moves stock between any two locations
+atomically. Orchestration only — it calls `apply_stock_delta` twice in one
+function body, so the proven single-sided primitive remains the only
+implementation of the locking, the fail-closed check, the create-if-missing
+branch and the ledger write. Calls are issued in deterministic
+`(location, sub_location)` order, not caller order, so an issue racing a return
+cannot deadlock.
+
+The main store **depletes** — it is an ordinary balance row, not a notional
+source. Proved live: store 100 → 90 and Sports Bar 17 → 27 on a single
+10-unit call. Store rows carry their own reorder (20 bottles / 32 crates), so
+the store itself goes Low after ~80 / ~68 units are issued out.
+
+`movement_type = 'issue'` was widened in **all three** places in the one
+migration: table CHECK (`..._check_v3`, replacing `_v2`), the `apply_stock_delta`
+allowlist, and `MOVEMENT_TYPES` in `src/lib/stock.js`. Requisition Fulfil is
+wired to it and now issues Main Store → the requesting department.
+
+**Deferred, decided by Aman 13 August 2026:**
+
+- **No partial fulfilment.** If the store cannot cover the FULL quantity the
+  fulfil is rejected and nothing moves. Matches the fail-closed pattern
+  everywhere else. **Revisit with Dhiren** — whether a short store should
+  part-fill a requisition is an operational preference, not a technical
+  default.
+- **Department → store RETURNS are out of scope.** `issue_stock` is
+  direction-agnostic and was proved working department→department (Sports Bar →
+  Main Bar), so returns need a UI surface, not new database work.
+
+### 4c. 🔴 BLOCKER FOUND BY THE 055 PROOFS — a receiving department cannot SEE what it was issued
+
+**Issuing works; seeing it does not.** After issuing 10 units into Kitchen, the
+Kitchen `department_head` sees **zero** balance rows — not merely zero of that
+item, but 0 rows in `current_stock` entirely.
+
+Cause: migration 039's `current_stock_dept_select` scopes via
+`EXISTS (stock_items si WHERE si.id = cs.stock_item_id AND si.department =
+current_app_department())` — the **deprecated** `stock_items.department`, not
+`current_stock.location`. The item issued to Kitchen is tagged `'Sports Bar'`,
+so the EXISTS fails. `stock_items` is itself RLS-filtered for that head, so even
+the item row reads back NULL.
+
+This is the deprecated column being load-bearing, exactly as `051`'s header
+predicted — but it has stopped being cosmetic and is now **functionally
+blocking**: a department can hold stock it cannot see, which makes the whole
+store→department flow undemonstrable to a department head.
+
+**Fix is one clause in the RLS pass** — re-point the policy at
+`current_stock.location`:
+
+```sql
+create policy "current_stock_dept_select" on public.current_stock
+  for select to authenticated
+  using (public.current_app_role() = 'department_head'
+         and location = public.current_app_department());
+```
+
+That also closes the known store-row over-exposure in item 4 above, since
+`'Main Store'` never equals a head's department. **Not applied — RLS was fenced
+out of this session. It should be the first thing the RLS pass does, and the
+RLS pass should now come before the Movement Ledger.**
+
 ### 5. Still not built, in order
 
-**transfer_stock primitive** (the store→department mechanic, and the fix for
-the transfers-don't-deduct bug) → **`movement_type` widening** for
-`event_allocation`/`event_return` → **Movement Ledger** → **RLS pass** →
+**RLS pass** (now first — see 4c, it is blocking) → **`TransfersTab` wiring**
+(one-line, see below) → **`movement_type` widening** for
+`event_allocation`/`event_return` → **Movement Ledger** → **bar par levels** →
 **real-data dedupe + table split**.
+
+### 6. ⚠ The transfers-don't-deduct bug is STILL OPEN — re-verified live 13 August 2026
+
+Recorded with evidence because it was twice believed fixed during the 055
+session, and a fixed-bug-recorded-as-open is cheaper than the reverse.
+
+**There is no `record_stock_transfer` function.** `pg_proc` holds exactly seven
+`public` functions, one signature each: `apply_stock_delta`, `issue_stock`,
+`set_stock_quantity`, `current_stock_validate_location`, `current_app_role`,
+`current_app_department`, and the orphan `handle_new_user`. Nothing in any
+schema matches `%transfer%` or `%record_stock%`, and the only non-internal
+trigger in the entire `public` schema is `trg_current_stock_validate_location`
+(054) — so no trigger syncs the ledger to balances either.
+
+**Demonstrated, not just read:** replaying exactly what `TransfersTab.jsx:57-60`
+submits — two `stock_movements` rows, `−7`/`+7`, Sports Bar → Kitchen — wrote
+**2 ledger rows** while the Sports Bar balance stayed at **17** and the Kitchen
+row was **never created**. Rolled back.
+
+`TransfersTab` still writes ledger rows directly and never calls any RPC. Its
+From/To selects also read `departments`, so `'Main Store'` cannot even be
+chosen.
+
+**The fix is now one line of wiring, because 055 already built the primitive
+and proved it in the transfer direction** (Sports Bar → Main Bar moved both
+balances). Replace the `supabase.from('stock_movements').insert([...])` with
+`issueStock(item, from, to, qty, { movementType: 'transfer' })` and swap
+`fetchDepartmentList()` for `stockLocations(departments)`. Deliberately not
+done in the 055 session, which was scoped to issuing.
 
 ---
 
