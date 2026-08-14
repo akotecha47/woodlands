@@ -347,7 +347,14 @@ every pre-existing balance, `location` = that item's `department`) is what lets
 the RLS pass re-point those policies at `current_stock.location`, after which
 the column can be dropped.
 
-### 4. Known scope widening for department_head — one clause, deliberately not applied
+### 4. ~~Known scope widening for department_head — one clause, deliberately not applied~~ — CLOSED 14 August 2026 by `056`
+
+Heads no longer see main-store rows: `current_stock_dept_select` now carries
+`tier = 'department' and location = current_app_department()`, and `'Main Store'`
+can never equal a department. Proved live — Sports Bar head **0 store rows**
+(was 283), Main Bar head 0 (was 276). See 4c for the full before/after.
+
+*Original entry, preserved:*
 
 The main-store rows point at items tagged `Main Bar`/`Sports Bar`, so
 `current_stock_dept_select`'s `EXISTS` against `stock_items.department` matches
@@ -393,7 +400,20 @@ wired to it and now issues Main Store → the requesting department.
   direction-agnostic and was proved working department→department (Sports Bar →
   Main Bar), so returns need a UI surface, not new database work.
 
-### 4c. 🔴 BLOCKER FOUND BY THE 055 PROOFS — a receiving department cannot SEE what it was issued
+### 4c. ~~🔴 BLOCKER — a receiving department cannot SEE what it was issued~~ — RESOLVED 14 August 2026, migration `056` applied and proven live
+
+**Migration `056` was written on 13 August but never executed** — the session that was to apply it was interrupted, and `057` went in without it. Discovered by a read-only assessment on 14 August (the policies were still in their `039` form; migration history had exactly one hole, at `056`). Applied 14 August and proved as the roles, rolled back, on the identical before/after scenario — issue Main Store → Kitchen 9 units, then read `current_stock` as each head:
+
+| Viewer | Before `056` | After `056` |
+|---|---|---|
+| Kitchen head (**holds** the stock) | **0 rows** | **1 row** — the Kitchen row, qty 9 |
+| Sports Bar head (**gave it away**) | **567 rows** — its own 283 + 283 Main Store + the Kitchen destination row | **283 rows** — Sports Bar only, **0 store rows** |
+
+Main Bar head 276 / 0 store (via a rolled-back re-point; no Main Bar head profile exists yet). Restaurant head 0 rows — still data-absence, not policy failure. Owner and admin unchanged at 1118 rows across both tiers. The `current_stock → stock_items` join a head reads returns **0 null catalogue rows**, so `StockLevelsTab.jsx:27`'s unguarded `r.stock_items.name` cannot throw. Policy count 19 before and after; old policies dropped, not left beside the new ones; no blanket `USING(true)` for `authenticated` introduced.
+
+**Worth carrying forward: the over-exposure was the more dangerous half, and it was the half nobody had named.** This entry was written as a *visibility* failure — a head cannot see what it holds. The same policy was simultaneously showing each head **other departments' balances**, which is a scoping failure and the one with security consequence. Both came from the same clause. When a policy is found to be scoped on the wrong column, check what it wrongly *reveals*, not only what it wrongly hides.
+
+*Original diagnosis, preserved:*
 
 **Issuing works; seeing it does not.** After issuing 10 units into Kitchen, the
 Kitchen `department_head` sees **zero** balance rows — not merely zero of that
@@ -428,12 +448,63 @@ RLS pass should now come before the Movement Ledger.**
 
 ### 5. Still not built, in order
 
-**RLS pass** (now first — see 4c, it is blocking) → **`TransfersTab` wiring**
-(one-line, see below) → **`movement_type` widening** for
+~~RLS pass~~ ✅ (`056`, 14 August) → ~~`TransfersTab` wiring~~ ✅ (`057` +
+frontend, 14 August) → **`movement_type` widening** for
 `event_allocation`/`event_return` → **Movement Ledger** → **bar par levels** →
 **real-data dedupe + table split**.
 
-### 6. ⚠ The transfers-don't-deduct bug is STILL OPEN — re-verified live 13 August 2026
+### 5b. ⚠ §2.6 REBUILD RE-PROOF OWED — before the next migration is written
+
+The gate closed on `001`–`050` (rebuild run 4, 12 August). **`051`–`057` have
+never been rebuild-proven**, and `056` additionally executed **out of order** —
+production ran `057` first.
+
+**The ordering introduced no divergence, and that is established rather than
+assumed.** `056` is 2 `DROP POLICY` + 2 `CREATE POLICY` + 1 column comment;
+`057` is 1 `CREATE OR REPLACE FUNCTION` + grants + a function comment. Disjoint
+object sets, neither referencing the other's objects, so they commute.
+Confirmed after the fact: applying `056` second left `transfer_stock`,
+`issue_stock` and `apply_stock_delta` **byte-identical** by `md5(prosrc)`
+against the pre-apply baseline, and every object `051`–`057` describe is
+present in production as described (location/sub_location/tier columns, the
+`UNIQUE NULLS NOT DISTINCT` key, the `054` guard trigger, one signature per
+RPC, both seeded tiers, 19 inventory policies).
+
+**What is still owed is the thing reasoning cannot substitute for:** a full
+throwaway rebuild of `001`–`057` diffed against production. Runs 1–3 each found
+real unfiled drift — a nullability constraint, ~20 columns, an FK property, the
+grant layer — that no amount of file reading had surfaced. Not run on 14 August
+because it needs a billable throwaway project provisioned, which is Aman's call.
+**A rebuild proof expires; it is a claim about a file range on a date, not a
+permanent property of the project.**
+
+### 6. ~~⚠ The transfers-don't-deduct bug is STILL OPEN~~ — FIXED AND PROVEN LIVE, 14 August 2026
+
+**Closed by migration `057` (`transfer_stock`) plus the `TransfersTab` /
+`src/lib/stock.js` wiring, with the false ledger rows removed by
+`scripts/data-ops/005`.** Proved as the `admin` role, `SET LOCAL ROLE`, rolled
+back, and re-read on a fresh connection afterwards to confirm the rollback:
+
+| Probe | Result |
+|---|---|
+| Sports Bar → Main Bar, 7 units | Sports Bar **17 → 10**, Main Bar row **created at 7**, 2 ledger rows, `movement_type` `'transfer'` |
+| Main Store → Sports Bar, 5 units | Store **100 → 95**, Sports Bar **17 → 22**, `movement_type` **`'issue'`** — server-side derivation works |
+| Same call as a Sports Bar `department_head` | **Denied `42501`** at the destination INSERT — correctly fail-closed |
+
+`movement_type` is **not** caller-chosen: `transfer_stock` derives it (`'issue'`
+when either end is `'Main Store'`, else `'transfer'`) so a manual
+store→department move and the identical movement raised through a requisition
+cannot be recorded two different ways in the Movement Ledger. `transferStock()`
+in `src/lib/stock.js` deliberately exposes no `movementType` option.
+
+The 2 orphan ledger rows from 27 July are deleted; `movement_type='transfer'`
+now counts **0** in production. Balances were deliberately **not** adjusted —
+the movement never happened, so the ledger was wrong and the balances were
+already right.
+
+*Original diagnosis, preserved — note the fix as planned here was superseded:
+`issueStock(..., { movementType: 'transfer' })` would have let the caller choose
+the type, which is exactly what `057` makes unrepresentable.*
 
 Recorded with evidence because it was twice believed fixed during the 055
 session, and a fixed-bug-recorded-as-open is cheaper than the reverse.

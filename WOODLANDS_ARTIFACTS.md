@@ -44,7 +44,18 @@
 - **Edge Functions (2):**
   - `create-user` — authenticated (owner-only JWT check, allowlisted 4 roles, CORS pinned)
   - `public-checkin` — unauthenticated by design (`--no-verify-jwt`, uses server-side `SERVICE_ROLE_KEY` for holder lookup + visit write; keeps holder PII off any public read policy)
-- **Migrations:** 001–030, all applied to live DB. Remote history table records only 001–007 — **`supabase db push` is disqualified** until reconciliation (post-meeting Priority 1). Every migration from 021 onward applied through Supabase SQL Editor or Management API by hand.
+- **Migrations:** `001`–`057`, all applied to the live DB. Remote history records a clean **`001`–`057`, 57 rows, no gaps** (as of 14 August 2026); `db push --dry-run` reports "Remote database is up to date." The §2.6 rebuild proof closed the gate for `001`–`050` on 12 August — **`051`–`057` are not yet rebuild-proven and a re-proof is owed** (see `WOODLANDS_STATE.md` § "§2.6 RE-PROOF OWED"). Migrations `021` onward were applied by hand through the SQL Editor or Management API; history is recorded via `migration repair`, not `db push`.
+
+  **Phase 2 — two-tier inventory (`051`–`057`, 13–14 August 2026):**
+  - `051`: `location` / `sub_location` on `current_stock` + generated `tier`, keyed `UNIQUE NULLS NOT DISTINCT (stock_item_id, location, sub_location)`, per-tier `reorder_level`
+  - `052`: `apply_stock_delta` / `set_stock_quantity` made location-aware (old overloads dropped, grants re-set)
+  - `053`: main store seeded — 559 rows, flat placeholder 100, store reorder 4× catalogue
+  - `054`: `trg_current_stock_validate_location` — rejects any location that is not `'Main Store'` or a live `departments` name; forbids a `sub_location` on the store tier
+  - `055`: `issue_stock` — atomic two-location move, deterministic lock order, fail-closed; widened `movement_type` to `'issue'` in all three places (table CHECK `_v3`, RPC allowlist, `MOVEMENT_TYPES`)
+  - `056`: RLS pass — `current_stock_dept_select` and `stock_items_dept_select` re-pointed from the deprecated `stock_items.department` onto `current_stock.location`. **Applied 14 August, out of order (after `057`)** — proven harmless, the two files are statement-disjoint and commute
+  - `057`: `transfer_stock` — thin delegation to `issue_stock`, derives `movement_type` server-side (`'issue'` if either end is `'Main Store'`, else `'transfer'`); asserts one signature each for itself and `issue_stock` and aborts otherwise
+- **Stock RPCs live in `pg_proc` (one signature each, no overloads):** `apply_stock_delta`, `set_stock_quantity`, `issue_stock`, `transfer_stock`, `current_stock_validate_location`, plus `current_app_role` / `current_app_department`.
+- **Frontend, two-tier inventory:** `src/lib/stock.js` exports `applyStockDelta` / `setStockQuantity` / `issueStock` / `transferStock` — `transferStock` deliberately takes **no** `movementType` option, since the server derives it. `src/lib/constants.js` holds `MAIN_STORE` + `stockLocations()`. `TransfersTab.jsx` calls `transferStock()` and no longer inserts `stock_movements` rows directly (the transfers-don't-deduct bug, fixed 14 August).
   - 021: Sprint A policies + `current_app_role()`
   - 022: 14 additional tables, policies + authenticated DML grants
   - 023: positive-amount CHECK constraints (event_payments, fm_payments, event_bill_items)
@@ -56,7 +67,7 @@
   - 029: `fm_holders.products` text column for Feb 2026 register import
   - 030: widened `stock_movements.movement_type` to permit `opening_balance` (for the bar stock import)
 - **Migration 014** (`fm_visits.checked_in_at` / `checked_out_at`) existed since May but had never run — applied 26 July evening as part of Sprint D compressed session.
-- **`scripts/data-ops/`** — one-shot data-mutating scripts kept separate from `supabase/migrations/` because they must NOT replay on rebuild. Currently: `001` Farmers Market import (305 stallholders from Feb 2026 register), `002` bar stock reset + import (559 items across two bars), and the test-data purge/seed procedure.
+- **`scripts/data-ops/`** — one-shot data-mutating scripts kept separate from `supabase/migrations/` because they must NOT replay on rebuild. Currently: `001` Farmers Market import (305 stallholders from Feb 2026 register), `002` bar stock reset + import (559 items across two bars), `003` department vocabulary re-tag (11-value canonical list across `departments` / `staff` / `stock_items`), `004` department orphan re-tag, `005` transfer orphan ledger cleanup (deleted the 2 false `transfer` rows written by the transfers bug on 27 July — balances deliberately untouched, since the movement never happened), and the test-data purge/seed procedure.
 
 ---
 

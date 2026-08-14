@@ -2,7 +2,7 @@
 
 *Current state, live commitments, next action. Updated at the end of every session that changed state.*
 
-**Last updated: 10 August 2026**
+**Last updated: 14 August 2026**
 **Governing doctrine:** STREAMLINE_BUILD_STANDARD.md v1.5, STREAMLINE_MATERIALS.md v2.4, STREAMLINE_SESSION.md v2.0.
 
 ---
@@ -79,13 +79,15 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 **Closed by the rebuild proof — 4 runs, 12 August 2026.** A clean `db push --dry-run` only proves the history table is recorded, not that the files reproduce the database — runs 1–3 found real unfiled drift a dry-run couldn't see: `016`'s `staff.full_name` nullability, ~20 unfiled columns on `events`/`table_bookings`/`event_payments`, `user_profiles`'s FK missing `DEFERRABLE INITIALLY DEFERRED`, and the GRANT/default-privileges layer — all hand-applied to production over months, never filed. Fixed as migrations `045`–`050`. **Run 4 pushed `001`–`050` into an empty throwaway and diffed byte-identical against production**: 28/28 tables, 302/302 columns, 101/101 constraints, 41/41 indexes, 435/435 grants, `pg_default_acl` and all four core functions byte-identical. RLS policies matched except 2 known production-only legacy duplicates (`departments`, `user_profiles`) — a production-cleanup item, not a file gap.
 
-Full detail — all four runs, every divergence found and fixed, and the residual cleanup item — in `WOODLANDS_FOLLOWUPS.md`. `045`–`050` are filed but **not yet rolled into production's migration history** (`supabase migration repair --status applied 045 046 047 048 049 050` — not `db push`); that rollout is separate from the gate being closed.
+Full detail — all four runs, every divergence found and fixed, and the residual cleanup item — in `WOODLANDS_FOLLOWUPS.md`. `045`–`050` were rolled into production's migration history on 13 August via `migration repair` (never `db push` — `050`'s revoke/re-grant window must not run against live data).
+
+**⚠ The proof covers `001`–`050` only.** `051`–`057` are all post-gate and **none has been through a from-files rebuild**. See "§2.6 RE-PROOF OWED" below.
 
 ---
 
 ## KNOWN BUGS / BROKEN PATHS
 
-- **Transfers don't deduct stock.** Found 27 July browser test. Requisitions deduct correctly; department transfers don't. Directly relevant to two-tier inventory — store→department movement is the core mechanic.
+- **~~Transfers don't deduct stock~~ — FIXED AND PROVEN LIVE, 14 August 2026.** Migration `057` added `transfer_stock` (a thin delegation to `issue_stock`); `TransfersTab` now calls it instead of inserting two ledger rows directly. Proved as the `admin` role, rolled back: Sports Bar 17 → 10 with the Main Bar row created at 7, 2 ledger rows, `movement_type` `'transfer'`. The 2 orphan ledger rows the bug wrote on 27 July were deleted via `scripts/data-ops/005`.
 - **Events payments tab not editable.** Recordable, not correctable. Phase 2 UX fix.
 - **`public-checkin` returns an internal `detail` field on failure.** Aids diagnosis; drop before handover.
 
@@ -155,15 +157,38 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 - **Fail-closed, no partial issue** (Dhiren-revisit logged). Department→store returns deferred; `issue_stock` is already direction-agnostic.
 - **`pg_proc`: one signature per function, no overloads.** `apply_stock_delta` was replaced in place with a byte-identical parameter list, so its grants survived.
 
-**🔴 Blocker found by those proofs — see FOLLOWUPS 4c.** A department that is issued stock **cannot see it**: `current_stock_dept_select` still scopes on the deprecated `stock_items.department` rather than `current_stock.location`, so the Kitchen head sees 0 balance rows after receiving 10 units. One clause fixes it; RLS was fenced out of the session.
+**Done 14 August 2026 — RLS visibility pass (`056`) + transfers fix (`057`), and the cleanup of a half-applied session:**
+
+- **`056` RLS pass — APPLIED AND PROVEN (it had never executed).** `current_stock_dept_select` and `stock_items_dept_select` now scope on `current_stock.location`, not the deprecated `stock_items.department`. Policy count unchanged, 19 before and after; both old policies dropped, not left beside the new ones; no blanket `USING(true)` for `authenticated` anywhere (only the 2 pre-existing `service_role` ones).
+- **FOLLOWUPS blocker 4c is DEAD**, proved before-and-after on the same scenario (issue Main Store → Kitchen 9 units, read as each head, rolled back):
+
+  | Viewer | Before `056` | After `056` |
+  |---|---|---|
+  | Kitchen head (holds the stock) | **0 rows** | **1 row**, the Kitchen row, qty 9 |
+  | Sports Bar head (gave it away) | **567 rows** — incl. the Kitchen row + all Main Store rows | **283 rows**, Sports Bar only, **0 store rows** |
+
+  Main Bar head 276 rows / 0 store (via a rolled-back re-point — no Main Bar head profile exists yet); Restaurant head 0 rows, still data-absence not policy failure; owner and admin both 1118 rows across both tiers. The `current_stock → stock_items` join a head reads returns **0 null catalogue rows**, so `StockLevelsTab`'s unguarded `r.stock_items.name` cannot throw.
+- **`057` `transfer_stock` + `TransfersTab` wiring** — the transfers bug is closed; see KNOWN BUGS above. `movement_type` is derived server-side (`'issue'` when either end is `'Main Store'`, else `'transfer'`) so a manual store→department move and the identical requisition fulfil cannot disagree in the ledger. Proved live: `Main Store → Sports Bar` returns `'issue'`, `Sports Bar → Main Bar` returns `'transfer'`, a `department_head` is denied `42501`.
+- **`scripts/data-ops/005`** deleted the 2 orphan ledger rows from 27 July. `movement_type='transfer'` count is now 0; balances untouched (the movement never happened, so there was nothing to correct).
+- **Migration history repaired to a clean `001`–`057`, 57 rows, no gaps.** `db push --dry-run` reports "Remote database is up to date."
 
 **Forward path — build order:**
-1. **RLS pass** — now first, because it is blocking (FOLLOWUPS 4c). Then the one-line `TransfersTab` wiring, `movement_type` widening for events, Movement Ledger, bar par levels, real-data dedupe + table split.
-2. **⚠ The transfers-don't-deduct bug is still open** — re-verified live 13 August with evidence (FOLLOWUPS item 6). `TransfersTab` still writes ledger rows only; no `record_stock_transfer` function exists.
+1. **`movement_type` widening** for `event_allocation`/`event_return`, then **Movement Ledger**, **bar par levels**, **real-data dedupe + table split**.
 2. **Remaining Phase 2 features** — bar par levels + end-of-day cycle; consumption attribution + rooms + laundry retention; Farmers Market taxonomy + waiting list + fees; QR attendance; Events UX fixes (payments editable, revenue display — revenue blocked on Dhiren).
 3. **Per-role UI pass** — deferred to end.
 4. **Production cleanup** — drop the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`) from production. Cosmetic, not blocking.
-5. **045–050 rollout** — `supabase migration repair --status applied 045 046 047 048 049 050` (not `db push`) next time schema is touched.
+
+---
+
+## §2.6 RE-PROOF OWED — before the next schema work
+
+The gate closed on `001`–`050` (rebuild run 4, 12 August). **`051`–`057` have never been rebuild-proven**, and `056` additionally executed **out of order** — production ran `057` before `056`, where the files order them `056` → `057`.
+
+**The ordering itself introduced no divergence, and that is established rather than assumed.** The two migrations are disjoint at statement level: `056` is 2 `DROP POLICY` + 2 `CREATE POLICY` + 1 column comment; `057` is 1 `CREATE OR REPLACE FUNCTION` + grants + a function comment. Neither reads, references or depends on the other's objects, so they commute. Confirmed empirically after the fact: applying `056` second left `transfer_stock`, `issue_stock` and `apply_stock_delta` **byte-identical** (`md5(prosrc)` unchanged against the pre-`056` baseline), and every object `051`–`057` describe is present in production as described — location/sub_location/tier columns, the `UNIQUE NULLS NOT DISTINCT` key, the `054` guard trigger, one signature per RPC, both seeded tiers.
+
+**Still owed: a full throwaway rebuild of `001`–`057` and a diff against production**, which is the only thing that catches the unfiled-drift class runs 1–3 found. Not run this session — it needs a billable throwaway project provisioned, which is Aman's call. **Do this before the next migration is written**, not after.
+
+
 
 Every new table ships with placeholder seed in its own step.
 
@@ -177,4 +202,4 @@ Revenue display is blocked on Dhiren (what "different" means). Everything else i
 
 ## STATUS SUMMARY
 
-Hardening done, real data live, migration gate closed, role model live, department vocabulary reconciled. Building Phase 2 to functional-complete on placeholder data by the 15th — two-tier inventory next, then the remaining module work.
+Hardening done, real data live, migration gate closed, role model live, department vocabulary reconciled. **Two-tier inventory is now functionally complete end to end** — location dimension, main store, store→department issuing, department↔department transfers, and the RLS scoping that makes a receiving department able to *see* what it holds, all applied and proven live as the roles. Building the rest of Phase 2 to functional-complete on placeholder data — Movement Ledger and bar par levels next. One item owed: a §2.6 rebuild re-proof covering `051`–`057`.

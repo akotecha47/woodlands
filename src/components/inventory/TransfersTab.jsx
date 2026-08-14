@@ -1,36 +1,41 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, AccessDenied, fetchActiveItems, fetchDepartmentList, fetchStaffUsers } from './InventoryUI'
 import { MANAGE_ROLES } from '../../lib/roles'
+import { transferStock } from '../../lib/stock'
+import { stockLocations } from '../../lib/constants'
 
 // 'store_supervisor' removed — see LogDeliveryTab. Dead role, no behaviour change.
 
 export default function TransfersTab() {
-  const { profile, session } = useAuth()
-  const [items,       setItems]       = useState([])
-  const [departments, setDepartments] = useState([])
-  const [staffUsers,  setStaffUsers]  = useState([])
-  const [busy,        setBusy]        = useState(false)
-  const [toast,       setToast]       = useState(null)
+  const { profile } = useAuth()
+  const [items,      setItems]      = useState([])
+  const [locations,  setLocations]  = useState([])
+  const [staffUsers, setStaffUsers] = useState([])
+  const [busy,       setBusy]       = useState(false)
+  const [toast,      setToast]      = useState(null)
   const flash = useFlash(setToast)
   const [form, setForm] = useState({
-    stock_item_id: '', from_department: '', to_department: '', quantity: '', notes: '', received_by_id: '',
+    stock_item_id: '', from_location: '', to_location: '', quantity: '', notes: '', received_by_id: '',
   })
 
   useEffect(() => {
     if (!MANAGE_ROLES.includes(profile?.role)) return
     fetchActiveItems().then(setItems)
-    fetchDepartmentList().then(setDepartments)
+    // Locations, not departments: 'Main Store' is a stock location and never a
+    // departments row (051), so it has to be prepended in code. This is what
+    // lets the screen serve manual store→department issues and department→store
+    // returns as well as department↔department transfers.
+    fetchDepartmentList().then(d => setLocations(stockLocations(d)))
     fetchStaffUsers().then(setStaffUsers)
   }, [profile?.role])
 
   if (!MANAGE_ROLES.includes(profile?.role)) return <AccessDenied />
 
   const deptError =
-    form.from_department && form.to_department && form.from_department === form.to_department
-      ? 'From and To departments cannot be the same'
+    form.from_location && form.to_location && form.from_location === form.to_location
+      ? 'From and To locations cannot be the same'
       : null
 
   async function handleSubmit(e) {
@@ -44,23 +49,22 @@ export default function TransfersTab() {
         form.notes,
       ].filter(Boolean).join('\n') || null
 
-      const qty  = Number(form.quantity)
-      const base = {
-        stock_item_id:   form.stock_item_id,
-        movement_type:   'transfer',
-        from_department: form.from_department,
-        to_department:   form.to_department,
-        performed_by:    session.user.id,
-        notes:           noteValue,
-      }
-      // Two rows: negative from source, positive to destination
-      const { error } = await supabase.from('stock_movements').insert([
-        { ...base, quantity_change: -qty },
-        { ...base, quantity_change:  qty },
-      ])
-      if (error) throw error
-      flash('Transfer recorded')
-      setForm({ stock_item_id: '', from_department: '', to_department: '', quantity: '', notes: '', received_by_id: '' })
+      const qty = Number(form.quantity)
+      // This used to insert two stock_movements rows directly (−qty / +qty) and
+      // call no RPC at all, so a transfer wrote ledger history and moved no
+      // stock — the transfers-don't-deduct bug, found 27 July 2026. The RPC
+      // moves both balances in one transaction; it also writes the ledger pair
+      // itself, so nothing may insert stock_movements alongside it (see
+      // src/lib/stock.js). `performed_by` is gone with it: apply_stock_delta
+      // records auth.uid() server-side.
+      const res = await transferStock(
+        form.stock_item_id, form.from_location, form.to_location, qty, { reason: noteValue },
+      )
+      // Report what the server actually recorded, not what the screen assumed:
+      // a move with the main store at either end is an 'issue', not a
+      // 'transfer', and the UI does not get a vote.
+      flash(res?.movement_type === 'issue' ? 'Stock issued' : 'Transfer recorded')
+      setForm({ stock_item_id: '', from_location: '', to_location: '', quantity: '', notes: '', received_by_id: '' })
     } catch (err) { flash(err.message, false) }
     finally { setBusy(false) }
   }
@@ -79,17 +83,17 @@ export default function TransfersTab() {
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="From *">
-            <Sel required value={form.from_department}
-              onChange={e => setForm(f => ({ ...f, from_department: e.target.value }))}>
+            <Sel required value={form.from_location}
+              onChange={e => setForm(f => ({ ...f, from_location: e.target.value }))}>
               <option value="">Select…</option>
-              {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+              {locations.map(l => <option key={l} value={l}>{l}</option>)}
             </Sel>
           </Field>
           <Field label="To *">
-            <Sel required value={form.to_department}
-              onChange={e => setForm(f => ({ ...f, to_department: e.target.value }))}>
+            <Sel required value={form.to_location}
+              onChange={e => setForm(f => ({ ...f, to_location: e.target.value }))}>
               <option value="">Select…</option>
-              {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+              {locations.map(l => <option key={l} value={l}>{l}</option>)}
             </Sel>
           </Field>
         </div>

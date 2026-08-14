@@ -58,12 +58,6 @@ export async function applyStockDelta(stockItemId, delta, {
 }
 
 /**
- * Set an item's balance to an absolute value — a stock take. The delta is
- * computed server-side under the lock, so it cannot be based on a stale read.
- * Records an 'adjustment' movement for the difference, and no movement at all
- * when the value is unchanged. Returns the new quantity.
- */
-/**
  * Move stock from one location to another — the two-tier issue path.
  * Primary case is MAIN_STORE -> a department: the store balance is deducted
  * and the department balance credited, atomically (migration 055).
@@ -96,6 +90,48 @@ export async function issueStock(stockItemId, fromLocation, toLocation, quantity
   return data
 }
 
+/**
+ * Move stock between two locations from the Transfers screen (migration 057).
+ *
+ * Thin wrapper over transfer_stock, which is itself a thin delegation to
+ * issue_stock — one transaction, deterministic lock order, fail-closed on
+ * insufficient source, destination row created at the right location/tier if
+ * absent. None of that is reimplemented anywhere.
+ *
+ * There is deliberately NO movementType option. The server derives it from the
+ * movement: 'issue' when either end is MAIN_STORE, 'transfer' otherwise. If the
+ * caller could choose, a manual store→department move would be recorded as
+ * 'transfer' while the identical movement raised through a requisition was
+ * recorded as 'issue', and the Movement Ledger would describe one physical
+ * event two ways. The returned object reports which type was actually written.
+ *
+ * Returns { from_location, to_location, quantity, from_quantity, to_quantity,
+ *           movement_type }.
+ */
+export async function transferStock(stockItemId, fromLocation, toLocation, quantity, {
+  reason = null,
+  fromSubLocation = null,
+  toSubLocation = null,
+} = {}) {
+  const { data, error } = await supabase.rpc('transfer_stock', {
+    p_stock_item_id:     stockItemId,
+    p_from_location:     fromLocation,
+    p_to_location:       toLocation,
+    p_quantity:          quantity,
+    p_reason:            reason,
+    p_from_sub_location: fromSubLocation,
+    p_to_sub_location:   toSubLocation,
+  })
+  if (error) throw error
+  return data
+}
+
+/**
+ * Set an item's balance to an absolute value — a stock take. The delta is
+ * computed server-side under the lock, so it cannot be based on a stale read.
+ * Records an 'adjustment' movement for the difference, and no movement at all
+ * when the value is unchanged. Returns the new quantity.
+ */
 export async function setStockQuantity(stockItemId, newQty, reason = null) {
   const { data, error } = await supabase.rpc('set_stock_quantity', {
     p_stock_item_id: stockItemId,
