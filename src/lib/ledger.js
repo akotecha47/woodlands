@@ -72,3 +72,31 @@ export function parseSupplier(notes) {
   const match = notes.match(/^Supplier:\s*(.+)/m)
   return match ? match[1].trim() : null
 }
+
+// Movements with no departmental route at all. A delivery is external inflow —
+// it arrives from a supplier, which is not a department and does not belong in
+// a column meaning "which departments did this move between". An
+// opening_balance is an import artefact and moved between nowhere.
+export const NO_ROUTE_TYPES = new Set(['delivery', 'opening_balance'])
+
+/**
+ * What the From → To cell should show for a movement.
+ *
+ * Returns null when the movement has no route, which the caller renders as an
+ * em dash. This previously put the supplier parsed out of the notes in the From
+ * slot for deliveries, which rendered "Aman → —" on the live delivery row: a
+ * person's name sitting where a department belongs, reading as though stock had
+ * arrived from a department called Aman. The supplier is still on the row and
+ * is surfaced as a tooltip — it is simply not a route.
+ *
+ * Render-side only. No delivery row's from_department is mutated; as of the
+ * 14 August backfill every delivery and opening_balance row already carries
+ * NULL in both department columns.
+ */
+export function routeFor(row) {
+  if (NO_ROUTE_TYPES.has(row.movement_type)) return null
+  const from = row.from_department ?? null
+  const to   = row.to_department ?? null
+  if (!from && !to) return null
+  return { from, to }
+}

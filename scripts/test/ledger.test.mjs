@@ -9,7 +9,7 @@
 // all (533 opening_balance, 1 delivery, 1 requisition, 1 event_allocation).
 // The first real requisition fulfil or transfer will be the first live
 // exercise; until then this suite is the proof.
-import { collapsePairs, parseSupplier } from '../../src/lib/ledger.js'
+import { collapsePairs, parseSupplier, routeFor } from '../../src/lib/ledger.js'
 
 let pass = 0, fail = 0
 const check = (name, cond, detail) => {
@@ -147,6 +147,53 @@ console.log('\n8. supplier parsing')
   check('parses the live format', parseSupplier('Supplier: Aman\nReceived by: Owner') === 'Aman')
   check('null when absent', parseSupplier('11') === null)
   check('null when notes empty', parseSupplier(null) === null)
+}
+
+// ── 9. From -> To routing (migration 059 / data-op 006) ────────────────────
+// Rows below are the ACTUAL live rows as of 14 August 2026, post-backfill.
+console.log('\n9. From -> To routing')
+{
+  // The row that rendered "Aman -> —". from_department is NULL in the data;
+  // the name came from the notes being parsed into the From slot.
+  const delivery = {
+    movement_type: 'delivery', quantity_change: 10,
+    from_department: null, to_department: null,
+    notes: 'Supplier: Aman\nReceived by: Owner',
+  }
+  check('delivery has NO route (renders em dash)', routeFor(delivery) === null)
+  check('the supplier is still recoverable for the tooltip',
+        parseSupplier(delivery.notes) === 'Aman')
+
+  // Defensive: even if a delivery somehow carried a department, it is not a route.
+  check('delivery with a stray from_department is STILL not a route',
+        routeFor({ ...delivery, from_department: 'Aman' }) === null)
+
+  check('opening_balance has no route',
+        routeFor({ movement_type: 'opening_balance', from_department: null, to_department: null }) === null)
+
+  // Live event rows after data-ops/006.
+  check('event_allocation routes FROM the consuming department',
+        JSON.stringify(routeFor({ movement_type: 'event_allocation', quantity_change: -13,
+                                  from_department: 'Main Bar', to_department: null }))
+        === JSON.stringify({ from: 'Main Bar', to: null }))
+
+  check('event_return routes TO the receiving department',
+        JSON.stringify(routeFor({ movement_type: 'event_return', quantity_change: 4,
+                                  from_department: null, to_department: 'Main Bar' }))
+        === JSON.stringify({ from: null, to: 'Main Bar' }))
+
+  // The live requisition row.
+  check('requisition keeps its destination',
+        routeFor({ movement_type: 'requisition', from_department: null,
+                   to_department: 'Main Bar' })?.to === 'Main Bar')
+
+  check('an issue keeps both ends',
+        JSON.stringify(routeFor({ movement_type: 'issue', from_department: 'Main Store',
+                                  to_department: 'Sports Bar' }))
+        === JSON.stringify({ from: 'Main Store', to: 'Sports Bar' }))
+
+  check('a routeless non-delivery row still collapses to no route',
+        routeFor({ movement_type: 'adjustment', from_department: null, to_department: null }) === null)
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

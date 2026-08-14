@@ -105,9 +105,13 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
         // deduction is refused we remove it again rather than leaving a phantom
         // allocation behind a deduction that never happened.
         try {
+          // from_department: the stock LEAVES this department for the event.
+          // selectedItem is the row the dropdown was populated from, so the
+          // department is already loaded — nothing is re-fetched to get it.
           await applyStockDelta(form.stock_item_id, -qty, {
-            movementType: 'event_allocation',
-            reason:       `Event stock allocated (event ${eventId})`,
+            movementType:   'event_allocation',
+            reason:         `Event stock allocated (event ${eventId})`,
+            fromDepartment: selectedItem?.department ?? null,
           })
         } catch (deductErr) {
           await supabase.from('event_stock_allocations').delete().eq('id', newAlloc.id)
@@ -170,9 +174,13 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
         // applyStockDelta rejects a zero delta, and a zero-change ledger row
         // would be noise.
         if (returned > 0) {
+          // to_department: unused stock comes BACK to the department. The
+          // allocation rows are loaded with stock_items(... department), which
+          // is the same join the Dept column in the table above renders from.
           await applyStockDelta(a.stock_item_id, returned, {
             movementType: 'event_return',
             reason:       `Event clearance, unused stock returned (event ${eventId})`,
+            toDepartment: a.stock_items?.department ?? null,
           })
         }
         // Mark cleared. returned_qty is persisted so the audit trail matches

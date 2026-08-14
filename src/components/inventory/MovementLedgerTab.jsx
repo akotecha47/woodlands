@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { MAIN_STORE } from '../../lib/constants'
-import { collapsePairs, parseSupplier } from '../../lib/ledger'
+import { collapsePairs, parseSupplier, routeFor } from '../../lib/ledger'
 import { Th, Td, Toast, useFlash, fmtDate } from '../admin/AdminUI'
 import { EmptyRow, TdBold, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
 
@@ -65,13 +65,20 @@ function Qty({ entry, unit }) {
   )
 }
 
-/** "From → To". Deliveries have no source department, so the supplier fills it. */
+/** "From → To", for the movements that actually have one. See routeFor. */
 function Route({ entry }) {
-  const r = entry.row
-  const from = r.movement_type === 'delivery' ? parseSupplier(r.notes) : r.from_department
-  const to   = r.to_department
+  const r     = entry.row
+  const route = routeFor(r)
 
-  if (!from && !to) return <span className="text-gray-400">—</span>
+  if (!route) {
+    // The supplier is not a route, but it is still the most useful thing to
+    // know about a delivery, so it survives as the cell's tooltip.
+    const supplier = parseSupplier(r.notes)
+    return (
+      <span className="text-gray-400" title={supplier ? `Supplier: ${supplier}` : undefined}>—</span>
+    )
+  }
+  const { from, to } = route
   return (
     <span className="text-sm text-gray-600 whitespace-nowrap">
       <span className={from ? '' : 'text-gray-400'}>{from ?? '—'}</span>

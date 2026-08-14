@@ -107,7 +107,11 @@ export default function EventDetailTab({ eventId, onBack }) {
     if (newStatus === 'confirmed') {
       const { data: pending, error: pendingErr } = await supabase
         .from('event_stock_allocations')
-        .select('id, stock_item_id, allocated_qty')
+        // stock_items(department) is needed for the ledger row's
+        // from_department. Without it the movement is written with a null
+        // department and the Movement Ledger's department filter drops it —
+        // the ledger then under-reports the department's own stock draws.
+        .select('id, stock_item_id, allocated_qty, stock_items(department)')
         .eq('event_id', eventId)
         .eq('status', 'pending')
       if (pendingErr) throw pendingErr
@@ -132,9 +136,14 @@ export default function EventDetailTab({ eventId, onBack }) {
         // Atomic: locks the balance, deducts, writes the ledger row. The
         // guard above stays as a friendlier pre-check; this call is the one
         // that actually enforces it under a lock.
+        // from_department, not to_department: the stock LEAVES the department
+        // for the event, and there is no receiving department — an event is not
+        // one. The sign and the column agree, and dept_select matches on either
+        // end, so the department head now sees its own draws.
         await applyStockDelta(alloc.stock_item_id, -required, {
-          movementType: 'event_allocation',
-          reason:       `Event stock allocated (event ${eventId})`,
+          movementType:   'event_allocation',
+          reason:         `Event stock allocated (event ${eventId})`,
+          fromDepartment: alloc.stock_items?.department ?? null,
         })
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')
@@ -149,7 +158,8 @@ export default function EventDetailTab({ eventId, onBack }) {
     } else if (newStatus === 'cancelled') {
       const { data: deducted, error: deductedErr } = await supabase
         .from('event_stock_allocations')
-        .select('id, stock_item_id, allocated_qty, deducted_qty')
+        // stock_items(department) — see the confirm branch above.
+        .select('id, stock_item_id, allocated_qty, deducted_qty, stock_items(department)')
         .eq('event_id', eventId)
         .eq('status', 'deducted')
       if (deductedErr) throw deductedErr
@@ -159,9 +169,12 @@ export default function EventDetailTab({ eventId, onBack }) {
         // have been silently clamped; allocated_qty is then the best available
         // answer because nothing recorded the real figure.
         const qtyBack = Number(alloc.deducted_qty ?? alloc.allocated_qty)
+        // to_department: the stock comes BACK to the department. Mirror image
+        // of the allocation above — positive delta, receiving end named.
         await applyStockDelta(alloc.stock_item_id, qtyBack, {
           movementType: 'event_return',
           reason:       `Event cancelled, stock returned (event ${eventId})`,
+          toDepartment: alloc.stock_items?.department ?? null,
         })
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')
