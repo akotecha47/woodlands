@@ -81,7 +81,7 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 Full detail — all four runs, every divergence found and fixed, and the residual cleanup item — in `WOODLANDS_FOLLOWUPS.md`. `045`–`050` were rolled into production's migration history on 13 August via `migration repair` (never `db push` — `050`'s revoke/re-grant window must not run against live data).
 
-**⚠ The proof covers `001`–`050` only.** `051`–`057` are all post-gate and **none has been through a from-files rebuild**. See "§2.6 RE-PROOF OWED" below.
+**Extended to `001`–`057` by re-proof run 5 (14 August).** `051`–`057` (two-tier + RLS + transfers) rebuilt clean from empty and diffed against production — PASS, one low-severity residual logged. See "§2.6 RE-PROOF — DONE" below.
 
 ---
 
@@ -180,13 +180,13 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 
 ---
 
-## §2.6 RE-PROOF OWED — before the next schema work
+## §2.6 RE-PROOF — DONE (run 5, 14 August 2026)
 
-The gate closed on `001`–`050` (rebuild run 4, 12 August). **`051`–`057` have never been rebuild-proven**, and `056` additionally executed **out of order** — production ran `057` before `056`, where the files order them `056` → `057`.
+The gate closed on `001`–`050` (rebuild run 4, 12 August). `051`–`057` had never been rebuild-proven, and `056` additionally executed **out of order** on production — `057` ran before `056`, where the files order them `056` → `057`.
 
-**The ordering itself introduced no divergence, and that is established rather than assumed.** The two migrations are disjoint at statement level: `056` is 2 `DROP POLICY` + 2 `CREATE POLICY` + 1 column comment; `057` is 1 `CREATE OR REPLACE FUNCTION` + grants + a function comment. Neither reads, references or depends on the other's objects, so they commute. Confirmed empirically after the fact: applying `056` second left `transfer_stock`, `issue_stock` and `apply_stock_delta` **byte-identical** (`md5(prosrc)` unchanged against the pre-`056` baseline), and every object `051`–`057` describe is present in production as described — location/sub_location/tier columns, the `UNIQUE NULLS NOT DISTINCT` key, the `054` guard trigger, one signature per RPC, both seeded tiers.
+**Re-proof run 5 (14 August): `001`–`057` pushed clean into an empty throwaway and diffed against production — PASS, with one low-severity residual logged (below).** All 57 migrations applied with no error; the out-of-order `056` introduced no divergence (its RLS policy set rebuilt byte-identical to production). Schema, constraints, indexes, functions, the two-tier objects (location/sub_location/tier columns, the `UNIQUE NULLS NOT DISTINCT` key, the `054` guard trigger, one signature per RPC, both seeded tiers) all matched. Known-and-expected: the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`) remain production-only cruft.
 
-**Still owed: a full throwaway rebuild of `001`–`057` and a diff against production**, which is the only thing that catches the unfiled-drift class runs 1–3 found. Not run this session — it needs a billable throwaway project provisioned, which is Aman's call. **Do this before the next migration is written**, not after.
+**New residual found by run 5 (logged, not blocking):** `anon` holds `EXECUTE` on `current_app_role` / `current_app_department` on a fresh rebuild but not on production. Migration `050`'s default-privileges fix revokes *future* function grants but has no section resetting functions that already existed when `050` runs — and `current_app_role` (`021`) and `current_app_department` (`037`) both predate `050`, so a fresh project's default `anon`-EXECUTE grant survives the rebuild. Low severity: both are `SECURITY DEFINER` functions used only inside RLS `USING` clauses, `anon` holds zero table access either side (confirmed), and the app never calls them directly. It is the same class of gap `050` was written to close, on the function side. **Fix in the next docs/migration pass — a `050`-style retroactive `REVOKE EXECUTE` on the pre-existing functions — before it compounds. Not blocking the next feature.**
 
 
 
@@ -202,4 +202,4 @@ Revenue display is blocked on Dhiren (what "different" means). Everything else i
 
 ## STATUS SUMMARY
 
-Hardening done, real data live, migration gate closed, role model live, department vocabulary reconciled. **Two-tier inventory is now functionally complete end to end** — location dimension, main store, store→department issuing, department↔department transfers, and the RLS scoping that makes a receiving department able to *see* what it holds, all applied and proven live as the roles. Building the rest of Phase 2 to functional-complete on placeholder data — Movement Ledger and bar par levels next. One item owed: a §2.6 rebuild re-proof covering `051`–`057`.
+Hardening done, real data live, migration gate closed, role model live, department vocabulary reconciled. **Two-tier inventory is now functionally complete end to end** — location dimension, main store, store→department issuing, department↔department transfers, and the RLS scoping that makes a receiving department able to *see* what it holds, all applied and proven live as the roles. Building the rest of Phase 2 to functional-complete on placeholder data — Movement Ledger and bar par levels next. §2.6 re-proof covering `051`–`057` **done (run 5, 14 August) — PASS**, with one low-severity residual logged (`anon` EXECUTE on two pre-`050` functions; fix in the next migration pass, non-blocking).
