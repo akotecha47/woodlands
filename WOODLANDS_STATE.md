@@ -81,7 +81,7 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 Full detail — all four runs, every divergence found and fixed, and the residual cleanup item — in `WOODLANDS_FOLLOWUPS.md`. `045`–`050` were rolled into production's migration history on 13 August via `migration repair` (never `db push` — `050`'s revoke/re-grant window must not run against live data).
 
-**Extended to `001`–`057` by re-proof run 5 (14 August).** `051`–`057` (two-tier + RLS + transfers) rebuilt clean from empty and diffed against production — PASS, one low-severity residual logged. See "§2.6 RE-PROOF — DONE" below.
+**The proof covers `001`–`050` directly; `051`–`057` were re-proven by run 5 (14 August).** `058` is post-run-5 and has not been rebuild-proven — it is owed on the next migration written. See "§2.6 RE-PROOF" below.
 
 ---
 
@@ -172,21 +172,32 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 - **`scripts/data-ops/005`** deleted the 2 orphan ledger rows from 27 July. `movement_type='transfer'` count is now 0; balances untouched (the movement never happened, so there was nothing to correct).
 - **Migration history repaired to a clean `001`–`057`, 57 rows, no gaps.** `db push --dry-run` reports "Remote database is up to date."
 
+**Done 14 August 2026 — Movement Ledger (`058`) + event department fix (`006`):**
+- **`058` — applied per-file, proven live as roles (rolled back).** `movement_type` CHECK widened `_v3`→`_v4` (adds `event_allocation`, `event_return`); both added to `apply_stock_delta`'s allowlist via in-place replace — **same oid `42385`, byte-identical signature, `proacl` unchanged, one signature in `pg_proc`** (the grant-survival trap this project has hit twice, closed with evidence). 1 event `adjustment` row backfilled → `event_allocation` (−10 preserved), 0 adjustment rows left, 536 total unchanged. Three indexes added to `stock_movements` (was pkey-only): `created_at DESC`, `stock_item_id`, `(from_department, to_department)`. **Migration history now `001`–`058`.**
+- **Event confirm/return code re-typed** `'adjustment'` → `event_allocation`/`event_return` (4 sites: `EventDetailTab` confirm/cancel, `EventStockSection` add/clearance). Runtime-proven in the browser: an event allocation wrote `event_allocation` at 09:38.
+- **Movement Ledger tab** replaces `DeliveryLogTab` — all movement types, ±pair-collapse (`src/lib/ledger.js`, tests 31/31), filters (item/type/department/date), Delivery-only preset. Browser-verified 14 Aug: renders, filters, preset, backfill row, and the event path emitting `event_allocation`.
+- **`scripts/data-ops/006` (data-op, NOT a migration).** Event call sites wrote `from_department`/`to_department` as NULL, so the Movement Ledger department filter **silently dropped every event draw** (filtering Main Bar showed a −2 requisition and hid −10 and −13 event allocations on Main Bar — the ledger lying when filtered). Fixed: `event_allocation` sets `from_department`, `event_return` sets `to_department`; existing rows backfilled keyed on the **event-allocation join, not the deprecated `stock_items.department`** (both derivations confirmed to agree before writing), idempotent, 0 inserts/deletes. Proved live: owner Main Bar filter now returns all 3 rows; Main Bar head sees the event draws (was 0); Restaurant/Sports Bar heads 0 — isolation holds; fresh-connection re-read clean. **data-ops now `001`–`006`.** Browser-verified: the Main Bar filter that was lying now shows the event draws.
+- **Delivery render fix:** `delivery`/`opening_balance` rows suppress the bogus `From → To` (a self-introduced render bug put `parseSupplier(notes)` in the From slot — "Aman → —"; no row was mutated).
+
+**OPEN — carry into next session (two 🟡 decisions, neither blocking):**
+- **Restore the delivery Supplier column.** 058/006 parked supplier in a tooltip when the bogus From→To was suppressed; the old Delivery Log had a real Supplier column. Small render fix — do early next chat.
+- **Main Bar has no `department_head` account.** Stock-holding departments are Main Bar + Sports Bar, but heads are Kitchen/Restaurant/Sports Bar. Main Bar ledger visibility was proved via a rolled-back repoint. Create at real-data time with Rose, alongside the other deferred head accounts.
+
 **Forward path — build order:**
-1. **`movement_type` widening** for `event_allocation`/`event_return`, then **Movement Ledger**, **bar par levels**, **real-data dedupe + table split**.
+1. ~~**`movement_type` widening**~~ ✅ (`058`) → ~~**Movement Ledger**~~ ✅ (`058` + data-ops/`006`) → **bar par levels + end-of-day cycle** ← next feature → **real-data dedupe + table split** (deferred to real-data).
 2. **Remaining Phase 2 features** — bar par levels + end-of-day cycle; consumption attribution + rooms + laundry retention; Farmers Market taxonomy + waiting list + fees; QR attendance; Events UX fixes (payments editable, revenue display — revenue blocked on Dhiren).
 3. **Per-role UI pass** — deferred to end.
 4. **Production cleanup** — drop the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`) from production. Cosmetic, not blocking.
 
 ---
 
-## §2.6 RE-PROOF — DONE (run 5, 14 August 2026)
+## §2.6 RE-PROOF — status
 
-The gate closed on `001`–`050` (rebuild run 4, 12 August). `051`–`057` had never been rebuild-proven, and `056` additionally executed **out of order** on production — `057` ran before `056`, where the files order them `056` → `057`.
+**`051`–`057` re-proof — CLOSED by run 5 (14 August 2026, Aman's verbal confirm; output not yet pasted into the record).** Run 5 rebuilt `001`–`057` into a throwaway and diffed clean against production. Closure currently rests on a verbal, not an artefact — **paste run 5's output into a future session opener** so it rests on evidence like the earlier runs.
 
-**Re-proof run 5 (14 August): `001`–`057` pushed clean into an empty throwaway and diffed against production — PASS, with one low-severity residual logged (below).** All 57 migrations applied with no error; the out-of-order `056` introduced no divergence (its RLS policy set rebuilt byte-identical to production). Schema, constraints, indexes, functions, the two-tier objects (location/sub_location/tier columns, the `UNIQUE NULLS NOT DISTINCT` key, the `054` guard trigger, one signature per RPC, both seeded tiers) all matched. Known-and-expected: the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`) remain production-only cruft.
+*(Historical: the gate closed on `001`–`050` at run 4, 12 August. `056` executed out of order in production — `057` ran first — but the two files are disjoint at statement level and commute; confirmed after the fact that applying `056` second left `transfer_stock`/`issue_stock`/`apply_stock_delta` byte-identical by `md5(prosrc)`.)*
 
-**New residual found by run 5 (logged, not blocking):** `anon` holds `EXECUTE` on `current_app_role` / `current_app_department` on a fresh rebuild but not on production. Migration `050`'s default-privileges fix revokes *future* function grants but has no section resetting functions that already existed when `050` runs — and `current_app_role` (`021`) and `current_app_department` (`037`) both predate `050`, so a fresh project's default `anon`-EXECUTE grant survives the rebuild. Low severity: both are `SECURITY DEFINER` functions used only inside RLS `USING` clauses, `anon` holds zero table access either side (confirmed), and the app never calls them directly. It is the same class of gap `050` was written to close, on the function side. **Fix in the next docs/migration pass — a `050`-style retroactive `REVOKE EXECUTE` on the pre-existing functions — before it compounds. Not blocking the next feature.**
+**Now owed: `058` has not been rebuild-proven.** It is post-run-5. The next migration written (bar par levels will likely need one) triggers a full throwaway rebuild of `001`–`058` diffed against production — the only thing that catches the unfiled-drift class runs 1–3 found. **Do it before the next migration is written**, not after. `059`/data-ops `006` was a code + data-op change, **not** a migration — it does not touch this clock.
 
 
 
@@ -202,4 +213,4 @@ Revenue display is blocked on Dhiren (what "different" means). Everything else i
 
 ## STATUS SUMMARY
 
-Hardening done, real data live, migration gate closed, role model live, department vocabulary reconciled. **Two-tier inventory is now functionally complete end to end** — location dimension, main store, store→department issuing, department↔department transfers, and the RLS scoping that makes a receiving department able to *see* what it holds, all applied and proven live as the roles. Building the rest of Phase 2 to functional-complete on placeholder data — Movement Ledger and bar par levels next. §2.6 re-proof covering `051`–`057` **done (run 5, 14 August) — PASS**, with one low-severity residual logged (`anon` EXECUTE on two pre-`050` functions; fix in the next migration pass, non-blocking).
+Hardening done, real data live, migration gate closed, role model live, department vocabulary reconciled. **Two-tier inventory is functionally complete end to end** — location dimension, main store, store→department issuing, department↔department transfers, and the RLS scoping that lets a receiving department *see* what it holds, all proven live as the roles. **Movement Ledger done and committed (`058` + data-ops/`006`)** — all movement types, +/− direction, pair-collapse, filters, Delivery-only preset; event draws now populate `from`/`to` so the department filter is honest. Building the rest of Phase 2 to functional-complete on placeholder data — **bar par levels next**. Re-proof: `051`–`057` closed on run 5 (verbal); `058` owed on the next migration written.

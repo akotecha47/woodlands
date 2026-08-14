@@ -4,6 +4,8 @@
 
 **Rewritten 9 August 2026** to the end goal. Supersedes the 31 May 2026 version (which described the pre-hardening single-tier build with roles that no longer exist).
 
+**Updated 14 August 2026** — gate closed, role model built, two-tier inventory built, Movement Ledger built (`058` + data-ops/`006`). The corresponding [NEW]/[PROPOSED]/[BUG] markers below are flipped to [DONE]. Remaining [NEW] work: bar par levels, consumption attribution, rooms, QR attendance, Farmers Market taxonomy/waiting-list/fees, Events payments-editable + revenue.
+
 **Scope source:** the Phase 2 additions below come from `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md`. Where that doc and this one disagree, the meeting doc is the record of what Dhiren asked for; this doc is the build interpretation of it.
 
 ---
@@ -21,34 +23,28 @@ The target for end of the week of 11 August: **every screen works on placeholder
 
 ---
 
-## 0. THE GATE — MIGRATION HISTORY RECONCILIATION [P1]
+## 0. THE GATE — MIGRATION HISTORY RECONCILIATION [DONE — historical]
 
-**Session A executed (9 August) — gate NOT yet closed. Session B (012 auth) closes it.** History repaired to 001–035 minus 010/012/017; duplicate 008 merged; ghost tables migrated (031/032/033); missing attendance indexes created (034); GPS columns migrated (035); 021 rebuild-order bug fixed; 010 FK documented to live. Real data unchanged.
-
-**Session B remaining:** drop the blanket `ALL/authenticated/USING(true)` policy live on `attendance_records`; reconcile 017's policy drift + the unfiled "staff can… own" policies; clean seed.sql's flagged block; decide the two 010 default divergences (`shift_date`, `within_radius`); then `repair 010/012/017`, `db push --dry-run`, staging rebuild proof = gate closed. **Do NOT run `db push` before Session B reconciles 010/012/017.** Full detail in `WOODLANDS_FOLLOWUPS.md`.
+**✅ GATE CLOSED.** History reconciled and schema provably rebuildable from files: `001`–`050` rebuild-proven (run 4, 12 August); `051`–`057` re-proven (run 5, 14 August). Migration history now **`001`–`058`**. `db push` is trustworthy for new schema. **This section no longer blocks anything** — retained for provenance. The one live re-proof item: `058` is post-run-5 and owed a from-files rebuild before the next migration is written (see `WOODLANDS_STATE.md` §2.6). Full detail in `WOODLANDS_STATE.md` and `WOODLANDS_FOLLOWUPS.md`.
 
 ---
 
 ## 1. ROLES
 
-### Current — authoritative in `src/lib/roles.js` [DONE]
+### Role model — BUILT AND PROVEN [DONE] (migrations 037–044, 12 August)
 
-`owner`, `manager`, `kitchen_manager`, `restaurant_manager`. Four login roles. The `staff` table (62 rows) is disjoint from login roles — it is the roster the manager-facing Attendance screens operate on, no FK to `user_profiles`.
+Live roles: `owner`, `admin`, `department_head` (scoped by `user_profiles.department`), `hr`. The old `owner`/`manager`/`kitchen_manager`/`restaurant_manager` set no longer exists. Authoritative in `src/lib/roles.js`. The `staff` table (62 rows) is disjoint from login roles — it is the roster the manager-facing Attendance screens operate on, no FK to `user_profiles`.
 
-### Target model [NEW — PROPOSED, confirm before the role migration runs]
-
-The meeting requires owner, front-desk admin, multiple restaurant heads, one head per other department, and HR. The right architecture is **one `department_head` role scoped by the existing `department` field, not a role per department** — role-per-department is role explosion and can't cleanly express "Restaurant has three or four heads."
-
-Target roles:
+The model implements the meeting requirement (owner, front-desk admin, multiple restaurant heads, one head per other department, HR) as **one `department_head` role scoped by the existing `department` field, not a role per department** — role-per-department is role explosion and can't cleanly express "Restaurant has three or four heads."
 
 | Role | Who | Scope |
 |---|---|---|
-| `owner` | Dhiren | Everything |
-| `admin` | Rose, Secret (front desk) | Bookings, events, Farmers Market, front-desk operations. Confirm exact surface. |
-| `department_head` | Sanjay/Patrick/Daniel + heads of Housekeeping, Laundry, Grounds, Restaurant Bar, Sports Bar | Scoped to their `department`: that department's sub-store, consumption, requisitions, par levels (bars), their staff's attendance. **Multiple heads per department allowed.** |
-| `hr` | Martin | Staff, roster, shifts, attendance. **Not** stock or revenue. Confirm. |
+| `owner` | Dhiren | Everything, including event payment write. Except the Admin page (owner-only anyway). |
+| `admin` | Rose, Secret (front desk) | Full access to all modules including event payment write, **except** the Admin page (owner-only). |
+| `department_head` | Heads of Main Bar, Sports Bar, Kitchen, Restaurant, Housekeeping, Grounds, etc. | Scoped to their `user_profiles.department`: that department's sub-store, requisitions (raise + view own dept, cannot approve), stock. **No attendance scope.** **Multiple heads per department allowed.** |
+| `hr` | Martin | Staff, roster, shifts, attendance. **Not** stock or revenue. |
 
-**Collapse mapping (confirm):** `manager` → absorbed by `owner`/`admin`; `kitchen_manager` → `department_head` (Kitchen); `restaurant_manager` → `department_head` (Restaurant) or `admin`. Whether a general cross-department `manager` role survives below owner is Aman's call — do not delete it unilaterally.
+Attendance is **admin + hr only** (plus owner) — no department-scoped attendance. The two bars (Main Bar, Sports Bar) are scoped independently.
 
 Departments stay plain text, never FK to a departments table (standing rule).
 
@@ -59,7 +55,7 @@ Departments stay plain text, never FK to a departments table (standing rule).
 | `/login`, `/checkin` (FM), `/attend` (staff QR) | Public |
 | `/dashboard` | All authenticated |
 | `/inventory` | owner, admin, department_head (own dept view) |
-| `/attendance` | owner, admin, hr; department_head (own staff) |
+| `/attendance` | owner, admin, hr |
 | `/events` | owner, admin |
 | `/table-bookings` | owner, admin |
 | `/farmers-market` | owner, admin |
@@ -67,25 +63,27 @@ Departments stay plain text, never FK to a departments table (standing rule).
 
 **[VERIFY]** the old spec claimed a GPS geofence on clock-in (100 m radius, `unverified` status). AUDIT (4 July) corroborates "GPS-flagged clock in/out," so it likely exists — but confirm against live code before relying on it, and decide how it coexists with QR check-in (§4).
 
+**Known deferred surfaces (see FOLLOWUPS "PHASE 2 ROLE MODEL — deferred items"):** `hr` has `staff` write in RLS but no reachable UI (StaffTab lives under owner-only `/admin`); `RequisitionsTab` shows a head only their OWN requisitions where RLS now permits the whole department (fails closed, one-line fix); remaining `department_head` accounts (incl. a **Main Bar head**) deferred to real-data time with Rose.
+
 ---
 
-## 2. NEW CROSS-CUTTING CONCEPTS [NEW]
+## 2. NEW CROSS-CUTTING CONCEPTS
 
 Three things Phase 2 introduces that don't map to a single existing module.
 
-### 2.1 Two-tier inventory
+### 2.1 Two-tier inventory [DONE — foundation + issuing + transfers + RLS] (migrations 051–057)
 
 One main store is the single inbound point — everything logged in on arrival. Stock then distributes out to departments as needed: **one inflow, many outflows.** Each department holds its own stock, consumed from its own dedicated list.
 
-Data-model direction: an item carries a main-store balance and a per-department balance. Reorder levels and low-stock alerts are per-tier — a department can be empty while the store is full, and that's a different alert. The requisition flow becomes the store→department transfer mechanism (requisitions already deduct on Fulfil). The existing `TransfersTab` net-zero assumption must be revisited under two tiers.
+**Built and proven live (051–057):** a `location`/`sub_location` dimension on `current_stock` with a generated `tier` (`store`/`department`) and per-tier `reorder_level`; `'Main Store'` reserved, `'Laundry'` a Housekeeping sub-location; a guard trigger (`054`) rejecting any location that is not `'Main Store'` or a live department; the main store seeded (559 rows, placeholder 100); location-aware RPCs (`052`); `issue_stock` moving stock between any two locations atomically (`055`, store depletes); `transfer_stock` for department↔department (`057`, derives `issue`/`transfer` server-side); and the RLS pass (`056`) scoping heads on `current_stock.location` so a receiving department can *see* what it holds with zero cross-department leakage. Requisition Fulfil is wired to `issue_stock` (Main Store → requesting department).
 
-Departments (exist in system; item lists empty): Kitchen, Restaurant, Housekeeping, Grounds, Security, plus the two bars which hold stock. **Laundry** is required by the meeting but not yet a department — add it. **Security** exists but wasn't named in the meeting — confirm it stays.
+**Deferred to the real-data session (see FOLLOWUPS "TWO-TIER INVENTORY — DEFERRED"):** catalogue dedupe (559 → 283; 276 products duplicated RBA/SBA, lossless suffix key exists) **and** the `stock_catalogue`/`stock_locations` table split, done as one data operation. `stock_items.department` is deprecated but still populated (no longer the location authority). Until dedupe runs, each product shows twice in the main store (559 store rows) — accepted deliberately; frame for Dhiren as placeholder-pending-stocktake.
 
-### 2.2 Rooms
+### 2.2 Rooms [NEW]
 
 Not currently a concept anywhere in the system. Required so stock consumption can be attributed to a room (housekeeping, laundry). A rooms reference list must exist before §2.3 works. Room list (numbers or names) comes from Dhiren.
 
-### 2.3 Consumption ledger
+### 2.3 Consumption ledger [NEW]
 
 Every consumption event records three dimensions: **what** (item + quantity), **where** (department, and room for housekeeping/laundry), **who** (staff member who drew it). Named as a real current pain: they cannot see which rooms used which stock. Laundry history retained one year minimum — treat 12 months as the floor for the whole ledger.
 
@@ -94,23 +92,24 @@ Every consumption event records three dimensions: **what** (item + quantity), **
 ## 3. INVENTORY MODULE
 
 **File:** `src/pages/Inventory.jsx`
+**Tabs:** Stock Levels · Log Delivery · Requisitions · Transfers · Adjustments · Movement Ledger
 
 ### Existing tabs [DONE unless marked]
 
-- **Stock Levels** — department filter, columns Item/SKU/Dept/Unit/Current Stock/Reorder/Status, "Low" badge when qty ≤ reorder. Read-only. *(An item with no `current_stock` row is invisible here, not shown as zero — any import must write a row per item.)*
+- **Stock Levels** — location filter (Main Store / department), columns Item/SKU/Location/Unit/Current Stock/Reorder/Status, "Low" badge when qty ≤ reorder. Read-only. *(An item with no `current_stock` row is invisible here, not shown as zero — any import must write a row per item.)*
 - **Log Delivery** — Item/Qty/Supplier/Date/Received By/Notes; inserts `stock_movements` (delivery) and adds to `current_stock`.
-- **Requisitions** — raise (Item/Dept/Qty/Reason); manager Approve → Reject → **Fulfil**. Stock deducts on **Fulfil only**. Non-managers see only their own.
-- **Transfers [BUG]** — records a matched movement pair (−from/+to) and, per the old design, does not touch `current_stock`. **Found not to deduct stock in browser test 27 July.** Under two-tier (§2.1) this is the core store→department mechanic and must move real balances. Fix here.
+- **Requisitions** — raise (Item/Dept/Qty/Reason); manager Approve → Reject → **Fulfil**. Stock deducts on **Fulfil only**, and Fulfil now issues Main Store → the requesting department via `issue_stock`. Non-managers see only their own (RLS permits own dept; UI is the narrower gate — one-line fix pending).
+- **Transfers [DONE]** — `TransfersTab` calls `transfer_stock` (`057`), which delegates to `issue_stock` and moves real balances. `movement_type` derived server-side (`issue` if either end is Main Store, else `transfer`). The "doesn't deduct stock" bug (found 27 July) is closed and proven live.
 - **Adjustments** — set new quantity; writes signed `stock_movements` (adjustment) + upserts `current_stock`.
-- **Delivery Log** — shows `movement_type = delivery` only. Open question: keep delivery-only or make a consolidated **Movement Ledger** (deliveries, adjustments, requisitions, transfers, event allocations, with +/− direction). Two-tier makes consolidation more attractive; if consolidated, widen `movement_type` CHECK to add `event_allocation`/`event_return`.
+- **Movement Ledger [DONE]** (`058` + data-ops/`006`, 14 August) — replaces the delivery-only Delivery Log. Shows all movement types with +/− direction; issue/transfer ±pairs collapse to one `From → To` line (positive magnitude); single-row types (delivery, adjustment, opening_balance, event_allocation, event_return) render as-is with signed quantity. Filters: Item · Type · Department · From/To date · Clear. The delivery-only view is the **Type = Delivery** preset (replaces the old tab's job). Columns: Date · Item · SKU · Type · From → To · Qty (+/−) · Performed By. `movement_type` CHECK is `_v4` (adds `event_allocation`/`event_return`); event confirm/return code re-typed off `adjustment`. Pair-collapse logic in `src/lib/ledger.js` (31/31 tests). **Open:** restore the delivery Supplier column (parked in a tooltip when the bogus From→To was suppressed).
 
 ### End-goal additions
 
-- **Two-tier stock [NEW]** — per §2.1. Per-department sub-stores, per-department stock lists, store→department issue recorded, dual balances.
-- **Bar par levels + end-of-day cycle [NEW]** — each bar holds a minimum per item before opening. Nightly: bartender counts → reports levels → system computes shortfall against par → generates a refill requisition (confirm a pre-filled request, don't compose one) → fulfilled from main store before next open. Par quantities come from the bar heads.
+- **Two-tier stock [DONE]** — per §2.1 (051–057). Per-department sub-stores, per-location balances, store→department issue recorded, RLS-scoped visibility.
+- **Bar par levels + end-of-day cycle [NEW]** — each bar holds a minimum per item before opening. Nightly: bartender counts → reports levels → system computes shortfall against par → generates a refill requisition (confirm a **pre-filled** request, don't compose one) → fulfilled from main store before next open. Par quantities come from the bar heads. **This is the next feature to build.**
 - **Consumption attribution [NEW]** — per §2.3. Draw-from-department writes a consumption row (what/where/who, room where relevant).
 
-**[VERIFIED 9 Aug]** `stock_movements.movement_type` CHECK is `..._check_v2`, permitting `delivery/transfer/adjustment/requisition/opening_balance`. Migration 030 ran. Still open: widening for `event_allocation`/`event_return` if the Movement Ledger (above) is built.
+**[DONE 14 Aug]** `stock_movements.movement_type` CHECK is `..._check_v4`, permitting `delivery/transfer/adjustment/requisition/opening_balance/issue/event_allocation/event_return`. The event-allocation/event-return widening the Movement Ledger required (`058`) is applied; event code re-typed.
 
 ---
 
@@ -121,7 +120,7 @@ Every consumption event records three dimensions: **what** (item + quantity), **
 ### Existing [DONE]
 
 - **Clock In/Out** — states idle/working/break/done; live net hours. On Clock In, GPS compared to lodge coords (100 m); outside/unavailable → `unverified`; inside → `present`/`late` vs shift_start + late_threshold. **[VERIFY] the GPS behaviour against live code.**
-- **Today** (owner/manager/restaurant_manager) — Present/Late/Absent/Unverified/Not-arrived cards, department filter, Mark All Absent (after 11:00), Override, Note. Absence + coverage alerts.
+- **Today** — Present/Late/Absent/Unverified/Not-arrived cards, department filter, Mark All Absent (after 11:00), Override, Note. Absence + coverage alerts. Access: owner, admin, hr.
 - **History** (same access) — Daily and Weekly Summary views, filters, 14-day default.
 - **Settings** (same access) — shift definitions per department (start/end/late threshold/days/type).
 
@@ -135,13 +134,13 @@ Every consumption event records three dimensions: **what** (item + quantity), **
 
 ## 5. EVENTS MODULE
 
-**File:** `src/pages/Events.jsx` · Access: owner, manager (target: owner, admin)
+**File:** `src/pages/Events.jsx` · Access: owner, admin
 
 ### Existing [DONE unless marked]
 
 - **Events List** — summary strip, status/deposit filters, sort, amber highlight for ≤7-day or confirmed-unpaid. View/Edit/Delete.
 - **Create Event** — full form; new events `enquiry`, `deposit_paid=false`.
-- **Event Detail** — status pipeline (enquiry→confirm→start→complete, cancel); info grid; **BEO checklists** auto-generated on confirm/in_progress, grouped by department, progress bars.
+- **Event Detail** — status pipeline (enquiry→confirm→start→complete, cancel); info grid; **BEO checklists** auto-generated on confirm/in_progress, grouped by department, progress bars. Stock Allocations section: allocate on confirm (writes `event_allocation`, deducts department tier), return/clearance writes `event_return`.
 - **Bill Section** — categorised line items, bill total.
 - **Payments Section [BUG for edit]** — summary cards (Bill Total/Total Paid/Balance Due); add payment (Deposit/Balance/Additional/Refund); deposit auto-sets `deposit_paid`. `recorded_by` is written but not displayed.
 
@@ -154,7 +153,7 @@ Every consumption event records three dimensions: **what** (item + quantity), **
 
 ## 6. TABLE BOOKINGS MODULE [DONE]
 
-**File:** `src/pages/TableBookings.jsx` · Access target: owner, admin
+**File:** `src/pages/TableBookings.jsx` · Access: owner, admin
 
 Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated/completed/cancelled/no_show; locations Indoor/Outdoor/Terrace/Private Room. Walk-ins seat immediately; 45-min conflict + no-show flagging; party size ≤ table capacity. No Phase 2 changes requested. Leave as-is.
 
@@ -187,13 +186,13 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 ### Existing [DONE]
 
 - **Users** — list + Edit + Deactivate/Reactivate.
-- **Add User** — creates via `create-user` Edge Function (authenticated, owner-only, CORS pinned). **[VERIFY]** old spec references bar1/bar2 `bar_week` logic — those roles are gone; confirm the form no longer branches on them.
+- **Add User** — creates via `create-user` Edge Function (authenticated, owner-only, CORS pinned). Dropdown derives from `Object.keys(ROLE_LABELS)` → offers exactly the four live roles. **[VERIFY]** the dead bar1/bar2 `bar_week` branching is gone (roles removed; confirm no residue).
 - **Departments** — add/edit/delete (plain text).
 - **Stock Items** — list, inline edit, deactivate; SKU auto-gen `{DeptCode}-{PaddedCount}`.
 
 ### End-goal additions
 
-- **Expanded role model [NEW]** — per §1 (owner/admin/department_head/hr). Add-User and Users must support assigning `department_head` scoped by department, and `hr`. Confirm the model before the migration.
+- **Expanded role model [DONE]** — per §1 (owner/admin/department_head/hr), migrations 037–044. Add-User and Users support assigning `department_head` scoped by department, and `hr`.
 - **Rooms management [NEW]** — per §2.2. A place to maintain the rooms reference list.
 
 ---
@@ -210,7 +209,8 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 | BEO auto-generated on Confirm/Start | Events | [DONE] |
 | At-risk auto-flag >90 days, 0 recent visits | Farmers Market | [DONE] |
 | GPS outside radius → unverified clock-in | Attendance | [VERIFY] |
-| One inflow, many outflows (main store → depts) | Inventory | [NEW] |
+| One inflow, many outflows (main store → depts) | Inventory | [DONE] (051–057) |
+| Movement Ledger shows all types with +/− direction | Inventory | [DONE] (058 + 006) |
 | Bar par level enforced before open | Inventory / bars | [NEW] |
 | Consumption records what/where/who | Inventory / consumption | [NEW] |
 | 3-month no-attendance → stall forfeit to waiting list | Farmers Market | [NEW] |
@@ -221,8 +221,8 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 
 ## 10. ITEMS REQUIRING LIVE VERIFICATION (do not trust the doc — probe)
 
-1. **~~`stock_movements.movement_type` CHECK~~ — SETTLED 9 August.** Live constraint permits `opening_balance`; migration 030 ran. FOLLOWUPS was the stale doc, now corrected.
-2. **GPS clock-in geofence** — the four GPS columns exist live (from `seed.sql`); confirm the geofence *logic* in code.
+1. **~~`stock_movements.movement_type` CHECK~~ — SETTLED.** Live constraint is `_v4` (permits `opening_balance`, `issue`, `event_allocation`, `event_return`); migrations 030/055/058 ran.
+2. **GPS clock-in geofence** — the four GPS columns exist live (035); confirm the geofence *logic* in code.
 3. **Stall-number regex** in Add Holder — two-digit or three-digit? If two-digit, the 305 imported stalls are un-editable through the form.
 4. **Add User role branching** — does it still reference the dead bar1/bar2 `bar_week` logic?
 

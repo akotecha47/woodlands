@@ -4,26 +4,6 @@
 
 ---
 
-## MOVEMENT LEDGER — DEFERRED FROM THE 058 SESSION (14 August 2026)
-
-*Migration 058 + event re-type + the consolidated Ledger shipped. These were consciously left.*
-
-- **~~🔴 Event movements are invisible to department heads.~~ — CLOSED 14 August 2026 (059).** Worse than first logged: because the Ledger's department filter is `(from = D OR to = D)`, the null columns also made the filter **silently drop event rows** — filtering Main Bar showed a `-2` requisition and hid a `-13` and a `-10` event allocation on Main Bar stock. A ledger that omits rows when filtered is the exact failure the ledger exists to prevent. Fixed at all four call sites (`event_allocation` → `from_department`, `event_return` → `to_department`) plus `scripts/data-ops/006` to backfill the two historical rows. Proved live: owner's Main Bar filter now returns all three rows; a Main Bar head sees 3 (was 0); Restaurant and Sports Bar heads still see 0.
-
-- **🟡 Pair-collapse has a known edge.** The Ledger collapses the ±legs of an `issue`/`transfer` into one line by grouping on `(stock_item_id, movement_type, created_at, from_department, to_department)` — there is no id linking the two legs. If the SAME item moves the SAME route TWICE in ONE transaction, the group holds 4 rows and legs pair by magnitude rather than identity. Nothing is lost or double-counted and both lines render with correct quantities and route; only the invisible leg-to-leg attribution could swap. Proper fix is a `movement_group` uuid written by `apply_stock_delta` — **rejected for now because it changes that function's signature**, which is exactly the trap 052 and 055 document. Covered by test case 5 in the ledger test suite.
-
-- **🟡 `opening_balance` rows have no `from`/`to`, so a department head's Ledger reads empty on placeholder data.** Correct behaviour, not a bug — but it means the Ledger cannot be meaningfully demoed to Dhiren as a department head until real movements exist. Worth knowing before the demo.
-
-- **🟡 No `department_head` account exists for `Main Bar`** — the heads are Kitchen, Restaurant and Sports Bar, but the two departments that actually hold stock are Main Bar and Sports Bar. So the department whose stock the events draw on has no head who can see it in the running system. The 059 proof had to repoint a head's department inside a rolled-back transaction to test the Main Bar case at all. Either create a Main Bar head or accept that Main Bar is owner/admin-only. **Needs a decision.**
-
-- **🟡 The Ledger no longer shows a delivery's supplier as a column.** 059 stopped rendering the notes-parsed supplier in the From slot (it produced `Aman → —`, a person's name where a department belongs). The supplier survives as the cell's tooltip, but the old Delivery Log had a dedicated Supplier column and the delivery preset no longer matches it. Cheap to restore as a real column if Dhiren wants it back.
-
-- **🟡 Browser verification is partial.** The session had no browser-automation tool. Verified by other means: 058 proved live as owner / admin / two department heads (rolled back), and pair-collapse proved by a 22-assertion suite against the real `collapsePairs`. **Not yet seen rendered in a browser:** the Ledger itself, the delivery preset, and a collapsed pair line. An event confirm to exercise the re-typed `event_allocation` path at runtime was authorised but not performed — no enquiry event with a pending allocation exists; the route is Events → *Chikondi & James Wedding Reception* → Stock Allocations → Add to Allocation (that event is `confirmed`, so adding deducts immediately through the re-typed `EventStockSection.jsx`).
-
-- **🟢 No issue/transfer pair exists in production at all.** Only 533 `opening_balance`, 1 `delivery`, 1 `requisition`, 1 `event_allocation`. The first real requisition fulfil or transfer will be the first live exercise of pair-collapse.
-
----
-
 ## NOTE — ITEMS NOW ABSORBED INTO PHASE 2 (tagged 9 August)
 
 Some items below are no longer loose cleanup — they are part of the Phase 2 build specified in `WOODLANDS_FUNCTIONAL_SPEC.md`. Build them there, not as standalone followups:
@@ -469,34 +449,36 @@ RLS pass should now come before the Movement Ledger.**
 ### 5. Still not built, in order
 
 ~~RLS pass~~ ✅ (`056`, 14 August) → ~~`TransfersTab` wiring~~ ✅ (`057` +
-frontend, 14 August) → **`movement_type` widening** for
-`event_allocation`/`event_return` → **Movement Ledger** → **bar par levels** →
+frontend, 14 August) → ~~`movement_type` widening~~ ✅ (`058`, 14 August) →
+~~Movement Ledger~~ ✅ (`058` + data-ops/`006`, 14 August — see the CLOSED block
+below) → **bar par levels + end-of-day cycle** ← next feature →
 **real-data dedupe + table split**.
 
-### 5b. ⚠ §2.6 REBUILD RE-PROOF OWED — before the next migration is written
+### 5b. §2.6 REBUILD RE-PROOF — `051`–`057` CLOSED (run 5); `058` now owed
 
-The gate closed on `001`–`050` (rebuild run 4, 12 August). **`051`–`057` have
-never been rebuild-proven**, and `056` additionally executed **out of order** —
-production ran `057` first.
+**`051`–`057` re-proof — CLOSED by run 5 (14 August 2026, Aman's verbal
+confirm; output not yet pasted into the record).** Run 5 rebuilt `001`–`057`
+into a throwaway and diffed clean against production. Closure currently rests on
+a verbal — re-anchor it to the pasted artefact when convenient, as the earlier
+runs were.
 
-**The ordering introduced no divergence, and that is established rather than
-assumed.** `056` is 2 `DROP POLICY` + 2 `CREATE POLICY` + 1 column comment;
-`057` is 1 `CREATE OR REPLACE FUNCTION` + grants + a function comment. Disjoint
-object sets, neither referencing the other's objects, so they commute.
-Confirmed after the fact: applying `056` second left `transfer_stock`,
-`issue_stock` and `apply_stock_delta` **byte-identical** by `md5(prosrc)`
-against the pre-apply baseline, and every object `051`–`057` describe is
-present in production as described (location/sub_location/tier columns, the
-`UNIQUE NULLS NOT DISTINCT` key, the `054` guard trigger, one signature per
-RPC, both seeded tiers, 19 inventory policies).
+*(Historical: the gate closed on `001`–`050` at run 4, 12 August. `056`
+executed out of order — production ran `057` first — but `056` is 2 `DROP
+POLICY` + 2 `CREATE POLICY` + 1 column comment and `057` is 1 `CREATE OR REPLACE
+FUNCTION` + grants + a comment; disjoint object sets, so they commute. Confirmed
+after the fact: applying `056` second left `transfer_stock`, `issue_stock` and
+`apply_stock_delta` byte-identical by `md5(prosrc)`, every `051`–`057` object
+present as described.)*
 
-**What is still owed is the thing reasoning cannot substitute for:** a full
-throwaway rebuild of `001`–`057` diffed against production. Runs 1–3 each found
-real unfiled drift — a nullability constraint, ~20 columns, an FK property, the
-grant layer — that no amount of file reading had surfaced. Not run on 14 August
-because it needs a billable throwaway project provisioned, which is Aman's call.
-**A rebuild proof expires; it is a claim about a file range on a date, not a
-permanent property of the project.**
+**Now owed: `058` has not been rebuild-proven.** It is post-run-5. The next
+migration written (bar par levels will likely need one) triggers a full
+throwaway rebuild of `001`–`058` diffed against production — the only thing that
+catches the unfiled-drift class runs 1–3 found (a nullability constraint, ~20
+columns, an FK property, the grant layer — none surfaced by file reading).
+**Before the next migration is written, not after.** `data-ops/006` was a code +
+data-op change, **not** a migration — it does not touch this clock. A rebuild
+proof expires; it is a claim about a file range on a date, not a permanent
+property of the project.
 
 ### 6. ~~⚠ The transfers-don't-deduct bug is STILL OPEN~~ — FIXED AND PROVEN LIVE, 14 August 2026
 
@@ -552,6 +534,49 @@ balances). Replace the `supabase.from('stock_movements').insert([...])` with
 `issueStock(item, from, to, qty, { movementType: 'transfer' })` and swap
 `fetchDepartmentList()` for `stockLocations(departments)`. Deliberately not
 done in the 055 session, which was scoped to issuing.
+
+---
+
+## MOVEMENT LEDGER — CLOSED 14 August 2026 (`058` + data-ops/`006`)
+
+The consolidated Movement Ledger replaces the delivery-only Delivery Log. Full
+detail in STATE and HISTORY; the followup-relevant residue:
+
+- **`058`** — `movement_type` CHECK `_v3`→`_v4` (`event_allocation`,
+  `event_return`); allowlist widened in `apply_stock_delta` via in-place replace
+  (same oid, byte-identical signature, `proacl` unchanged); 1 event `adjustment`
+  row backfilled → `event_allocation`; `stock_movements` indexed (was pkey-only).
+  4 event code sites re-typed. Ledger tab replaces `DeliveryLogTab`;
+  pair-collapse in `src/lib/ledger.js`, 31/31 tests. Proven live as roles, and
+  browser-verified.
+- **Event `from`/`to` NULL bug — CLOSED (`data-ops/006`).** The four event call
+  sites wrote `from_department`/`to_department` NULL, so the ledger department
+  filter **silently dropped every event draw** (Main Bar filter showed a −2
+  requisition, hid −10 and −13 event allocations on Main Bar). Fixed:
+  `event_allocation` sets `from_department`, `event_return` sets
+  `to_department`; existing rows backfilled from the event-allocation join, not
+  the deprecated `stock_items.department` (both derivations confirmed to agree),
+  idempotent, 0 inserts/deletes. See HISTORY 14 Aug for the doctrine lesson
+  (nullable-column filters silently exclude null rows).
+- **🟡 OPEN — restore the delivery Supplier column.** 058/006 suppressed the
+  bogus `From → To` on delivery rows (a self-introduced render bug had put
+  `parseSupplier(notes)` in the From slot) and parked supplier in a tooltip. The
+  old Delivery Log had a real Supplier column. Restore it as a column for
+  delivery rows. Small render fix, do early next chat.
+- **🟡 OPEN — create a Main Bar `department_head` account.** Stock-holding
+  departments are Main Bar + Sports Bar, but heads are Kitchen/Restaurant/Sports
+  Bar. Main Bar ledger visibility was proved via a rolled-back repoint. Create
+  at real-data time with Rose, alongside the other deferred head accounts.
+
+## anon-EXECUTE RESIDUAL — VERIFIED ABSENT 14 August 2026
+
+The debt to `REVOKE EXECUTE` on `current_app_role`/`current_app_department` from
+`anon`/`PUBLIC` **does not exist and must not be re-added to any migration.**
+Verified live: `has_function_privilege` returns **false ×4** (anon + public ×
+both functions); `proacl` on both functions is
+`{postgres, authenticated, service_role}` only — no `anon`, no `PUBLIC`. Already
+closed, most likely at `050` or at function-creation time. Struck from the
+"fold into the next migration" plan. Do not re-litigate.
 
 ---
 
@@ -689,11 +714,11 @@ All three are now written into `src/lib/standards.md` §4 so the next session in
 
 *Observed 26 July 2026 while verifying the Sprint C stock RPCs through the requisition path. Both are design gaps, not defects — nothing is broken or losing data.*
 
-- **~~Delivery Log shows only `movement_type = 'delivery'`.~~ — CLOSED 14 August 2026.** Built as the consolidated Movement Ledger (`MovementLedgerTab.jsx`); `DeliveryLogTab.jsx` is deleted. All eight movement types show, and the delivery-only view survives as a one-click preset filter, so nothing that used the old tab lost anything.
+- **Delivery Log shows only `movement_type = 'delivery'`.** `DeliveryLogTab.jsx:26` filters on it, so requisition fulfils — which do write `stock_movements` rows — never appear there. The trail is not invisible: the Requisitions view surfaces fulfilled requisitions by status. It is just not consolidated in one place. Two options: rename the tab so its scope is obvious, or build a consolidated Movement Ledger. **Decision needed from Dhiren.**
 
-- **~~Movement rows show a quantity with no +/- direction indicator.~~ — CLOSED 14 August 2026.** The Ledger renders single-row movements signed and coloured (green `+`, red `−`); collapsed `issue`/`transfer` pairs render as a neutral magnitude with an explicit `From → To` route, because a move is not a net change to anything.
+- **Movement rows show a quantity with no +/- direction indicator.** Harmless in a delivery-only view where everything is inbound, but ambiguous the moment adjustments, fulfils or transfers appear alongside. Cheap to fix when needed — `stock_movements.quantity_change` is already stored signed (negative for deductions), so this is a rendering change with no schema work. **Required if the consolidated Ledger is built.**
 
-- **~~MEETING QUESTION — should Delivery Log stay delivery-only or become a consolidated Movement Ledger~~ — ANSWERED 14 August 2026: consolidated.** Built, with the delivery-only view kept as a preset filter so the question does not need re-asking. Still worth showing Dhiren for confirmation that the collapsed `From → To` line reads the way he expects.
+- **MEETING QUESTION — should Delivery Log stay delivery-only or become a consolidated Movement Ledger** showing deliveries, adjustments, requisitions, transfers and event allocations with +/- direction?
 
   Dependency worth raising if the answer is "consolidate": event stock deductions and returns are currently written with `movement_type = 'adjustment'`, because the CHECK constraint on that column only permits `delivery / transfer / adjustment / requisition` (see the Sprint C Task 4 entry below). Today nothing displays them so it is invisible. In a consolidated Ledger, event allocations would appear to the owner as manual stock takes — so widening the CHECK to add `event_allocation` / `event_return` becomes a prerequisite of that feature rather than a tidy-up.
 
