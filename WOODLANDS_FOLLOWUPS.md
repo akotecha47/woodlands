@@ -4,6 +4,22 @@
 
 ---
 
+## MOVEMENT LEDGER — DEFERRED FROM THE 058 SESSION (14 August 2026)
+
+*Migration 058 + event re-type + the consolidated Ledger shipped. These were consciously left.*
+
+- **🔴 Event movements are invisible to department heads.** `stock_movements_dept_select` scopes a `department_head` on `from_department`/`to_department`, but none of the four event call sites set either — they pass only `movementType` and `reason`. So an `event_allocation` that empties a department's stock is visible to owner/admin and **not** to the head of the department it came out of. Proved live: writing an allocation tagged `from_department = 'Sports Bar'` makes it visible to the Sports Bar head and invisible to the Restaurant head, so the RLS works — the tag is simply never written. One line per call site (`fromDepartment: <item department>`) fixes it. **Deliberately not changed in the 058 session, which was scoped "no other behaviour change".** Needs a decision: should a department head see event draws on their own stock? (Almost certainly yes.)
+
+- **🟡 Pair-collapse has a known edge.** The Ledger collapses the ±legs of an `issue`/`transfer` into one line by grouping on `(stock_item_id, movement_type, created_at, from_department, to_department)` — there is no id linking the two legs. If the SAME item moves the SAME route TWICE in ONE transaction, the group holds 4 rows and legs pair by magnitude rather than identity. Nothing is lost or double-counted and both lines render with correct quantities and route; only the invisible leg-to-leg attribution could swap. Proper fix is a `movement_group` uuid written by `apply_stock_delta` — **rejected for now because it changes that function's signature**, which is exactly the trap 052 and 055 document. Covered by test case 5 in the ledger test suite.
+
+- **🟡 `opening_balance` rows have no `from`/`to`, so a department head's Ledger reads empty on placeholder data.** Correct behaviour, not a bug — but it means the Ledger cannot be meaningfully demoed to Dhiren as a department head until real movements exist. Worth knowing before the demo.
+
+- **🟡 Browser verification is partial.** The session had no browser-automation tool. Verified by other means: 058 proved live as owner / admin / two department heads (rolled back), and pair-collapse proved by a 22-assertion suite against the real `collapsePairs`. **Not yet seen rendered in a browser:** the Ledger itself, the delivery preset, and a collapsed pair line. An event confirm to exercise the re-typed `event_allocation` path at runtime was authorised but not performed — no enquiry event with a pending allocation exists; the route is Events → *Chikondi & James Wedding Reception* → Stock Allocations → Add to Allocation (that event is `confirmed`, so adding deducts immediately through the re-typed `EventStockSection.jsx`).
+
+- **🟢 No issue/transfer pair exists in production at all.** Only 533 `opening_balance`, 1 `delivery`, 1 `requisition`, 1 `event_allocation`. The first real requisition fulfil or transfer will be the first live exercise of pair-collapse.
+
+---
+
 ## NOTE — ITEMS NOW ABSORBED INTO PHASE 2 (tagged 9 August)
 
 Some items below are no longer loose cleanup — they are part of the Phase 2 build specified in `WOODLANDS_FUNCTIONAL_SPEC.md`. Build them there, not as standalone followups:
@@ -669,11 +685,11 @@ All three are now written into `src/lib/standards.md` §4 so the next session in
 
 *Observed 26 July 2026 while verifying the Sprint C stock RPCs through the requisition path. Both are design gaps, not defects — nothing is broken or losing data.*
 
-- **Delivery Log shows only `movement_type = 'delivery'`.** `DeliveryLogTab.jsx:26` filters on it, so requisition fulfils — which do write `stock_movements` rows — never appear there. The trail is not invisible: the Requisitions view surfaces fulfilled requisitions by status. It is just not consolidated in one place. Two options: rename the tab so its scope is obvious, or build a consolidated Movement Ledger. **Decision needed from Dhiren.**
+- **~~Delivery Log shows only `movement_type = 'delivery'`.~~ — CLOSED 14 August 2026.** Built as the consolidated Movement Ledger (`MovementLedgerTab.jsx`); `DeliveryLogTab.jsx` is deleted. All eight movement types show, and the delivery-only view survives as a one-click preset filter, so nothing that used the old tab lost anything.
 
-- **Movement rows show a quantity with no +/- direction indicator.** Harmless in a delivery-only view where everything is inbound, but ambiguous the moment adjustments, fulfils or transfers appear alongside. Cheap to fix when needed — `stock_movements.quantity_change` is already stored signed (negative for deductions), so this is a rendering change with no schema work. **Required if the consolidated Ledger is built.**
+- **~~Movement rows show a quantity with no +/- direction indicator.~~ — CLOSED 14 August 2026.** The Ledger renders single-row movements signed and coloured (green `+`, red `−`); collapsed `issue`/`transfer` pairs render as a neutral magnitude with an explicit `From → To` route, because a move is not a net change to anything.
 
-- **MEETING QUESTION — should Delivery Log stay delivery-only or become a consolidated Movement Ledger** showing deliveries, adjustments, requisitions, transfers and event allocations with +/- direction?
+- **~~MEETING QUESTION — should Delivery Log stay delivery-only or become a consolidated Movement Ledger~~ — ANSWERED 14 August 2026: consolidated.** Built, with the delivery-only view kept as a preset filter so the question does not need re-asking. Still worth showing Dhiren for confirmation that the collapsed `From → To` line reads the way he expects.
 
   Dependency worth raising if the answer is "consolidate": event stock deductions and returns are currently written with `movement_type = 'adjustment'`, because the CHECK constraint on that column only permits `delivery / transfer / adjustment / requisition` (see the Sprint C Task 4 entry below). Today nothing displays them so it is invisible. In a consolidated Ledger, event allocations would appear to the owner as manual stock takes — so widening the CHECK to add `event_allocation` / `event_return` becomes a prerequisite of that feature rather than a tidy-up.
 

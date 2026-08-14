@@ -133,7 +133,7 @@ export default function EventDetailTab({ eventId, onBack }) {
         // guard above stays as a friendlier pre-check; this call is the one
         // that actually enforces it under a lock.
         await applyStockDelta(alloc.stock_item_id, -required, {
-          movementType: 'adjustment',
+          movementType: 'event_allocation',
           reason:       `Event stock allocated (event ${eventId})`,
         })
         const { error: allocErr } = await supabase
@@ -160,7 +160,7 @@ export default function EventDetailTab({ eventId, onBack }) {
         // answer because nothing recorded the real figure.
         const qtyBack = Number(alloc.deducted_qty ?? alloc.allocated_qty)
         await applyStockDelta(alloc.stock_item_id, qtyBack, {
-          movementType: 'adjustment',
+          movementType: 'event_return',
           reason:       `Event cancelled, stock returned (event ${eventId})`,
         })
         const { error: allocErr } = await supabase

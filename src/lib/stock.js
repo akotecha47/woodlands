@@ -25,12 +25,16 @@ import { supabase } from './supabase'
  * use it without importing across feature folders.
  */
 
-// Kept in step with the table CHECK (stock_movements_movement_type_check_v3)
+// Kept in step with the table CHECK (stock_movements_movement_type_check_v4)
 // and the allowlist inside apply_stock_delta. All three are widened in the
-// same migration or they drift — 'issue' was added in 055.
+// same migration or they drift — 'issue' was added in 055,
+// 'event_allocation'/'event_return' in 058.
 // Note 'opening_balance' is permitted by the table but deliberately absent
 // here and in the RPC: it is import-only (scripts/data-ops/002).
-const MOVEMENT_TYPES = ['delivery', 'transfer', 'adjustment', 'requisition', 'issue']
+const MOVEMENT_TYPES = [
+  'delivery', 'transfer', 'adjustment', 'requisition', 'issue',
+  'event_allocation', 'event_return',
+]
 
 /**
  * Add `delta` to an item's balance. Negative to deduct.

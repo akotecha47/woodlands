@@ -3,8 +3,8 @@ import StockLevelsTab  from '../components/inventory/StockLevelsTab'
 import LogDeliveryTab  from '../components/inventory/LogDeliveryTab'
 import RequisitionsTab from '../components/inventory/RequisitionsTab'
 import TransfersTab    from '../components/inventory/TransfersTab'
-import AdjustmentsTab  from '../components/inventory/AdjustmentsTab'
-import DeliveryLogTab  from '../components/inventory/DeliveryLogTab'
+import AdjustmentsTab     from '../components/inventory/AdjustmentsTab'
+import MovementLedgerTab from '../components/inventory/MovementLedgerTab'
 
 const TABS = [
   { id: 'stock',        label: 'Stock Levels', Component: StockLevelsTab  },
@@ -12,7 +12,9 @@ const TABS = [
   { id: 'requisitions', label: 'Requisitions', Component: RequisitionsTab },
   { id: 'transfers',    label: 'Transfers',    Component: TransfersTab    },
   { id: 'adjustments',  label: 'Adjustments',  Component: AdjustmentsTab  },
-  { id: 'log',          label: 'Delivery Log', Component: DeliveryLogTab  },
+  // Was 'Delivery Log' (delivery-only). The Ledger shows every movement type;
+  // the delivery-only view survives as a preset filter inside it.
+  { id: 'log',          label: 'Movement Ledger', Component: MovementLedgerTab },
 ]
 
 export default function Inventory() {

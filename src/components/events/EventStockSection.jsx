@@ -106,7 +106,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
         // allocation behind a deduction that never happened.
         try {
           await applyStockDelta(form.stock_item_id, -qty, {
-            movementType: 'adjustment',
+            movementType: 'event_allocation',
             reason:       `Event stock allocated (event ${eventId})`,
           })
         } catch (deductErr) {
@@ -171,7 +171,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
         // would be noise.
         if (returned > 0) {
           await applyStockDelta(a.stock_item_id, returned, {
-            movementType: 'adjustment',
+            movementType: 'event_return',
             reason:       `Event clearance, unused stock returned (event ${eventId})`,
           })
         }
