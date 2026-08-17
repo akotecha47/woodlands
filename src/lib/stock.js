@@ -196,12 +196,26 @@ export async function fulfilRequisitionBatch(sessionId) {
  * that both were NULL on every adjustment, which made them invisible to the
  * Movement Ledger's department filter — the same fault data-ops/006 fixed for
  * event movements.
+ *
+ * `location` / `subLocation` are the two-tier coordinates (051). Omitting
+ * location makes the server fall back to the item's catalogue department,
+ * which is the DEPRECATED location authority — that fallback exists only so
+ * pre-051 callers kept working, and it can never resolve to 'Main Store'
+ * because the store is not a department. This helper passed neither until
+ * 17 August 2026, so the Main Store could not be adjusted at all and every
+ * adjustment silently landed on the item's own department tier. Always pass a
+ * location.
  */
-export async function setStockQuantity(stockItemId, newQty, reason = null) {
+export async function setStockQuantity(stockItemId, newQty, reason = null, {
+  location = null,
+  subLocation = null,
+} = {}) {
   const { data, error } = await supabase.rpc('set_stock_quantity', {
     p_stock_item_id: stockItemId,
     p_new_qty:       newQty,
     p_reason:        reason,
+    p_location:      location,
+    p_sub_location:  subLocation,
   })
   if (error) throw error
   return Number(data)

@@ -2,30 +2,50 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
-import { itemLabel, AccessDenied, fetchActiveItems } from './InventoryUI'
+import { itemLabel, AccessDenied, fetchActiveItems, fetchDepartmentList } from './InventoryUI'
 import { setStockQuantity } from '../../lib/stock'
 import { MANAGE_ROLES } from '../../lib/roles'
+import { stockLocations, SUB_LOCATIONS } from '../../lib/constants'
+
+// Balances are keyed by (item, location, sub_location) since 051, so a stock
+// take has to name WHICH balance it is setting. Until 17 August 2026 this tab
+// named none: it called setStockQuantity() with no location, so the server fell
+// back to the item's catalogue department and the Main Store — which is a
+// location and deliberately never a department — could not be adjusted at all.
+// It worked by accident for the two bars, whose department happens to equal
+// their location.
+const balanceKey = (itemId, location, subLocation) =>
+  `${itemId}|${location}|${subLocation ?? ''}`
 
 export default function AdjustmentsTab() {
   // performed_by is set server-side from auth.uid() inside set_stock_quantity.
   const { profile } = useAuth()
-  const [items,    setItems]    = useState([])
-  const [stockMap, setStockMap] = useState({}) // stock_item_id → quantity
-  const [busy,     setBusy]     = useState(false)
-  const [toast,    setToast]    = useState(null)
+  const [items,     setItems]     = useState([])
+  const [locations, setLocations] = useState([])
+  const [stockMap,  setStockMap]  = useState({}) // (item|location|sub) → quantity
+  const [busy,      setBusy]      = useState(false)
+  const [toast,     setToast]     = useState(null)
   const flash = useFlash(setToast)
-  const [form, setForm] = useState({ stock_item_id: '', new_quantity: '', reason: '' })
+  const [form, setForm] = useState({
+    stock_item_id: '', location: '', sub_location: '', new_quantity: '', reason: '',
+  })
 
   async function loadData() {
-    const [activeItems, { data: cs }] = await Promise.all([
+    const [activeItems, departments, { data: cs }] = await Promise.all([
       fetchActiveItems(),
-      // tier='department' keeps this map one-row-per-item after migration 051
-      // added the main-store tier. Without it the map would silently take
-      // whichever tier came back last.
-      supabase.from('current_stock').select('stock_item_id, quantity').eq('tier', 'department'),
+      fetchDepartmentList(),
+      // Every tier, deliberately. This used to filter tier='department', which
+      // is what hid all 559 main-store balances from the only screen that can
+      // correct them.
+      supabase.from('current_stock').select('stock_item_id, location, sub_location, quantity'),
     ])
     setItems(activeItems)
-    if (cs) setStockMap(Object.fromEntries(cs.map(r => [r.stock_item_id, r.quantity])))
+    setLocations(stockLocations(departments))
+    if (cs) {
+      setStockMap(Object.fromEntries(
+        cs.map(r => [balanceKey(r.stock_item_id, r.location, r.sub_location), r.quantity]),
+      ))
+    }
   }
 
   useEffect(() => {
@@ -34,6 +54,8 @@ export default function AdjustmentsTab() {
   }, [profile?.role])
 
   if (!MANAGE_ROLES.includes(profile?.role)) return <AccessDenied />
+
+  const subOptions = SUB_LOCATIONS[form.location] ?? []
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -51,17 +73,25 @@ export default function AdjustmentsTab() {
       // adjustment on record that never took effect. Both now commit together,
       // and an unchanged value writes no ledger row at all.
       const applied = await setStockQuantity(
-        form.stock_item_id, newQty, form.reason || null
+        form.stock_item_id, newQty, form.reason || null,
+        { location: form.location, subLocation: form.sub_location || null },
       )
 
-      flash(`Stock set to ${applied}`)
-      setForm({ stock_item_id: '', new_quantity: '', reason: '' })
+      flash(`${form.location} stock set to ${applied}`)
+      setForm(f => ({
+        ...f, stock_item_id: '', new_quantity: '', reason: '',
+      }))
       loadData()
     } catch (err) { flash(err.message, false) }
     finally { setBusy(false) }
   }
 
-  const currentQty = form.stock_item_id !== '' ? (stockMap[form.stock_item_id] ?? 0) : null
+  // Undefined (no balance row at this location) reads differently from 0 (a row
+  // holding nothing), so the two are shown differently rather than collapsed.
+  const currentQty = form.stock_item_id && form.location
+    ? stockMap[balanceKey(form.stock_item_id, form.location, form.sub_location || null)]
+    : undefined
+  const ready = form.stock_item_id !== '' && form.location !== ''
 
   return (
     <div className="p-6 max-w-md">
@@ -75,9 +105,29 @@ export default function AdjustmentsTab() {
             {items.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
           </Sel>
         </Field>
-        {currentQty !== null && (
+        <Field label="Location *">
+          <Sel required value={form.location}
+            onChange={e => setForm(f => ({
+              ...f, location: e.target.value, sub_location: '', new_quantity: '',
+            }))}>
+            <option value="">Select location…</option>
+            {locations.map(l => <option key={l} value={l}>{l}</option>)}
+          </Sel>
+        </Field>
+        {subOptions.length > 0 && (
+          <Field label="Sub-location">
+            <Sel value={form.sub_location}
+              onChange={e => setForm(f => ({ ...f, sub_location: e.target.value, new_quantity: '' }))}>
+              <option value="">{form.location} (main)</option>
+              {subOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            </Sel>
+          </Field>
+        )}
+        {ready && (
           <p className="text-sm text-gray-500">
-            Current stock: <span className="font-medium text-gray-800">{currentQty}</span>
+            {currentQty === undefined
+              ? <>No balance held here yet — a row will be created.</>
+              : <>Current stock: <span className="font-medium text-gray-800">{currentQty}</span></>}
           </p>
         )}
         <Field label="New Quantity *">
@@ -94,7 +144,7 @@ export default function AdjustmentsTab() {
         <Field label="Recorded By">
           <Inp disabled value={profile?.full_name ?? '—'} />
         </Field>
-        <button type="submit" disabled={busy}
+        <button type="submit" disabled={busy || !ready}
           className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
           {busy ? 'Saving…' : 'Record Adjustment'}
         </button>

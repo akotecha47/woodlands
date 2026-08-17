@@ -480,12 +480,34 @@ Deferred / decided items from that session:
   Levels shows a Par column) but there is no screen to change it. Fine while
   values are placeholder; needed at real-data time when the bar heads supply
   real numbers. Until then it is an UPDATE.
-- **🟡 OPEN — `AdjustmentsTab` is still location-blind.** `setStockQuantity()`
-  never passes `p_location`, so every adjustment resolves to
-  `stock_items.department` and the **Main Store cannot be adjusted at all**.
-  Works by accident for bars. `059` fixed the *department on the movement row*
-  through the same function but deliberately did not change the tab's call
-  signature. Small fix, own step.
+- **~~🟡 OPEN — `AdjustmentsTab` is still location-blind.~~ — CLOSED 17 August
+  2026, frontend-only, no migration.** `setStockQuantity()` never passed
+  `p_location`, so every adjustment resolved to `stock_items.department` and the
+  **Main Store could not be adjusted at all** — it worked by accident for the
+  bars, whose department happens to equal their location. `059` fixed the
+  *department on the movement row* through the same function but deliberately
+  did not change the tab's call signature; that is now done.
+
+  The helper takes `{ location, subLocation }` (both already accepted by
+  `set_stock_quantity` since `051`/`059` — verified live, not assumed), the tab
+  has a Location selector built from `stockLocations()` and a Sub-location
+  selector driven by `SUB_LOCATIONS`, `stockMap` is keyed on
+  `(item, location, sub_location)` instead of `stock_item_id`, and the
+  `tier='department'` filter — the actual line that hid all 559 main-store
+  balances from the only screen able to correct them — is gone.
+
+  **Proved as the roles, rolled back**, and the old behaviour demonstrated in
+  the same transaction rather than merely asserted:
+
+  | Probe | Result |
+  |---|---|
+  | `admin`, explicit `p_location => 'Main Store'` | Main Store **100 → 42**, Main Bar **unchanged at 5**, movement `adjustment −58 from_department='Main Store'`, `performed_by` the real admin |
+  | `admin`, no `p_location` (the pre-fix call) | falls back to the item's department — **Main Bar 5 → 7, store untouched**. The store is unreachable this way. |
+  | Sports Bar `department_head` at the store | denied **`42501`** — fail-closed unchanged |
+  | invalid location `'Nowhere Bar'` | rejected by `054`'s guard |
+
+  Rollback re-verified on a fresh connection: 1118 balances, 725 movements,
+  **0** adjustment rows, 0 proof rows. Not yet browser-verified.
 - **🟡 OPEN — browser verification of the Bar Count tab.** The database layer is
   proven live as the roles (19/19 scenarios) and the build is clean, but the new
   tab has not been exercised in a browser. Needs an owner or bar-head session.

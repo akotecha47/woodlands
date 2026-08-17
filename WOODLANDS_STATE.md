@@ -195,7 +195,7 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 **OPEN — carry into next session (none blocking):**
 - **Browser-verify the Bar Count tab.** DB layer proven live as the roles and the build is clean, but the new tab has not been exercised in a browser — needs an owner or bar-head session.
 - **No par-level editing UI.** Par is seeded and visible but only changeable by UPDATE. Fine while placeholder; needed at real-data time.
-- **`AdjustmentsTab` is still location-blind** — `setStockQuantity()` passes no location, so the Main Store cannot be adjusted at all. Small fix, own step.
+- **~~`AdjustmentsTab` is location-blind~~ — FIXED AND PROVEN LIVE, 17 August 2026.** Frontend-only, no migration: `setStockQuantity()` now takes `{ location, subLocation }` and `AdjustmentsTab` has a Location selector (plus a Sub-location selector where `SUB_LOCATIONS` defines one), its `stockMap` keyed on `(item, location, sub_location)`, and the `tier='department'` filter that hid all 559 main-store balances removed. Proved as `admin` (`SET LOCAL ROLE`, rolled back): a Main Store take moved Main Store 100 → 42 with **Main Bar unchanged at 5** and wrote `adjustment −58, from_department='Main Store'`; the same call with no location still falls back to the item's department (Main Bar 5 → 7, store untouched) — the old bug, demonstrated rather than described. A `department_head` is still denied `42501` at the store, and `054`'s guard still rejects an invalid location. Rollback re-verified on a fresh connection: 1118 balances, 725 movements, 0 adjustment rows.
 - **`059` is not rebuild-proven.** Owed on the next migration written.
 
 **Forward path — build order:**
