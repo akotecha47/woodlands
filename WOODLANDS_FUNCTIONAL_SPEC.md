@@ -92,7 +92,7 @@ Every consumption event records three dimensions: **what** (item + quantity), **
 ## 3. INVENTORY MODULE
 
 **File:** `src/pages/Inventory.jsx`
-**Tabs:** Stock Levels · Log Delivery · Requisitions · Transfers · Adjustments · Movement Ledger
+**Tabs:** Stock Levels · Log Delivery · Bar Count · Requisitions · Transfers · Adjustments · Movement Ledger
 
 ### Existing tabs [DONE unless marked]
 
@@ -106,7 +106,7 @@ Every consumption event records three dimensions: **what** (item + quantity), **
 ### End-goal additions
 
 - **Two-tier stock [DONE]** — per §2.1 (051–057). Per-department sub-stores, per-location balances, store→department issue recorded, RLS-scoped visibility.
-- **Bar par levels + end-of-day cycle [NEW]** — each bar holds a minimum per item before opening. Nightly: bartender counts → reports levels → system computes shortfall against par → generates a refill requisition (confirm a **pre-filled** request, don't compose one) → fulfilled from main store before next open. Par quantities come from the bar heads. **This is the next feature to build.**
+- **Bar par levels + end-of-day cycle [DONE]** (`059`, 17 August) — **Bar Count** tab. Each bar holds a per-item minimum before opening, stored as `current_stock.par_level` (per item per location, beside the per-tier `reorder_level` from `051`; NULL = not on the cycle, so today only Main Bar and Sports Bar). Nightly: the count sheet opens **pre-filled with the system balance** for every par-managed item; the bartender corrects what they counted; **Post Count** does everything in one server-side transaction — reconciles each balance to the counted number (a stock take: nothing deducts sales, so the balance is fiction between counts and the delta IS the night's consumption), stamps each line with system qty / par / shortfall, and raises a **pre-filled** refill requisition per short item (`source='par_refill'`, `status='pending'`, tagged with the count session). Requisitions groups those into a **Bar Refills** panel with Approve all / Fulfil all; fulfil issues Main Store → bar through the existing `issue_stock` path. Tables: `bar_count_sessions`, `bar_count_lines`. RPCs: `post_bar_count` (SECURITY DEFINER, gated to owner/admin or the head whose department IS the location), `fulfil_requisition_batch` (INVOKER, one transaction, a store-short line is skipped and named rather than aborting the refill). Par quantities are placeholder (2× catalogue reorder) until the bar heads supply real ones. **Proven live as the roles, 19/19 scenarios, rolled back.**
 - **Consumption attribution [NEW]** — per §2.3. Draw-from-department writes a consumption row (what/where/who, room where relevant).
 
 **[DONE 14 Aug]** `stock_movements.movement_type` CHECK is `..._check_v4`, permitting `delivery/transfer/adjustment/requisition/opening_balance/issue/event_allocation/event_return`. The event-allocation/event-return widening the Movement Ledger required (`058`) is applied; event code re-typed.
@@ -211,7 +211,7 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 | GPS outside radius → unverified clock-in | Attendance | [VERIFY] |
 | One inflow, many outflows (main store → depts) | Inventory | [DONE] (051–057) |
 | Movement Ledger shows all types with +/− direction | Inventory | [DONE] (058 + 006) |
-| Bar par level enforced before open | Inventory / bars | [NEW] |
+| Bar par level enforced before open | Inventory / bars | [DONE] (059) |
 | Consumption records what/where/who | Inventory / consumption | [NEW] |
 | 3-month no-attendance → stall forfeit to waiting list | Farmers Market | [NEW] |
 | Product change raises 10k fee at point of change | Farmers Market | [NEW] |

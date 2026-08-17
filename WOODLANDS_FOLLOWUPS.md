@@ -446,12 +446,58 @@ That also closes the known store-row over-exposure in item 4 above, since
 out of this session. It should be the first thing the RLS pass does, and the
 RLS pass should now come before the Movement Ledger.**
 
+### 4d. BAR PAR LEVELS + END-OF-DAY CYCLE — BUILT (migration 059, 17 August 2026)
+
+Deferred / decided items from that session:
+
+- **Par placeholder is `2 × catalogue reorder_level`** (bottles 5 → 10, crates
+  8 → 16), **Main Bar and Sports Bar only** (Aman, 17 August). The other nine
+  departments keep `par_level` NULL and never enter the refill cycle — a
+  location is on the cycle exactly when it has par values, so a new department
+  joins by getting data, with no code change. **Real par values come from the
+  bar heads at real-data time**; replacing them is one UPDATE.
+- **The count is a stock take, and that is load-bearing, not incidental.**
+  Nothing deducts sales (no POS integration), so a bar's `current_stock` is
+  fiction between counts. Posting a count reconciles the balance to what was
+  physically counted; the count-vs-system delta IS the night's consumption.
+  **This is the natural feed for the §2.3 consumption ledger** — build that on
+  top of `bar_count_lines`, don't invent a second source.
+- **`post_bar_count` is `SECURITY DEFINER`.** A `department_head` holds no write
+  policy on `current_stock`/`stock_movements` (all owner/admin), so a bar head
+  could not otherwise post their own count. Widening those policies was
+  **rejected** — it would also grant arbitrary balance edits at that location,
+  the same over-exposure class `056` closed. The in-function check is therefore
+  the security boundary: no dynamic SQL, location read off the locked session
+  row and never from an argument, non-draft sessions refused. `fulfil_requisition_batch`
+  is deliberately **INVOKER**, so fulfilling adds no second privilege surface.
+- **Batch fulfil is per-line survivable, unlike a single requisition.** `055`'s
+  no-partial rule still holds per requisition; but a 90-line refill must not be
+  abandoned because one item is short, so `check_violation` on a line is caught,
+  named in the return value and skipped. **Every other error aborts the batch.**
+- **Requisitions are raised `pending`, not `approved`** — the existing
+  approve → fulfil control is preserved rather than bypassed by automation.
+- **🟡 OPEN — no par-level editing UI.** Par is seeded and readable (Stock
+  Levels shows a Par column) but there is no screen to change it. Fine while
+  values are placeholder; needed at real-data time when the bar heads supply
+  real numbers. Until then it is an UPDATE.
+- **🟡 OPEN — `AdjustmentsTab` is still location-blind.** `setStockQuantity()`
+  never passes `p_location`, so every adjustment resolves to
+  `stock_items.department` and the **Main Store cannot be adjusted at all**.
+  Works by accident for bars. `059` fixed the *department on the movement row*
+  through the same function but deliberately did not change the tab's call
+  signature. Small fix, own step.
+- **🟡 OPEN — browser verification of the Bar Count tab.** The database layer is
+  proven live as the roles (19/19 scenarios) and the build is clean, but the new
+  tab has not been exercised in a browser. Needs an owner or bar-head session.
+
 ### 5. Still not built, in order
 
 ~~RLS pass~~ ✅ (`056`, 14 August) → ~~`TransfersTab` wiring~~ ✅ (`057` +
 frontend, 14 August) → ~~`movement_type` widening~~ ✅ (`058`, 14 August) →
 ~~Movement Ledger~~ ✅ (`058` + data-ops/`006`, 14 August — see the CLOSED block
-below) → **bar par levels + end-of-day cycle** ← next feature →
+below) → ~~bar par levels + end-of-day cycle~~ ✅ (`059`, 17 August — see 4d
+above) → **rooms + consumption ledger** ← next feature → **FM taxonomy +
+waiting list + fees** → **QR attendance** → **events payments-edit + revenue** →
 **real-data dedupe + table split**.
 
 ### 5b. §2.6 REBUILD RE-PROOF — `051`–`057` CLOSED (run 5); `058` now owed
@@ -470,15 +516,45 @@ after the fact: applying `056` second left `transfer_stock`, `issue_stock` and
 `apply_stock_delta` byte-identical by `md5(prosrc)`, every `051`–`057` object
 present as described.)*
 
-**Now owed: `058` has not been rebuild-proven.** It is post-run-5. The next
-migration written (bar par levels will likely need one) triggers a full
-throwaway rebuild of `001`–`058` diffed against production — the only thing that
-catches the unfiled-drift class runs 1–3 found (a nullability constraint, ~20
-columns, an FK property, the grant layer — none surfaced by file reading).
-**Before the next migration is written, not after.** `data-ops/006` was a code +
-data-op change, **not** a migration — it does not touch this clock. A rebuild
-proof expires; it is a claim about a file range on a date, not a permanent
-property of the project.
+**~~Now owed: `058` has not been rebuild-proven.~~ — CLOSED by RUN 6,
+17 August 2026, before `059` was written.**
+
+Throwaway `ezdzuncwptlslclxepii` (eu-west-1), confirmed empty first (0 tables,
+0 functions, 0 migration rows). `db push --db-url` via the pooler applied **all
+58 migrations with no errors**. Production stayed read-only throughout (a helper
+that hard-refuses any statement not starting `SELECT`/`WITH` — it fired on the
+proof's own `'GRANT|'` string literal, which was relabelled rather than the guard
+relaxed). Staging deleted immediately; local link verified `gttsjmxltrxxfplqjans`
+before *and* after; production data unchanged (559 / 305 / 62 / 1118 / 537).
+
+| Object | Prod | Rebuild | Result |
+|---|---|---|---|
+| Tables | 28 | 28 | **exact** |
+| Columns | 306 | 306 | set-exact; 5 differ in ordinal position only (accepted, above) |
+| Constraints (incl. `condeferrable`/`condeferred`) | 101 | 101 | **exact** |
+| Indexes | 46 | 46 | **exact** |
+| Table privileges | 631 | 631 | **exact** |
+| `pg_default_acl` | 24 | 24 | **exact** |
+| RLS enablement | 28 | 28 | **exact** |
+| Triggers | 1 | 1 | **exact** |
+| Policies | 106 | 104 | the 2 known production-only legacy duplicates |
+| Functions | 8 | 7 | `handle_new_user` orphan (production-only, files correctly omit) + the anon-EXECUTE finding above |
+
+**Every function body byte-identical** by `md5(prosrc)`, including
+`apply_stock_delta` after `058`'s in-place replace.
+
+**Run 6 also caught what the record had wrong: production's migration history
+stopped at `057`.** `058` had been applied by hand and never recorded — exactly
+one gap, while its objects were demonstrably live (CHECK `_v4` carrying all eight
+types, 4 indexes on `stock_movements`). STATE and this log both claimed
+"`001`–`058`". Repaired via `migration repair --status applied 058`, re-read on a
+fresh connection: **58 rows, max 58, no gaps**, `db push --dry-run` clean. `059`
+was then written on a genuinely proven base rather than a believed one.
+
+**Now owed: `059` has not been rebuild-proven.** Same rule — the next migration
+written triggers a throwaway rebuild of `001`–`059` diffed against production.
+A rebuild proof expires; it is a claim about a file range on a date, not a
+permanent property of the project.
 
 ### 6. ~~⚠ The transfers-don't-deduct bug is STILL OPEN~~ — FIXED AND PROVEN LIVE, 14 August 2026
 
@@ -558,25 +634,86 @@ detail in STATE and HISTORY; the followup-relevant residue:
   the deprecated `stock_items.department` (both derivations confirmed to agree),
   idempotent, 0 inserts/deletes. See HISTORY 14 Aug for the doctrine lesson
   (nullable-column filters silently exclude null rows).
-- **🟡 OPEN — restore the delivery Supplier column.** 058/006 suppressed the
-  bogus `From → To` on delivery rows (a self-introduced render bug had put
-  `parseSupplier(notes)` in the From slot) and parked supplier in a tooltip. The
-  old Delivery Log had a real Supplier column. Restore it as a column for
-  delivery rows. Small render fix, do early next chat.
-- **🟡 OPEN — create a Main Bar `department_head` account.** Stock-holding
-  departments are Main Bar + Sports Bar, but heads are Kitchen/Restaurant/Sports
-  Bar. Main Bar ledger visibility was proved via a rolled-back repoint. Create
-  at real-data time with Rose, alongside the other deferred head accounts.
+- **~~🟡 OPEN — restore the delivery Supplier column.~~ — DONE 17 August 2026.**
+  `Supplier` is now a real column in `MovementLedgerTab`, populated by
+  `parseSupplier(notes)` for every row that carries one, and the `Route` cell no
+  longer tries to render a supplier as a route — it just says "—" when a
+  movement has no route. Restores what the old Delivery Log showed.
+- **~~🟡 OPEN — create a Main Bar `department_head` account.~~ — ALREADY DONE;
+  the note was stale.** `mainbar@woodlands.com` exists live as a `department_head`
+  scoped to `Main Bar` (confirmed 17 August while listing profiles for the `059`
+  role proof, and used as a real cross-department denial subject in it — it is no
+  longer proved via a rolled-back re-point). Both stock-holding bars now have a
+  head. Kitchen, Restaurant and Sports Bar heads also exist; the remaining
+  departments have none, which stays a real-data item with Rose.
 
-## anon-EXECUTE RESIDUAL — VERIFIED ABSENT 14 August 2026
+## anon-EXECUTE RESIDUAL — ⚠ CORRECTED 17 August 2026. The entry below was right about PRODUCTION and wrong about the FILES.
 
-The debt to `REVOKE EXECUTE` on `current_app_role`/`current_app_department` from
-`anon`/`PUBLIC` **does not exist and must not be re-added to any migration.**
-Verified live: `has_function_privilege` returns **false ×4** (anon + public ×
-both functions); `proacl` on both functions is
-`{postgres, authenticated, service_role}` only — no `anon`, no `PUBLIC`. Already
-closed, most likely at `050` or at function-creation time. Struck from the
-"fold into the next migration" plan. Do not re-litigate.
+**Closed for real by `059` section 10.** Rebuild proof run 6 (17 August) measured
+both databases and resolved the contradiction this entry created:
+
+| | `proacl` on `current_app_role` / `current_app_department` |
+|---|---|
+| **Production** | `{postgres, authenticated, service_role}` — **no anon**. The entry below is correct. |
+| **A from-files rebuild** | `{postgres, **anon**, authenticated, service_role}` — anon CAN execute. |
+
+So the debt **does exist**, on the files, and the old entry's instruction —
+*"must not be re-added to any migration, do not re-litigate"* — would have kept a
+real gap open indefinitely. It was written from a **production-only probe**, and
+only a rebuild distinguishes the two sides. That is the whole reason §2.6 exists.
+
+**Cause, measured not inferred:** a fresh Supabase project's default privileges
+grant EXECUTE on new functions to `anon`. `021` and `037` each pair their CREATE
+with `revoke all … from public`, which strips the **PUBLIC** grant but not the
+separate **explicit anon** one. `050` then fixes the defaults going forward and
+resets already-created **tables** (its section 2) but never resets already-created
+**functions** — its own header documents that `ALTER DEFAULT PRIVILEGES` is not
+retroactive and then covers only half of it. The two divergent functions are
+exactly the only two created before `050` and never re-created after it (`052`
+re-created the stock RPCs under the restricted default; `054`/`055`/`057` were
+created after). Theory and measurement agree exactly, and the other five
+functions matched production byte-for-byte.
+
+**Effect was inert** — `auth.uid()` is NULL for `anon`, so both return NULL — but
+these are `SECURITY DEFINER` functions that every RLS policy in the system calls,
+and "production defends twice, a rebuild defends once" is precisely the class
+that made `050` a finding.
+
+**Fixed in `059` section 10**, which unlike `050` is safe to execute against
+production (it is a no-op there — confirmed after apply: `proacl` unchanged,
+still no `anon`).
+
+**Doctrine, and the reason this is written at length:** *a claim that a debt does
+not exist must say WHICH DATABASE it was measured on.* "Verified absent" against
+production says nothing about the files, and the files are what a rebuild runs.
+
+*Original entry, preserved:*
+
+> The debt to `REVOKE EXECUTE` on `current_app_role`/`current_app_department` from
+> `anon`/`PUBLIC` **does not exist and must not be re-added to any migration.**
+> Verified live: `has_function_privilege` returns **false ×4** (anon + public ×
+> both functions); `proacl` on both functions is
+> `{postgres, authenticated, service_role}` only — no `anon`, no `PUBLIC`. Already
+> closed, most likely at `050` or at function-creation time. Struck from the
+> "fold into the next migration" plan. Do not re-litigate.
+
+## COLUMN ORDINAL ORDER on `attendance_records` — ACCEPTED DIVERGENCE (17 August 2026)
+
+Rebuild run 6 found positions 14–18 of `attendance_records` holding the **same
+five columns with identical types, nullability and defaults, in a different
+order**:
+
+| | 14 | 15 | 16 | 17 | 18 |
+|---|---|---|---|---|---|
+| Production | `shift_date` | `user_id` | `within_radius` | `break_start` | `break_end` |
+| Rebuild | `user_id` | `shift_date` | `break_start` | `break_end` | `within_radius` |
+
+Set-identical — nothing missing, nothing extra, 306/306 columns match as a set.
+**Accepted, not chased.** Unlike `046`/`047` (which could match production's
+ordinal order because those columns did not yet exist in any file), both sides
+already have these columns, so aligning them needs a table rewrite. PostgREST
+returns keyed JSON, so no application code depends on ordinal position. Recorded
+so a future audit recognises it as known rather than re-discovering it as new.
 
 ---
 

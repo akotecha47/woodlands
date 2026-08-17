@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { itemLabel, EmptyRow, TdBold, ReqStatusBadge, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
-import { issueStock } from '../../lib/stock'
+import { issueStock, fulfilRequisitionBatch } from '../../lib/stock'
 import { MANAGE_ROLES } from '../../lib/roles'
 import { MAIN_STORE } from '../../lib/constants'
 
@@ -109,6 +109,70 @@ export default function RequisitionsTab() {
     } catch (err) { flash(err.message, false) }
   }
 
+  // ── par-refill batches (059) ──────────────────────────────────────
+  // A night's count can raise dozens of requisitions. They are grouped by the
+  // count session that produced them so a refill is approved and fulfilled as
+  // one unit — a per-row Approve/Fulfil across 90+ items is not a usable
+  // screen. The rows themselves stay ordinary requisitions; only the grouping
+  // is new.
+  const batches = useMemo(() => {
+    const map = new Map()
+    for (const r of reqs) {
+      if (r.source !== 'par_refill' || !r.count_session_id) continue
+      const b = map.get(r.count_session_id) ?? {
+        id: r.count_session_id, department: r.department, created_at: r.created_at,
+        pending: 0, approved: 0, fulfilled: 0, rejected: 0, units: 0, count: 0,
+      }
+      b[r.status] = (b[r.status] ?? 0) + 1
+      b.units += Number(r.quantity)
+      b.count += 1
+      map.set(r.count_session_id, b)
+    }
+    return [...map.values()].sort((a, b) => b.created_at.localeCompare(a.created_at))
+  }, [reqs])
+
+  // The flat list shows hand-raised requisitions only; batched refill lines are
+  // represented by their batch above, so the table stays readable.
+  const looseReqs = reqs.filter(r => r.source !== 'par_refill' || !r.count_session_id)
+
+  async function handleApproveBatch(batch) {
+    try {
+      const { error } = await supabase.from('requisitions')
+        .update({ status: 'approved', reviewed_by: session.user.id, updated_at: new Date().toISOString() })
+        .eq('count_session_id', batch.id)
+        .eq('status', 'pending')
+      if (error) throw error
+      flash(`Approved ${batch.pending} line(s)`)
+      fetchReqs()
+    } catch (err) { flash(err.message, false) }
+  }
+
+  async function handleFulfilBatch(batch) {
+    try {
+      // One transaction server-side. A line the store cannot cover is skipped
+      // and named rather than aborting the whole refill; anything else aborts.
+      const res = await fulfilRequisitionBatch(batch.id)
+      if (res.skipped > 0) {
+        flash(`Fulfilled ${res.fulfilled}, skipped ${res.skipped} for insufficient store stock`, false)
+      } else {
+        flash(`Fulfilled ${res.fulfilled} line(s) — issued from ${MAIN_STORE} to ${batch.department}`)
+      }
+      fetchReqs()
+    } catch (err) { flash(err.message, false) }
+  }
+
+  async function handleRejectBatch(batch) {
+    try {
+      const { error } = await supabase.from('requisitions')
+        .update({ status: 'rejected', reviewed_by: session.user.id, updated_at: new Date().toISOString() })
+        .eq('count_session_id', batch.id)
+        .in('status', ['pending', 'approved'])
+      if (error) throw error
+      flash('Refill rejected')
+      fetchReqs()
+    } catch (err) { flash(err.message, false) }
+  }
+
   const itemMap = Object.fromEntries(items.map(i => [i.id, i]))
   const managerCols = isManager ? 8 : 6
 
@@ -155,6 +219,58 @@ export default function RequisitionsTab() {
         </form>
       </div>
 
+      {/* ── Par-refill batches (059) ─────────────────────── */}
+      {batches.length > 0 && (
+        <div className="border-t border-gray-100 pt-6">
+          <h2 className="text-base font-semibold text-gray-800 mb-1">Bar Refills</h2>
+          <p className="text-sm text-gray-500 mb-3">
+            Pre-filled from an end-of-day count. Approve and fulfil the whole refill in one go.
+          </p>
+          <div className="space-y-2">
+            {batches.map(b => {
+              const done = b.pending === 0 && b.approved === 0
+              return (
+                <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 border border-gray-200 rounded-xl px-4 py-3">
+                  <div className="text-sm">
+                    <span className="font-medium text-gray-900">{b.department}</span>
+                    <span className="text-gray-500"> · {b.count} item(s) · {b.units} unit(s) · </span>
+                    <span className="text-gray-500">
+                      {new Date(b.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </span>
+                    <div className="mt-1 flex gap-1.5">
+                      {b.pending   > 0 && <ReqStatusBadge status="pending" />}
+                      {b.approved  > 0 && <ReqStatusBadge status="approved" />}
+                      {b.fulfilled > 0 && <ReqStatusBadge status="fulfilled" />}
+                      {b.rejected  > 0 && <ReqStatusBadge status="rejected" />}
+                    </div>
+                  </div>
+                  {isManager && !done && (
+                    <div className="flex gap-1.5">
+                      {b.pending > 0 && (
+                        <button onClick={() => handleApproveBatch(b)}
+                          className="px-2.5 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
+                          Approve all ({b.pending})
+                        </button>
+                      )}
+                      {b.approved > 0 && (
+                        <button onClick={() => handleFulfilBatch(b)}
+                          className="px-2.5 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
+                          Fulfil all ({b.approved})
+                        </button>
+                      )}
+                      <button onClick={() => handleRejectBatch(b)}
+                        className="px-2.5 py-1 text-xs font-medium bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-colors">
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── List ────────────────────────────────────────── */}
       <div className="border-t border-gray-100 pt-6">
         <h2 className="text-base font-semibold text-gray-800 mb-3">
@@ -171,7 +287,7 @@ export default function RequisitionsTab() {
               </tr>
             </thead>
             <tbody>
-              {reqs.map(r => (
+              {looseReqs.map(r => (
                 <tr key={r.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                   <TdBold>{itemMap[r.stock_item_id]?.name ?? '—'}</TdBold>
                   <Td>{r.department}</Td>
@@ -204,7 +320,11 @@ export default function RequisitionsTab() {
                   )}
                 </tr>
               ))}
-              {reqs.length === 0 && <EmptyRow cols={managerCols} msg="No requisitions yet" />}
+              {looseReqs.length === 0 && (
+                <EmptyRow cols={managerCols} msg={
+                  batches.length > 0 ? 'No hand-raised requisitions — see Bar Refills above' : 'No requisitions yet'
+                } />
+              )}
             </tbody>
           </table>
         </div>

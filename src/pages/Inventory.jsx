@@ -5,10 +5,14 @@ import RequisitionsTab from '../components/inventory/RequisitionsTab'
 import TransfersTab    from '../components/inventory/TransfersTab'
 import AdjustmentsTab     from '../components/inventory/AdjustmentsTab'
 import MovementLedgerTab from '../components/inventory/MovementLedgerTab'
+import BarCountTab       from '../components/inventory/BarCountTab'
 
 const TABS = [
   { id: 'stock',        label: 'Stock Levels', Component: StockLevelsTab  },
   { id: 'delivery',     label: 'Log Delivery', Component: LogDeliveryTab  },
+  // The end-of-day par cycle (059). Sits next to Requisitions because posting
+  // a count is what generates one.
+  { id: 'barcount',     label: 'Bar Count',    Component: BarCountTab     },
   { id: 'requisitions', label: 'Requisitions', Component: RequisitionsTab },
   { id: 'transfers',    label: 'Transfers',    Component: TransfersTab    },
   { id: 'adjustments',  label: 'Adjustments',  Component: AdjustmentsTab  },

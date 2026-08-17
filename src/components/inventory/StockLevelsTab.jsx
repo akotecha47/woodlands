@@ -18,7 +18,7 @@ export default function StockLevelsTab() {
   async function fetchStock() {
     const { data, error } = await supabase
       .from('current_stock')
-      .select('id, quantity, location, sub_location, reorder_level, stock_items(id, name, sku, unit, reorder_level)')
+      .select('id, quantity, location, sub_location, reorder_level, par_level, stock_items(id, name, sku, unit, reorder_level)')
     if (error) { flash(error.message, false); return }
     const flat = (data ?? [])
       .map(r => ({
@@ -32,6 +32,10 @@ export default function StockLevelsTab() {
         // Per-tier threshold, falling back to the catalogue default exactly as
         // the column comment specifies.
         reorder_level: r.reorder_level ?? r.stock_items.reorder_level,
+        // Par has NO catalogue fallback, unlike reorder: NULL means this
+        // location is not on the end-of-day par cycle at all, which is a real
+        // distinction and must not be papered over with a default (059).
+        par_level:     r.par_level,
         quantity:      r.quantity,
       }))
       .sort((a, b) => a.name.localeCompare(b.name) || a.locationKey.localeCompare(b.locationKey))
@@ -65,7 +69,7 @@ export default function StockLevelsTab() {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <Th>Item Name</Th><Th>SKU</Th><Th>Location</Th><Th>Unit</Th>
-              <Th>Current Stock</Th><Th>Reorder Level</Th><Th>Status</Th>
+              <Th>Current Stock</Th><Th>Reorder Level</Th><Th>Par</Th><Th>Status</Th>
             </tr>
           </thead>
           <tbody>
@@ -77,13 +81,20 @@ export default function StockLevelsTab() {
                 <Td>{item.unit}</Td>
                 <TdBold>{item.quantity}</TdBold>
                 <Td>{item.reorder_level}</Td>
+                <td className="px-4 py-3 text-sm">
+                  {item.par_level == null
+                    ? <span className="text-gray-300" title="Not on the end-of-day par cycle">—</span>
+                    : <span className={Number(item.quantity) < Number(item.par_level) ? 'font-medium text-amber-700' : 'text-gray-600'}>
+                        {item.par_level}
+                      </span>}
+                </td>
                 <td className="px-4 py-3">
                   <StockBadge quantity={item.quantity} reorderLevel={item.reorder_level} />
                 </td>
               </tr>
             ))}
             {visible.length === 0 && (
-              <EmptyRow cols={7} msg={
+              <EmptyRow cols={8} msg={
                 rows.length === 0
                   ? 'No stock items yet. Add items in Admin → Stock Items.'
                   : 'No items at this location.'

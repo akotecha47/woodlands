@@ -70,14 +70,11 @@ function Route({ entry }) {
   const r     = entry.row
   const route = routeFor(r)
 
-  if (!route) {
-    // The supplier is not a route, but it is still the most useful thing to
-    // know about a delivery, so it survives as the cell's tooltip.
-    const supplier = parseSupplier(r.notes)
-    return (
-      <span className="text-gray-400" title={supplier ? `Supplier: ${supplier}` : undefined}>—</span>
-    )
-  }
+  // The supplier is NOT a route — putting parseSupplier(notes) in the From slot
+  // was the render bug 058 introduced ("Aman → —"). It now has its own column,
+  // restoring what the old Delivery Log showed, so this cell just says "no
+  // route" honestly.
+  if (!route) return <span className="text-gray-400">—</span>
   const { from, to } = route
   return (
     <span className="text-sm text-gray-600 whitespace-nowrap">
@@ -209,7 +206,7 @@ export default function MovementLedgerTab() {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <Th>Date</Th><Th>Item</Th><Th>SKU</Th><Th>Type</Th>
-              <Th>From → To</Th><Th>Qty</Th><Th>Performed By</Th>
+              <Th>From → To</Th><Th>Supplier</Th><Th>Qty</Th><Th>Performed By</Th>
             </tr>
           </thead>
           <tbody>
@@ -222,6 +219,9 @@ export default function MovementLedgerTab() {
                   <Td>{m.stock_items?.sku}</Td>
                   <td className="px-4 py-3"><TypeBadge type={m.movement_type} /></td>
                   <td className="px-4 py-3"><Route entry={entry} /></td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {parseSupplier(m.notes) ?? <span className="text-gray-300">—</span>}
+                  </td>
                   <td className="px-4 py-3" title={m.notes ?? ''}>
                     <Qty entry={entry} unit={m.stock_items?.unit ?? ''} />
                   </td>
@@ -229,7 +229,7 @@ export default function MovementLedgerTab() {
                 </tr>
               )
             })}
-            {entries.length === 0 && <EmptyRow cols={7} msg="No movements found" />}
+            {entries.length === 0 && <EmptyRow cols={8} msg="No movements found" />}
           </tbody>
         </table>
       </div>
