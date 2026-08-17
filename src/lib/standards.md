@@ -169,7 +169,20 @@ select business_name,
   from fm_holders where stall_number = 'A079';
 ```
 
-`char_len` vs `octet_length` proves multibyte characters survived; `chr(8217)` / `chr(8212)` confirm the *expected* codepoint is present; a `chr(195)` (`Ã`) match is the signature of UTF-8 misread as Latin-1. When reading any file that may contain non-ASCII, decode explicitly — `[System.IO.File]::ReadAllText($f, [System.Text.Encoding]::UTF8)`, never bare `Get-Content`.
+`char_len` vs `octet_length` proves multibyte characters survived; `chr(8217)` / `chr(8212)` confirm the *expected* codepoint is present; a `chr(195)` (`Ã`) or `chr(226)` (`â`) match is the signature of UTF-8 misread as Latin-1. When reading any file that may contain non-ASCII, decode explicitly — `[System.IO.File]::ReadAllText($f, [System.Text.Encoding]::UTF8)`, never bare `Get-Content`.
+
+**3b. That rule applies to the MIGRATION-APPLY path too, not just imports — and the gap cost a production repair (17 August 2026).**
+
+The rule above was written after the Farmers Market import and then honoured only where it had been learned. The ad-hoc helper that applies migrations through the Management API kept using bare `Get-Content`, so migration `059` was written to production with **every non-ASCII character destroyed**: `post_bar_count` stored 92 × `U+00E2` where the file has 92 × `U+2500`, `set_stock_quantity` 1 × `U+00E2` for an em-dash, plus two `COMMENT ON` texts (one dating back to Sprint C).
+
+Nothing executable was affected — every corrupted character sat inside a `--` comment — so the application never misbehaved and `059`'s live role proof stood. **What it broke was the proof:** `md5(prosrc)` could no longer match the files, so every future §2.6 rebuild run would flag two functions forever. It was invisible to every check the project runs against production alone, and was caught only by rebuild proof run 7 diffing files-vs-production.
+
+Two consequences, both now permanent:
+
+- **Apply SQL through `scripts/apply-sql.ps1`, never an ad-hoc one-liner.** It reads UTF-8 explicitly *and* refuses to send text still containing `U+00C3`/`U+00E2`, which catches a file that was already saved corrupt — something explicit decoding alone cannot.
+- **Fix the tooling before healing the data.** A repair run through the broken path writes the corruption straight back in and looks like a success.
+
+Healed by `scripts/data-ops/007_encoding_heal.sql`, which slices the four statements verbatim out of the migration files rather than retyping them — so the resulting `md5(prosrc)` matching the rebuild's is itself the proof the text is exact.
 
 **Why set it manually anyway:** the runtime's auto-injected variable has changed format before, silently, and broke `auth.admin`. An explicitly set secret is one you control and can verify.
 

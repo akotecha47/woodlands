@@ -573,10 +573,126 @@ types, 4 indexes on `stock_movements`). STATE and this log both claimed
 fresh connection: **58 rows, max 58, no gaps**, `db push --dry-run` clean. `059`
 was then written on a genuinely proven base rather than a believed one.
 
-**Now owed: `059` has not been rebuild-proven.** Same rule — the next migration
-written triggers a throwaway rebuild of `001`–`059` diffed against production.
-A rebuild proof expires; it is a claim about a file range on a date, not a
-permanent property of the project.
+**~~Now owed: `059` has not been rebuild-proven.~~ — CLOSED BY RUN 7,
+17 August 2026, before any `060` DDL was written.**
+
+Throwaway `tnseclavqwijhtmljgui` (eu-west-1), confirmed empty first. The direct
+host `db.<ref>.supabase.co` did not resolve (IPv6-only, as on runs 1, 2 and 6) —
+session pooler `aws-1-eu-west-1.pooler.supabase.com:6543` used instead. **Never
+linked**; local link read `gttsjmxltrxxfplqjans` before *and* after. All 59
+migrations applied, no errors. Production read-only throughout.
+
+| Object | Prod | Rebuild | Result |
+|---|---|---|---|
+| Tables | 30 | 30 | **exact** |
+| Columns (set) | 328 | 328 | **exact** |
+| Columns (ordinal) | 328 | 328 | 5 differ — the known `attendance_records` 14–18 |
+| Constraints (incl. `condeferrable`/`condeferred`) | 114 | 114 | **exact** |
+| Indexes | 54 | 54 | **exact** |
+| Table privileges | 678 | 678 | **exact** |
+| `pg_default_acl` | 24 | 24 | **exact** |
+| RLS policies | 122 | 120 | the 2 known legacy duplicates |
+| RLS enablement | 30 | 30 | **exact**, all on |
+| Triggers | 2 | 2 | **exact** |
+| Functions | 11 | 11 | 3 differ — see below |
+| **anon/PUBLIC EXECUTE on the two role functions** | 2 | 2 | **exact — false on both** |
+
+**✅ `059` §10 did what it was written to do.** The anon-EXECUTE-in-files gap
+run 6 found is closed: `has_function_privilege` is false for `anon` **and**
+`public` on `current_app_role` and `current_app_department` on both databases.
+
+**🟡 `rls_auto_enable` / `ensure_rls` — platform, not a files gap.** A fresh
+Supabase project now ships an event trigger that auto-enables RLS on new tables;
+production predates it. It shows as a rebuild-only function, and it means **RLS
+enablement on a rebuild is not self-evidencing** — a file that forgot
+`enable row level security` would be silently fixed and the diff would read
+30/30 anyway. Closed from the other side: production has no such trigger and
+still carries RLS on all 30 tables, so enablement demonstrably comes from the
+migrations. **Future runs must keep making this argument rather than reading
+30/30 as proof.**
+
+### 🔴 What run 7 caught — mojibake in PRODUCTION, written by the apply path
+
+Two function bodies differed by `md5(prosrc)` with identical signature,
+`prosecdef` and `proacl`. Measured by **stored codepoints**, not rendering:
+
+| | files / rebuild | production |
+|---|---|---|
+| `post_bar_count` | 92 × `U+2500` | 0 box-draw, **92 × `U+00E2`** |
+| `set_stock_quantity` | 1 × `U+2014` | 0 em-dash, **1 × `U+00E2`** |
+| `current_stock.par_level` comment | clean | **corrupted** |
+| `event_stock_allocations.deducted_qty` comment | clean | **corrupted** |
+
+The clincher: production's `post_bar_count` **character** count (4481) equalled
+the rebuild's **byte** count (4481) — the signature of UTF-8 decoded as
+single-byte Latin-1.
+
+**Cause reproduced, not inferred.** Reading `059` both ways:
+
+```
+U+2500 box-drawing   bare Get-Content 0       UTF-8 read 333
+U+00E2 mojibake      bare Get-Content 360     UTF-8 read 0
+round trip to bytes  35427 -> 37230 (old)     35427 -> 35427 (fixed)
+```
+
+PowerShell 5.1's `Get-Content` decodes with the ANSI codepage. **`standards.md`
+§4 already carried this exact rule**, learned from the Farmers Market import —
+it was honoured in the import path and never carried across to the apply path.
+`transform_fm_import.ps1` does it correctly; the migration applier did not.
+
+**Effect was cosmetic and that was verified, not assumed:** both bodies 123 and
+73 lines on each side, and after stripping comment lines the executable text was
+**identical — 0 differences** in both. No constraint definition, column default,
+policy name or data row was affected (swept for all four). `059`'s 19/19 live
+role proof stands. What it broke was the *proof*: `md5(prosrc)` could never match
+again, so every future §2.6 run would flag two functions forever — and only a
+rebuild can see it, since production alone looks fine.
+
+**Fixed in the mandated order — tooling first, then the heal.** A heal run
+through the broken path writes the corruption straight back in and reports
+success.
+
+1. **`scripts/apply-sql.ps1`** (new, committed) — reads UTF-8 explicitly *and*
+   refuses to send text still containing `U+00C3`/`U+00E2`, which catches a file
+   that was already saved corrupt (explicit decoding alone cannot). Proven before
+   use: 333 × `U+2500`, 0 mojibake, and a **byte-exact round trip**
+   (35427 → 35427).
+2. **`scripts/data-ops/007_encoding_heal.sql`** — a data-op, **deliberately not a
+   migration**: the files are already correct and a rebuild produces clean text,
+   so there is nothing for a replay to fix. It re-runs four statements **sliced
+   verbatim out of the migration files rather than retyped** (`059` lines
+   405–487, 491–618, 126–127; `024` lines 42–43), so the healed `md5` matching
+   the rebuild's is itself the proof the text is exact. Self-asserting: it
+   captures `oid`/`proacl` first and aborts if either moves, if an `md5` fails to
+   change, or if any mojibake marker survives.
+
+**Result, verified on a fresh connection after commit:**
+
+| | before | after | rebuild (run 7) |
+|---|---|---|---|
+| `post_bar_count` md5 | `a2bffc19…` | **`c7117152…`** | `c7117152…` ✅ |
+| `set_stock_quantity` md5 | `25f91591…` | **`0334585770…`** | `0334585770…` ✅ |
+| `oid` | 42712 / 42386 | **unchanged** | — |
+| `proacl` | `{postgres,authenticated,service_role}` | **unchanged** | — |
+| comments carrying mojibake | 2 | **0** | 0 |
+
+Dry-run with `ROLLBACK` first and a **negative control** confirming production
+was still corrupted afterwards, so the dry run demonstrably executed. Both healed
+functions then executed live as the roles, rolled back: `set_stock_quantity` as
+`admin` (Main Store 100 → 88), and `post_bar_count` as the Sports Bar head on a
+**genuine non-zero delta** (SBA-1001 system 17, counted 14 → balance reconciled
+to 14, line stamped `system_qty=17 par=10 shortfall=0`, consumption delta **3**).
+Rollback re-verified: 1118 balances, 725 movements, 0 adjustment rows.
+
+**Doctrine, and the reason this is written at length:** *fix the tool before
+healing the data.* And: a defect can be invisible to every check run against
+production alone and still be real — this one was found only by diffing files
+against production, which is the entire purpose of §2.6.
+
+**Now owed: `060` will not be rebuild-proven.** Same rule — the next migration
+written after it triggers a throwaway rebuild of `001`–`060` diffed against
+production. A rebuild proof expires; it is a claim about a file range on a date,
+not a permanent property of the project.
 
 ### 6. ~~⚠ The transfers-don't-deduct bug is STILL OPEN~~ — FIXED AND PROVEN LIVE, 14 August 2026
 
