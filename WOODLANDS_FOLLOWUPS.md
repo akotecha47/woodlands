@@ -16,6 +16,83 @@ Everything else below stays a genuine followup.
 
 ---
 
+## EVENTS REVENUE — FINDINGS FROM THE 18 AUGUST BUILD
+
+### 🔴 `deliveries` is a dead table, and its RLS is a hole in the other direction
+
+Found while looking for a cost source for the net-of-cost revenue reading, and
+verified live:
+
+| Fact | Value |
+|---|---|
+| Rows | **0** |
+| RLS | **enabled, with ZERO policies** |
+| Grants | `authenticated` holds SELECT/INSERT/UPDATE |
+| Readers/writers in the app | **none** |
+
+So `authenticated` — owner and admin included — can read nothing from it and
+write nothing to it, despite holding the grants; proven live as the owner and as
+the admin, both counting **0 deliveries** while counting 5 payments and 4 bill
+items in the same transaction. A real delivery is recorded as a
+`stock_movements` row with `movement_type='delivery'` (`LogDeliveryTab` calls
+`applyStockDelta`), and the supplier is parsed back out of `notes`.
+
+This is **not urgent** — nothing depends on the table and nothing is broken by
+its being unreachable. It matters for two reasons:
+
+1. **`deliveries.unit_cost` is the only cost column in the entire schema**, so
+   "the system does not know what anything costs" is a structural fact, not a
+   data gap. `stock_movements` carries quantity and no price. Any future
+   costing, margin or P&L work needs a cost source built first — see the
+   revenue entry below.
+2. **A table with RLS on and no policies is indistinguishable, from the client,
+   from a table that is simply empty.** That is the silently-empty read this log
+   already records twice (the `data-ops/006` department filter, the `056`
+   visibility gap). The Events revenue code therefore does **not** query it:
+   querying would have returned `[]` for a reason that has nothing to do with
+   cost, and the screen would have blamed missing data for an RLS denial.
+
+**Decide at handover:** either drop `deliveries` as vestigial, or give it
+policies and wire delivery cost into it. Do not leave it half-alive. Either way
+it is a migration, so it waits behind the current gate.
+
+### 🟡 Events revenue ships with THREE readings and no decision
+
+`WOODLANDS_MEETING_FEEDBACK_2026-07-27.md` records only "revenue should be
+different in Events", and question 1 for the 10 August call — *what that means,
+pointing at the number on screen* — was **never answered**. Built toggleable
+rather than guessed (`src/lib/revenue.js`, 68/68 tests): **Cash Received** ·
+**Net of Cost** · **By Line**, default `received`, with an on-screen note on
+every revenue surface saying the default is provisional.
+
+**Owed from Dhiren on his return (28 August): pick one.** The other two come out,
+along with the toggle and the `useRevenueReading` hook.
+
+Two things worth putting to him at the same time, both found in this diagnosis:
+
+- **Events showed no revenue figure at all before this build.** The list strip
+  was three counts; the detail was Bill Total / Total Paid / Balance Due. It is
+  possible "different" meant "absent".
+- **`events.total_amount` is a stale 0** on the one live event whose bill items
+  sum to MWK 1,800,000, and **no code in Events reads or maintains it**. If he
+  was pointing at a number on screen, that is the likeliest candidate. It is
+  also a column a rebuild will keep reproducing; decide whether it is
+  authoritative or vestigial.
+
+### 🟡 Net-of-cost is built but cannot be populated
+
+`unitCostIndex` / `allocationCost` are written and tested (weighted-average unit
+cost, consumption as `deducted_qty - returned_qty`, an unpriced line refusing to
+count as a zero-cost line). They have **no input**: see the `deliveries` entry
+above. The reading therefore reports its own coverage and shows an em-dash, and
+the panel states plainly that no cost source exists — deliberately *not* a
+100% margin, which is how a placeholder screen comes to look like a finding.
+
+Labour and overhead are out of scope for the same reason: `event_staff` carries
+no rate, and no table in the schema does.
+
+---
+
 ## FARMERS MARKET REGISTER — DATA QUALITY (for Rose, post-meeting)
 
 *From the 26 July 2026 import of the Feb 2026 register. 305 of 319 stalls are live; the gaps below are source-data issues, not import faults.*

@@ -12,6 +12,7 @@ import {
 } from './EventsUI'
 import EventBillSection    from './EventBillSection'
 import EventPaymentsSection from './EventPaymentsSection'
+import EventRevenueSection  from './EventRevenueSection'
 import EventSetupSection    from './EventSetupSection'
 import EventStaffSection    from './EventStaffSection'
 import EventStockSection    from './EventStockSection'
@@ -443,6 +444,13 @@ export default function EventDetailTab({ eventId, onBack }) {
         eventId={eventId}
         billTotal={billTotal}
         canManage={canManage}
+      />
+
+      {/* Revenue — read-only, and last: it is a reading OF the bill and the
+          payments above, not another place to enter either. */}
+      <EventRevenueSection
+        eventId={eventId}
+        billItems={billItems}
       />
     </div>
   )

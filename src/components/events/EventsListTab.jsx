@@ -6,9 +6,11 @@ import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/Adm
 import { MANAGE_ROLES } from '../../lib/roles'
 import {
   EVENT_TYPES, VENUES, EVENT_STATUSES,
-  fmtDate, fmtTime,
+  fmtDate, fmtTime, fmtMWK,
   EventStatusBadge, EmptyRow, todayStr,
+  useRevenueReading, RevenueReadingPicker,
 } from './EventsUI'
+import { computePortfolioRevenue, REVENUE_READINGS } from '../../lib/revenue'
 
 function parseEventDate(val) {
   if (!val) return null
@@ -96,6 +98,15 @@ export default function EventsListTab({ onView }) {
 
   const [events,    setEvents]    = useState([])
   const [loading,   setLoading]   = useState(true)
+
+  // Revenue inputs. Loaded whole rather than per event: all three tables are
+  // small (5 payments, 4 bill items, 2 allocations as of 18 Aug 2026) and
+  // computePortfolioRevenue buckets by event id itself. No cost source is
+  // loaded — see the note in EventRevenueSection.
+  const [reading,   setReading]   = useRevenueReading()
+  const [payments,  setPayments]  = useState([])
+  const [billItems, setBillItems] = useState([])
+  const [allocs,    setAllocs]    = useState([])
   const [toast,     setToast]     = useState(null)
   const flash = useFlash(setToast)
 
@@ -115,10 +126,17 @@ export default function EventsListTab({ onView }) {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase
-      .from('events')
-      .select('*, event_checklists(id, is_complete)')
-    setEvents(data ?? [])
+    const [evR, payR, billR, allocR] = await Promise.all([
+      supabase.from('events').select('*, event_checklists(id, is_complete)'),
+      supabase.from('event_payments').select('event_id, amount, payment_type'),
+      supabase.from('event_bill_items').select('event_id, category, amount'),
+      supabase.from('event_stock_allocations')
+        .select('event_id, stock_item_id, deducted_qty, returned_qty'),
+    ])
+    setEvents(evR.data ?? [])
+    setPayments(payR.data ?? [])
+    setBillItems(billR.data ?? [])
+    setAllocs(allocR.data ?? [])
     setLoading(false)
   }
 
@@ -131,10 +149,21 @@ export default function EventsListTab({ onView }) {
   const monthEnd   = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59)
   const next7      = new Date(today.getTime() + 7 * 86400000)
 
-  const totalThisMonth = events.filter(ev => {
+  const monthEvents = events.filter(ev => {
     const d = parseEventDate(ev.event_date)
     return d && d >= monthStart && d <= monthEnd && ev.status !== 'cancelled'
-  }).length
+  })
+  const totalThisMonth = monthEvents.length
+
+  // Revenue over THIS MONTH's events, under the selected reading. Cancelled
+  // events are already excluded by monthEvents — a cancelled booking's deposit
+  // is a real receipt, but it is not this month's trading, and mixing the two
+  // is the kind of ambiguity the reading toggle exists to expose rather than
+  // bury.
+  const revenue = computePortfolioRevenue(reading, {
+    events: monthEvents, payments, billItems, allocations: allocs,
+  })
+  const revenueCfg = REVENUE_READINGS.find(r => r.value === revenue.reading)
 
   const confirmedUnpaid = events.filter(ev =>
     ev.status === 'confirmed' && !ev.deposit_paid
@@ -219,7 +248,7 @@ export default function EventsListTab({ onView }) {
       <Toast toast={toast} />
 
       {/* Summary strip */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border-b border-gray-200">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 border-b border-gray-200">
         <div className="bg-gray-50 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">Events This Month</p>
           <p className="text-2xl font-bold text-gray-900">{totalThisMonth}</p>
@@ -231,6 +260,25 @@ export default function EventsListTab({ onView }) {
         <div className="bg-blue-50 rounded-xl p-4">
           <p className="text-xs text-blue-600 mb-1">Events in Next 7 Days</p>
           <p className="text-2xl font-bold text-blue-700">{inNext7Days}</p>
+        </div>
+
+        {/* Revenue — provisional reading, see EventRevenueSection for the full
+            panel and the on-screen warning. */}
+        <div className="bg-gray-50 rounded-xl p-4">
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <p className="text-xs text-gray-500">Revenue · This Month</p>
+            <span className="text-[10px] font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+              Provisional
+            </span>
+          </div>
+          {revenue.available
+            ? <p className="text-2xl font-bold text-gray-900">{fmtMWK(revenue.headline)}</p>
+            : <p className="text-2xl font-bold text-gray-300" title={revenue.detail.reason}>—</p>
+          }
+          <p className="text-[11px] text-gray-400 mt-0.5">{revenueCfg?.label}</p>
+          <div className="mt-2">
+            <RevenueReadingPicker reading={revenue.reading} onChange={setReading} size="sm" />
+          </div>
         </div>
       </div>
 
