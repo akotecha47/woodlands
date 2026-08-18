@@ -21,8 +21,10 @@ import { EmptyRow, TdBold, fetchActiveItems, fetchDepartmentList, fetchUserMap }
  * from/to, and neither do event rows today.
  */
 
-// Every value permitted by stock_movements_movement_type_check_v4 (migration
-// 058). Kept in step with that CHECK and with MOVEMENT_TYPES in src/lib/stock.js.
+// Every value permitted by stock_movements_movement_type_check_v5 (migration
+// 060). Kept in step with that CHECK and with MOVEMENT_TYPES in src/lib/stock.js.
+// A type missing from this list still renders — TypeBadge falls back to the raw
+// value — but it cannot be FILTERED, which is the silent half of the drift.
 const TYPES = [
   { value: 'delivery',         label: 'Delivery',         badge: 'bg-green-100 text-green-700'   },
   { value: 'issue',            label: 'Issue',            badge: 'bg-blue-100 text-blue-700'     },
@@ -32,6 +34,7 @@ const TYPES = [
   { value: 'opening_balance',  label: 'Opening Balance',  badge: 'bg-slate-100 text-slate-600'   },
   { value: 'event_allocation', label: 'Event Allocation', badge: 'bg-purple-100 text-purple-700' },
   { value: 'event_return',     label: 'Event Return',     badge: 'bg-teal-100 text-teal-700'     },
+  { value: 'consumption',      label: 'Consumption',      badge: 'bg-rose-100 text-rose-700'     },
 ]
 const TYPE_META = Object.fromEntries(TYPES.map(t => [t.value, t]))
 

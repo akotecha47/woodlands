@@ -25,15 +25,15 @@ import { supabase } from './supabase'
  * use it without importing across feature folders.
  */
 
-// Kept in step with the table CHECK (stock_movements_movement_type_check_v4)
+// Kept in step with the table CHECK (stock_movements_movement_type_check_v5)
 // and the allowlist inside apply_stock_delta. All three are widened in the
 // same migration or they drift — 'issue' was added in 055,
-// 'event_allocation'/'event_return' in 058.
+// 'event_allocation'/'event_return' in 058, 'consumption' in 060.
 // Note 'opening_balance' is permitted by the table but deliberately absent
 // here and in the RPC: it is import-only (scripts/data-ops/002).
 const MOVEMENT_TYPES = [
   'delivery', 'transfer', 'adjustment', 'requisition', 'issue',
-  'event_allocation', 'event_return',
+  'event_allocation', 'event_return', 'consumption',
 ]
 
 /**
@@ -181,6 +181,49 @@ export async function postBarCount(sessionId) {
  */
 export async function fulfilRequisitionBatch(sessionId) {
   const { data, error } = await supabase.rpc('fulfil_requisition_batch', { p_session_id: sessionId })
+  if (error) throw error
+  return data
+}
+
+/**
+ * Record a stock draw with its consumption attribution (migration 060).
+ *
+ * The three dimensions FUNCTIONAL_SPEC §2.3 asks for:
+ *   what  — stockItemId + quantity
+ *   where — location, subLocation (e.g. Laundry inside Housekeeping), roomId
+ *   who   — consumedBy, a STAFF ROSTER id (1 of 62), which is NOT the login
+ *           user. The login user is recorded separately server-side as
+ *           performed_by. A housekeeper has no login, so both are needed.
+ *
+ * Quantity is POSITIVE — the amount used. The server applies the sign.
+ *
+ * SECURITY DEFINER on the database side, gated by an explicit in-function
+ * check: owner/admin, or the department_head whose department IS the location.
+ * A head may only attribute to their own department's roster. The Main Store is
+ * refused: the store issues stock, it does not consume it.
+ *
+ * The balance write is delegated to apply_stock_delta, so the row lock and the
+ * fail-closed insufficient-stock check are the same single implementation every
+ * other stock path uses. Never insert a stock_movements row alongside this.
+ *
+ * Returns { stock_item_id, item, location, sub_location, quantity, room,
+ *           consumed_by, new_quantity }.
+ */
+export async function recordConsumption(stockItemId, location, quantity, {
+  subLocation = null,
+  roomId      = null,
+  consumedBy  = null,
+  reason      = null,
+} = {}) {
+  const { data, error } = await supabase.rpc('record_consumption', {
+    p_stock_item_id: stockItemId,
+    p_location:      location,
+    p_sub_location:  subLocation,
+    p_quantity:      quantity,
+    p_room_id:       roomId,
+    p_consumed_by:   consumedBy,
+    p_reason:        reason,
+  })
   if (error) throw error
   return data
 }
