@@ -104,7 +104,7 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     async function load() {
-      const [attR, stockR, eventsR, bookingsR, unverifiedR, depositPmtsR, atRiskR] = await Promise.all([
+      const [attR, stockR, eventsR, bookingsR, unverifiedR, atRiskR] = await Promise.all([
         supabase
           .from('attendance_records')
           .select('status')
@@ -119,7 +119,7 @@ export default function OwnerDashboard() {
 
         supabase
           .from('events')
-          .select('id, title, deposit_amount')
+          .select('id, title, deposit_amount, deposit_paid')
           .gte('event_date', today)
           .neq('status', 'cancelled'),
 
@@ -136,10 +136,6 @@ export default function OwnerDashboard() {
           .eq('status', 'unverified')
           .eq('date', today),
 
-        supabase
-          .from('event_payments')
-          .select('event_id')
-          .eq('payment_type', 'deposit'),
 
         supabase
           .from('fm_holders')
@@ -170,8 +166,14 @@ export default function OwnerDashboard() {
         (unverifiedR.data ?? []).map(r => ({ name: r.user_profiles?.full_name ?? 'Unknown staff' }))
       )
 
-      const paidEventIds = new Set((depositPmtsR.data ?? []).map(p => p.event_id))
-      setUnpaidEvents(allEvents.filter(e => Number(e.deposit_amount) > 0 && !paidEventIds.has(e.id)))
+      // Reads events.deposit_paid rather than deriving "a deposit row exists".
+      // Since migration 062 a deposit can be REVERSED, and a derived-from-rows
+      // test would still see the reversed original and keep reporting the
+      // deposit as paid. deposit_paid is recomputed inside
+      // reverse_event_payment() in the same transaction as the reversal, and it
+      // is already the definition the Events List highlight uses — so this
+      // removes a second, now-wrong definition rather than adding one.
+      setUnpaidEvents(allEvents.filter(e => Number(e.deposit_amount) > 0 && !e.deposit_paid))
 
       setAtRiskCount((atRiskR.data ?? []).length)
       setLoading(false)

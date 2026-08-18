@@ -444,6 +444,7 @@ export default function EventDetailTab({ eventId, onBack }) {
         eventId={eventId}
         billTotal={billTotal}
         canManage={canManage}
+        onRefresh={load}
       />
 
       {/* Revenue — read-only, and last: it is a reading OF the bill and the

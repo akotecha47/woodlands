@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
+import { Undo2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
-import { PAY_METHODS, PAY_TYPES, fmtDate, fmtMWK, todayStr } from './EventsUI'
+import { PAY_METHODS, PAY_TYPES, payTypeLabel, fmtDate, fmtMWK, todayStr } from './EventsUI'
 
-export default function EventPaymentsSection({ eventId, billTotal, canManage }) {
+export default function EventPaymentsSection({ eventId, billTotal, canManage, onRefresh }) {
   const { session } = useAuth()
   const [payments, setPayments] = useState([])
   // System users, not the staff roster. received_by FKs to auth.users(id),
@@ -14,6 +15,13 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
   const [toast,    setToast]    = useState(null)
   const flash = useFlash(setToast)
   const [busy, setBusy] = useState(false)
+
+  // The payment being reversed, and the reason for it. A reversal is a money
+  // action, so it is never one click: the reason is required and ends up in the
+  // reversal row's notes.
+  const [reverseTarget, setReverseTarget] = useState(null)
+  const [reverseReason, setReverseReason] = useState('')
+  const [reverseBusy,   setReverseBusy]   = useState(false)
 
   const BLANK_FORM = {
     payment_type: 'deposit', amount: '', payment_date: todayStr(),
@@ -41,15 +49,30 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
 
   useEffect(() => { load() }, [eventId])
 
+  // Which payments have been reversed, and by which row. Derived from
+  // reverses_payment_id (migration 062) rather than a status column, so there
+  // is one fact about a reversal and it lives on the reversing row.
+  const reversedBy = new Map(
+    payments.filter(p => p.reverses_payment_id).map(p => [p.reverses_payment_id, p])
+  )
+
   const totalReceived = payments
-    .filter(p => p.payment_type !== 'refund')
+    .filter(p => p.payment_type !== 'refund' && p.payment_type !== 'reversal')
     .reduce((s, p) => s + Number(p.amount), 0)
 
   const totalRefunded = payments
     .filter(p => p.payment_type === 'refund')
     .reduce((s, p) => s + Number(p.amount), 0)
 
-  const totalPaid    = totalReceived - totalRefunded
+  // Reversals are stored POSITIVE, exactly like refunds, because
+  // CHECK (amount > 0) makes a negative row impossible. They are subtracted
+  // here and reported separately: a refund is money going back to the client, a
+  // reversal is money that never arrived in the shape recorded.
+  const totalReversed = payments
+    .filter(p => p.payment_type === 'reversal')
+    .reduce((s, p) => s + Number(p.amount), 0)
+
+  const totalPaid    = totalReceived - totalRefunded - totalReversed
   const billTotalNum = Number(billTotal || 0)
   const difference   = billTotalNum - totalPaid
   const balanceState = difference > 0 ? 'owed' : difference < 0 ? 'credit' : 'settled'
@@ -89,8 +112,34 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
       flash('Payment recorded')
       setForm(BLANK_FORM)
       load()
+      onRefresh?.()
     } catch (err) { flash(err.message, false) }
     finally { setBusy(false) }
+  }
+
+  // A correction is a REVERSING ENTRY, never an edit and never a delete.
+  // event_payments has no DELETE grant and no DELETE policy by design, and the
+  // original figure has to survive its own correction. The RPC writes the
+  // reversal and recomputes events.deposit_paid in one transaction — the
+  // browser cannot do that across two calls.
+  async function handleReverse() {
+    if (!reverseTarget) return
+    if (!reverseReason.trim()) { flash('Say why this payment is being reversed', false); return }
+    setReverseBusy(true)
+    try {
+      const { error } = await supabase.rpc('reverse_event_payment', {
+        p_payment_id: reverseTarget.id,
+        p_reason:     reverseReason.trim(),
+      })
+      if (error) throw error
+      flash('Payment reversed')
+      setReverseTarget(null)
+      setReverseReason('')
+      await load()
+      // The parent holds the event, and deposit_paid may have just changed.
+      onRefresh?.()
+    } catch (err) { flash(err.message, false) }
+    finally { setReverseBusy(false) }
   }
 
   return (
@@ -109,6 +158,9 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
           <p className="text-sm font-semibold text-gray-900">{fmtMWK(totalPaid)}</p>
           {totalRefunded > 0 && (
             <p className="text-xs text-red-500 mt-0.5">incl. {fmtMWK(totalRefunded)} refunded</p>
+          )}
+          {totalReversed > 0 && (
+            <p className="text-xs text-gray-500 mt-0.5">{fmtMWK(totalReversed)} reversed (corrections)</p>
           )}
         </div>
         <div className={`rounded-xl p-4 ${
@@ -148,28 +200,74 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
                 <Th>Amount</Th>
                 <Th>Reference</Th>
                 <Th>Received By</Th>
+                {/* recorded_by has been written since Sprint E and displayed
+                    nowhere, so verification was by SQL. It is also how "who
+                    reversed this" is read. */}
+                <Th>Recorded By</Th>
+                {canManage && <Th>{''}</Th>}
               </tr>
             </thead>
             <tbody>
-              {payments.map(p => (
-                <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <Td>{fmtDate(p.payment_date)}</Td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {PAY_TYPES.find(t => t.value === p.payment_type)?.label ?? p.payment_type}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {PAY_METHODS.find(m => m.value === p.payment_method)?.label ?? p.payment_method}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                    {p.payment_type === 'refund'
-                      ? <span className="text-red-600">({fmtMWK(p.amount)})</span>
-                      : fmtMWK(p.amount)
-                    }
-                  </td>
-                  <Td>{p.reference}</Td>
-                  <Td>{p.received_by ? userMap[p.received_by] : null}</Td>
-                </tr>
-              ))}
+              {payments.map(p => {
+                const reversal   = reversedBy.get(p.id)
+                const isReversed = Boolean(reversal)
+                const isReversal = p.payment_type === 'reversal'
+                const original   = isReversal
+                  ? payments.find(x => x.id === p.reverses_payment_id)
+                  : null
+
+                return (
+                  <tr key={p.id} className={`border-b border-gray-100 hover:bg-gray-50 ${
+                    isReversed ? 'bg-gray-50/60 text-gray-400' : ''
+                  }`}>
+                    <Td>{fmtDate(p.payment_date)}</Td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      <span className={isReversed ? 'line-through' : ''}>
+                        {payTypeLabel(p.payment_type)}
+                      </span>
+                      {isReversed && (
+                        <span className="ml-2 inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-600">
+                          Reversed
+                        </span>
+                      )}
+                      {isReversal && (
+                        <span className="block text-[11px] text-gray-400 mt-0.5">
+                          reverses the {payTypeLabel(original?.payment_type).toLowerCase()} of{' '}
+                          {original ? fmtMWK(original.amount) : '—'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {PAY_METHODS.find(m => m.value === p.payment_method)?.label ?? p.payment_method}
+                    </td>
+                    <td className={`px-4 py-3 text-sm font-semibold ${
+                      isReversed ? 'text-gray-400 line-through' : 'text-gray-900'
+                    }`}>
+                      {/* Refunds and reversals are both stored positive and both
+                          subtract, so both render parenthesised. */}
+                      {p.payment_type === 'refund' || isReversal
+                        ? <span className={isReversed ? '' : 'text-red-600'}>({fmtMWK(p.amount)})</span>
+                        : fmtMWK(p.amount)
+                      }
+                    </td>
+                    <Td>{p.reference}</Td>
+                    <Td>{p.received_by ? userMap[p.received_by] : null}</Td>
+                    <Td>{p.recorded_by ? userMap[p.recorded_by] : null}</Td>
+                    {canManage && (
+                      <td className="px-4 py-3 text-sm">
+                        {!isReversal && !isReversed && (
+                          <button
+                            onClick={() => { setReverseTarget(p); setReverseReason('') }}
+                            title="Reverse this payment"
+                            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 transition-colors">
+                            <Undo2 size={13} /> Reverse
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -177,6 +275,35 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage }) 
 
       {payments.length === 0 && (
         <p className="text-sm text-gray-400 mb-6">No payments recorded yet.</p>
+      )}
+
+      {/* Reverse confirmation. Deliberately explicit about what is about to
+          happen, because the row being corrected stays on the ledger for ever. */}
+      {reverseTarget && (
+        <div className="border border-red-200 bg-red-50 rounded-xl p-5 mb-6">
+          <h4 className="text-sm font-semibold text-red-800 mb-1">
+            Reverse {payTypeLabel(reverseTarget.payment_type).toLowerCase()} of {fmtMWK(reverseTarget.amount)}
+          </h4>
+          <p className="text-xs text-red-700 mb-4 max-w-prose">
+            This does not delete or edit the original. It records a matching reversal of{' '}
+            {fmtMWK(reverseTarget.amount)} against it, so the balance corrects while both rows stay on
+            the ledger. Enter the corrected payment afterwards if one is due.
+          </p>
+          <Field label="Reason *">
+            <Inp autoFocus placeholder="e.g. keyed against the wrong event"
+              value={reverseReason} onChange={e => setReverseReason(e.target.value)} />
+          </Field>
+          <div className="flex gap-2 mt-4">
+            <button onClick={handleReverse} disabled={reverseBusy}
+              className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              {reverseBusy ? 'Reversing…' : 'Reverse payment'}
+            </button>
+            <button onClick={() => { setReverseTarget(null); setReverseReason('') }} disabled={reverseBusy}
+              className="text-gray-600 hover:text-gray-800 px-4 py-2 rounded-lg text-sm">
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Add payment form — owner/manager only */}

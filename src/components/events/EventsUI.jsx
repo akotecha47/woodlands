@@ -43,12 +43,29 @@ export const PAY_METHODS = [
   { value: 'airtel_money',  label: 'Airtel Money'  },
 ]
 
+// The types a person may CHOOSE when recording a payment. 'reversal' is
+// deliberately absent: a reversal is only ever written by
+// reverse_event_payment(), which pairs it with the row it reverses. Offering it
+// here would let someone hand-key an unpaired reversal that subtracts from the
+// bill and points at nothing.
 export const PAY_TYPES = [
   { value: 'deposit',    label: 'Deposit'    },
   { value: 'balance',    label: 'Balance'    },
   { value: 'additional', label: 'Additional' },
   { value: 'refund',     label: 'Refund'     },
 ]
+
+// Every type that can appear in the ledger, including the ones no form offers.
+// Kept separate from PAY_TYPES so a display label can never accidentally become
+// a form option.
+export const PAY_TYPE_LABELS = {
+  ...Object.fromEntries(PAY_TYPES.map(t => [t.value, t.label])),
+  reversal: 'Reversal',
+}
+
+export function payTypeLabel(v) {
+  return PAY_TYPE_LABELS[v] ?? v ?? '—'
+}
 
 export const EVENT_STATUSES = [
   { value: 'enquiry',     label: 'Enquiry'     },

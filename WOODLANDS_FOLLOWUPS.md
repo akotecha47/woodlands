@@ -16,6 +16,92 @@ Everything else below stays a genuine followup.
 
 ---
 
+## §2.6 RE-PROOF RUN 9 — 001-061, PASS (18 August 2026)
+
+Throwaway `njttkfrbhnkdpqrtirlu` ("woodlands-rebuild-test-8", eu-west-1),
+confirmed empty first (0 tables, 0 views, no migrations table, the lone public
+function being the platform's `rls_auto_enable`). `001`-`061` pushed via the
+**session pooler** — `db.<ref>` was IPv6-unresolvable for the **fourth** run in a
+row, so the direct host should now be treated as unavailable rather than tried
+first. **Never re-linked**: the local link was verified as
+`gttsjmxltrxxfplqjans` before *and* after the push. Throwaway **deleted via the
+Management API** and confirmed gone (2 projects remain).
+
+The comparison was 13 fingerprint categories, each an md5 over the full sorted
+detail rather than a count — a count matching while the content differs is the
+failure mode a count-only diff cannot see.
+
+| Category | Production | Rebuild | Result |
+|---|---|---|---|
+| Tables | 37 | 37 | **identical** |
+| Views (+ `security_invoker`) | 2 | 2 | **identical** |
+| Columns by set | 429 | 429 | **identical** |
+| Columns by ordinal | 429 | 429 | differs — residual only |
+| Constraints | 142 | 142 | **identical** |
+| Indexes | 76 | 76 | **identical** |
+| Privileges | 600 | 600 | **identical** |
+| `pg_default_acl` | 24 | 24 | **identical** |
+| Policies | 149 | 147 | differs — residual only |
+| RLS enablement | 37 | 37 | **identical**, all `true` |
+| Triggers | 2 | 2 | **identical** |
+| Functions (md5 + secdef + acl) | 16 | 16 | differs — residual only |
+| Object comments | 33 | 33 | **identical** |
+
+**The three differences were EXACTLY the four pre-declared residuals and nothing
+else** — each confirmed by diffing the full detail, not inferred from a count:
+
+- `attendance_records` ordinals 14-18 (`shift_date, user_id, within_radius,
+  break_start, break_end` against `user_id, shift_date, break_start, break_end,
+  within_radius`) — set-identical, the other 424 rows byte-identical.
+- `handle_new_user()` production-only against `rls_auto_enable()` rebuild-only —
+  the counts cancel at 16, which is exactly why the md5 was needed. **All 15
+  shared functions were byte-identical by `md5(prosrc)` with identical
+  `prosecdef` and identical `proacl`.**
+- The 2 legacy duplicate `service_role` policies on `departments` and
+  `user_profiles`.
+- The platform `ensure_rls` event trigger (rebuild-only; both databases carry
+  the same 6 platform event triggers otherwise). RLS enablement was therefore
+  argued from **production's** side: 0 public tables without RLS on production.
+
+**The four `061`-specific checks no earlier run could make — all passed:**
+
+- `v_fm_attendance` present in the rebuild as `relkind='v'` with
+  **`security_invoker=true` on both**. (`v_stock_consumption` from `060` likewise.)
+- Its two function dependencies survived with their EXECUTE intact:
+  `fm_market_day` (IMMUTABLE) and `fm_last_n_market_days` (STABLE) both have
+  `authenticated` EXECUTE **true** and `anon`/`public` EXECUTE **false**, with
+  byte-identical `proacl` on both sides. Had those grants not reproduced, the
+  view would have been dead for `authenticated` on a rebuild while looking fine
+  on production.
+- The migration-borne reference seed is present in the rebuild: **6 categories /
+  17 product types / 51 items / 6 active fees**, with all six amounts identical.
+- `apply_stock_delta` compared by **`proacl` + `md5(prosrc)`, never oid**:
+  `md5=42f31099f05b34f659815e5db3973414` identical on both, **one signature** in
+  `pg_proc` on both, `prosecdef=false`, no PUBLIC and no anon EXECUTE on either.
+
+**The predicted demo-data divergence held exactly**, and is a design property
+rather than drift: reference data lives in `061` and IS in the rebuild; demo data
+lives in `data-ops/008` and is NOT. `fm_holders` 311/0, `fm_visits` 687/0,
+`fm_waiting_list` 8/0, `fm_approved_items` 72/0, `fm_stall_forfeitures` 0/0.
+
+Migration history: **62 rows, `001`-`062`, no gaps, on both sides** at the time
+each was read (the rebuild carried 61; `062` was written after it and recorded
+on production immediately via `migration repair`, so run 6's "applied but never
+recorded" is not repeated). `db push --dry-run` reports "Remote database is up
+to date."
+
+**No new finding.** The second run in this series to produce none.
+
+**`062` is now the outstanding proof**, owed before any `063` is written. It was
+written on a proven base, which is what the gate requires. It gives that run two
+things to check: a **self-referencing FK** on `event_payments` with a **partial
+UNIQUE index** (a rebuild must reproduce the `WHERE reverses_payment_id IS NOT
+NULL` predicate, not just the index), and a **row-level trigger plus its trigger
+function** — the trigger count moves 2 to 3, so the standing "triggers 2/2" line
+in earlier runs is superseded, not contradicted.
+
+---
+
 ## EVENTS REVENUE — FINDINGS FROM THE 18 AUGUST BUILD
 
 ### 🔴 `deliveries` is a dead table, and its RLS is a hole in the other direction
