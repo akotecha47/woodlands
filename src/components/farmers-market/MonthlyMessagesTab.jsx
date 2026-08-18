@@ -42,16 +42,20 @@ export default function MonthlyMessagesTab() {
         .select('id, full_name, business_name, stall_number, application_paid, acceptance_paid')
         .eq('status', 'active')
         .order('stall_number'),
+      // item_name is now an OPTIONAL free-text qualifier (061); the real
+      // classification is item_id into the fm_items catalogue. Read the
+      // catalogue name and fall back to the qualifier only if it is missing.
       supabase
         .from('fm_approved_items')
-        .select('holder_id, item_name')
+        .select('holder_id, item_name, fm_items(name)')
         .order('created_at'),
     ])
     setHolders(holdersR.data ?? [])
     const map = {}
     for (const item of (itemsR.data ?? [])) {
       if (!map[item.holder_id]) map[item.holder_id] = []
-      map[item.holder_id].push(item.item_name)
+      const label = item.fm_items?.name ?? item.item_name
+      if (label) map[item.holder_id].push(label)
     }
     setItemsMap(map)
   }

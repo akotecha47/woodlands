@@ -50,7 +50,19 @@ Everything else below stays a genuine followup.
 
 - **`fm_holders.products` is a text blob** (migration `029`), not normalised into `fm_approved_items` where the schema already models per-holder items. Deliberate: the register's product strings are comma-joined, but several individual product names contain internal commas — e.g. stall 79's `Chocolate "Salame Slab", Focaccia Slab`. Splitting on commas would have silently fragmented real product names across hundreds of rows, invisibly. **Needs Rose to confirm the intended delimiter before normalising.**
 
-- **Stall-number format is now `A001`–`A347`** (three-digit zero-padded, A-prefixed). The ten test rows it replaced were two-digit `A01`–`A10`. **Needs Dhiren's sign-off** — printed QR cards and the physical stall signage have to agree with whatever the system uses.
+- **Stall-number format is now `A001`–`A347`** (three-digit zero-padded, A-prefixed). The ten test rows it replaced were two-digit `A01`–`A10`. **Needs Dhiren's sign-off** — printed QR cards and the physical stall signage have to agree with whatever the system uses. **Code caught up 18 August 2026:** `STALL_RE` in `FarmersMarketUI.jsx` is now `/^[A-Za-z]+\d{3}$/`, shared by Add and Edit. The sign-off is still owed; if Dhiren picks a different format, one constant changes.
+
+---
+
+## FROM FARMERS MARKET PHASE 2 (061, 18 August 2026)
+
+- **A third or later ID card has no confirmed price.** Dhiren confirmed six fees and `id_card_initial` MWK 30,000 explicitly "inclusive of 2". Nothing states what card #3 costs. The code charges the replacement rate (MWK 20,000) and says so in `src/lib/constants.js` (`FM_ID_CARD_EXTRA_FEE`) rather than inventing a number silently. **Ask Dhiren.** One row in `fm_fee_schedule` closes it.
+
+- **~~`stall_type` is uniformly 'Other'~~ — SUPERSEDED, not yet dropped.** `061` added `fm_holders.category_id` as the real classification and marked `stall_type` DEPRECATED with a column comment. The column stays because it is `NOT NULL` across 305 rows and because `category_id` can only be backfilled properly once Rose confirms the `products` delimiter (see above — unchanged). **Dropping `stall_type` is a real-data-session cleanup.** 50 of 311 holders are classified today, all via `data-ops/008` placeholder assignment; the remaining 261 are genuinely unclassified and that is the honest state.
+
+- **All 305 imported holders carry `created_at = 2026-07-26`, the import timestamp — not their registration date.** The source register is February 2026. This matters now that `v_fm_attendance` gates forfeit-eligibility on "registered before the three-month window began": every market day in the current window pre-dates every real holder, so **no real holder can be forfeit-eligible, and that is the view behaving correctly on the data as it stands.** `data-ops/008` deliberately did NOT backdate the real cohort to fix this — mutating 305 rows of real client data to improve a demo is not a call to make unilaterally — and demonstrates the path on six clearly-marked placeholder holders (`Z001`–`Z006`) instead. **Decision owed at the real-data session: should the imported cohort's `created_at` be corrected to the register date?** Until then, forfeiture is provably built and provably correct, but will not fire on real holders.
+
+- **Placeholder Farmers Market demo data is live in production** (`scripts/data-ops/008`): 6 `Z00n` holders, ~684 seeded `fm_visits`, 72 `fm_approved_items`, 8 waiting-list entries. All are prefixed or noted `PLACEHOLDER`. **Must be purged before handover** — one delete keyed on the `Z` stall prefix and the placeholder notes.
 
 ---
 
@@ -1005,7 +1017,7 @@ so a future audit recognises it as known rather than re-discovering it as new.
 
 - **`public-checkin` is deployed with `--no-verify-jwt`.** Required — it is a public route with no caller to verify. Redeploying it without that flag will silently break every QR code. Not expressible in source: there is still no `supabase/config.toml`.
 
-- **Market-day maths is now duplicated.** `getMarketDayForMonth` exists in `src/components/farmers-market/FarmersMarketUI.jsx` and is re-implemented in `supabase/functions/public-checkin/index.ts` (Deno cannot import the browser module). The Deno copy computes in Africa/Blantyre (UTC+2) rather than the host's UTC, to preserve the browser's previous local-time behaviour. If the market-day rule changes, both must change. **Sprint E.**
+- **Market-day maths is now duplicated — THREE copies as of 061 (18 August 2026).** `getMarketDayForMonth` exists in `src/components/farmers-market/FarmersMarketUI.jsx` and is re-implemented in `supabase/functions/public-checkin/index.ts` (Deno cannot import the browser module). The Deno copy computes in Africa/Blantyre (UTC+2) rather than the host's UTC, to preserve the browser's previous local-time behaviour. **061 adds a third: `public.fm_market_day(int,int)` and `public.fm_last_n_market_days(int)` in SQL**, because `v_fm_attendance` has to compute the three-month window server-side — otherwise the "3 months with no attendance" rule would live only in whichever client last asked, and the `forfeit_stall()` eligibility check would be trusting a number the browser sent it. Also unavoidable: SQL cannot import the browser module either. **If the market-day rule changes, all THREE must change.** **Sprint E.**
 
 - **~~`check_in` / `check_out` write paths are not verified end-to-end~~ — CLOSED 26 July 2026 evening.** Verified via a real QR scan on Aman's phone: Banda Crafts holder scanned → check_in wrote the visit row → check_out completed roundtrip. Later re-verified with Shanie Cousins (A049) from the imported real dataset. Data-quality feedback ("Checked out after pack-up time") rendering correctly.
 

@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
-import { STALL_TYPES, todayStr, AccessDenied } from './FarmersMarketUI'
+import { STALL_TYPES, todayStr, AccessDenied, validateStall } from './FarmersMarketUI'
 
 const BLANK = {
   full_name: '', business_name: '', stall_number: '',
@@ -22,8 +22,6 @@ export default function AddHolderTab({ onCreated }) {
   const [toast,      setToast]      = useState(null)
   const flash = useFlash(setToast)
 
-  const STALL_RE = /^[A-Za-z]+\d{2}$/
-
   if (!canAdd) return <AccessDenied />
 
   function f(field) {
@@ -32,8 +30,13 @@ export default function AddHolderTab({ onCreated }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!STALL_RE.test(form.stall_number)) {
-      setStallError('Stall number must be in format A01, B12, FM01 etc.')
+    // Normalise once, then use the SAME value for the duplicate check and the
+    // insert. Previously the check ran on the upper-cased value and the insert
+    // wrote the raw one, so a lower-case entry could slip past a real clash.
+    const stall = form.stall_number.trim().toUpperCase()
+    const stallMsg = validateStall(stall)
+    if (stallMsg) {
+      setStallError(stallMsg)
       return
     }
     setStallError('')
@@ -43,7 +46,7 @@ export default function AddHolderTab({ onCreated }) {
       const { data: taken } = await supabase
         .from('fm_holders')
         .select('id')
-        .eq('stall_number', form.stall_number.toUpperCase())
+        .eq('stall_number', stall)
         .not('status', 'eq', 'inactive')
         .maybeSingle()
       if (taken) {
@@ -55,7 +58,7 @@ export default function AddHolderTab({ onCreated }) {
       const { error } = await supabase.from('fm_holders').insert({
         full_name:        form.full_name,
         business_name:    form.business_name    || null,
-        stall_number:     form.stall_number,
+        stall_number:     stall,
         stall_type:       form.stall_type,
         phone:            form.phone,
         email:            form.email            || null,
@@ -96,7 +99,7 @@ export default function AddHolderTab({ onCreated }) {
           <Field label="Stall Number *">
             <Inp
               required
-              placeholder="e.g. A01, FM01"
+              placeholder="e.g. A001, A347"
               value={form.stall_number}
               onChange={e => { setStallError(''); setForm(p => ({ ...p, stall_number: e.target.value })) }}
               onBlur={() => setForm(p => ({ ...p, stall_number: p.stall_number.toUpperCase() }))}

@@ -4,6 +4,8 @@ import HoldersTab         from '../components/farmers-market/HoldersTab'
 import AddHolderTab       from '../components/farmers-market/AddHolderTab'
 import PaymentsTab        from '../components/farmers-market/PaymentsTab'
 import MonthlyMessagesTab from '../components/farmers-market/MonthlyMessagesTab'
+import WaitingListTab     from '../components/farmers-market/WaitingListTab'
+import FeesTab            from '../components/farmers-market/FeesTab'
 
 const TABS = [
   { id: 'market',   label: 'Market Day'    },
@@ -11,6 +13,8 @@ const TABS = [
   { id: 'add',      label: 'Add Business'  },
   { id: 'messages', label: 'Messages'      },
   { id: 'payments', label: 'Payments'      },
+  { id: 'waiting',  label: 'Waiting List'  },
+  { id: 'fees',     label: 'Fees'          },
 ]
 
 export default function FarmersMarket() {
@@ -37,6 +41,8 @@ export default function FarmersMarket() {
         {tab === 'add'      && <AddHolderTab onCreated={() => setTab('holders')} />}
         {tab === 'messages' && <MonthlyMessagesTab />}
         {tab === 'payments' && <PaymentsTab />}
+        {tab === 'waiting'  && <WaitingListTab />}
+        {tab === 'fees'     && <FeesTab />}
       </div>
     </div>
   )

@@ -2,6 +2,21 @@
 
 export const STALL_TYPES = ['Produce', 'Crafts', 'Food & Beverages', 'Clothing', 'Other']
 
+// ── stall numbers ──────────────────────────────────────────────────────────────
+// THREE digits, not two. Every one of the 305 live stalls is A001-A347 (verified
+// against production 18 Aug 2026: 305/305 match ^[A-Za-z]+\d{3}$, 0 two-digit).
+// AddHolderTab enforced /^[A-Za-z]+\d{2}$/ until now, so no real stall number
+// could be entered through the form at all, and HoldersTab's Edit enforced
+// nothing. One rule, defined once, used by both.
+export const STALL_RE = /^[A-Za-z]+\d{3}$/
+
+export const STALL_FORMAT_HINT = 'Stall number must be a letter prefix then three digits — e.g. A001, A347, FM012.'
+
+// Returns '' when valid, otherwise the message to show. Normalise with toUpperCase() first.
+export function validateStall(value) {
+  return STALL_RE.test((value ?? '').trim().toUpperCase()) ? '' : STALL_FORMAT_HINT
+}
+
 export const FM_PAY_METHODS = [
   { value: 'cash',          label: 'Cash'          },
   { value: 'bank_transfer', label: 'Bank Transfer'  },
@@ -15,6 +30,7 @@ export const FM_PAY_TYPES = [
   { value: 'visit',       label: 'Visit Fee',        amount: 10000 },
   { value: 'id_card',     label: 'ID Card'                         },
   { value: 'reprint',     label: 'Reprint'                         },
+  { value: 'product_change', label: 'Product Change', amount: 10000 },
 ]
 
 export const HOLDER_STATUS_CFG = {
@@ -23,6 +39,7 @@ export const HOLDER_STATUS_CFG = {
   active:         { label: 'Active',         badge: 'bg-green-100 text-green-700'  },
   inactive:       { label: 'Inactive',       badge: 'bg-gray-100 text-gray-500'    },
   at_risk:        { label: 'At Risk',        badge: 'bg-red-100 text-red-700'      },
+  forfeited:      { label: 'Forfeited',      badge: 'bg-stone-200 text-stone-700'  },
 }
 
 // Role gates (FM_MANAGE_ROLES etc.) live in src/lib/roles.js, not here.

@@ -9,8 +9,8 @@ const ALL_PAY_TYPES = [
   { value: 'application', label: 'Application Fee',  amount: FM_FEES.application      },
   { value: 'acceptance',  label: 'Registration Fee', amount: FM_FEES.acceptance       },
   { value: 'visit',       label: 'Visit Fee',        amount: FM_FEES.visit            },
-  { value: 'id_card',     label: 'ID Card',          amount: FM_FEES.id_card_standard },
-  { value: 'reprint',     label: 'Reprint',          amount: FM_FEES.reprint          },
+  { value: 'id_card',     label: 'ID Card',          amount: FM_FEES.id_card_initial },
+  { value: 'reprint',     label: 'Reprint',          amount: FM_FEES.id_card_replace  },
 ]
 
 const PAY_TYPE_LABELS = {

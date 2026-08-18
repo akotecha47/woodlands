@@ -186,9 +186,10 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 
 ### End-goal additions
 
-- **3-month attendance history + waiting-list forfeiture [NEW]** — a clear attended/not-attended view over 3 months (off `fm_visits`), not a raw log. Holder with no attendance for 3 months forfeits their stall, which passes to the next waiting-list entry, recorded. Confirm whether a waiting list exists today and where. Extend the existing at-risk concept (already ~90 days), don't start a second.
-- **3-level product taxonomy [NEW]** — Category → Product type → Item (e.g. Crafts → Paintings → oil/wax). Replaces the coarse 5-value `stall_type` and the `fm_holders.products` text blob. Hangs off `fm_approved_items`. Closes two FOLLOWUPS items (uniform `stall_type='Other'`; un-normalised products) — selection from a controlled list removes the comma-splitting problem.
-- **Fee schedule [NEW]** — product change **MWK 10,000** (raised by the change action itself, or it won't get charged), ID cards **MWK 30,000** (inclusive of 2), replacement card **MWK 20,000**. Sits inside the full fee schedule — get the existing stall/other fees from Dhiren so these don't stand alone.
+- **3-month attendance history + waiting-list forfeiture [DONE]** (migration `061`, 18 August) — `v_fm_attendance` is a `security_invoker` view over `fm_visits` giving attended/not-attended per holder across the last three market days (a monthly market, so three market days *is* three months). It **replaces** the client-side write-on-read that used to UPDATE `fm_holders.status` to `at_risk` from a browser page load. At-risk is the warning state and forfeiture the action on it — one concept, not two. `fm_waiting_list` (new; nothing of the kind existed) orders by `(applied_at, created_at, id)` with position **derived, never stored**. `forfeit_stall()` is SECURITY DEFINER, gated owner/admin, **flag + manual confirm — never automatic**; it re-checks eligibility server-side, releases the stall number (the outgoing holder is renamed `A0nn-FFyyyymmdd` because `stall_number` is UNIQUE NOT NULL and could otherwise never be reissued), writes `fm_stall_forfeitures`, and marks the head of the queue `offered` — all atomically or not at all. `fm_stall_forfeitures` has **no INSERT policy and no INSERT grant**, so the RPC is the only write path.
+- **3-level product taxonomy [DONE]** (migration `061`) — `fm_categories` › `fm_product_types` › `fm_items`, three tables so "exactly three levels" is structural rather than a remembered rule. Seeded in the migration (6 / 17 / 51, including the spec's own Crafts › Paintings › Oil/Wax). `fm_approved_items.item_id` is **NOT NULL** — safe because the table held zero rows, asserted in-migration rather than assumed — and `item_name` demotes to an optional free-text qualifier. `fm_holders.category_id` is the new classification; **`stall_type` is deprecated in place, not dropped** (NOT NULL across 305 rows, and `category_id` cannot be backfilled until Rose confirms the `products` delimiter). Selection from a controlled list is what removes the comma-splitting problem.
+- **Fee schedule [DONE]** (migration `061`) — `fm_fee_schedule` holds all six fees as data: application 10,000 · registration 20,000 · ID cards 30,000 (incl. 2) · replacement 20,000 · visit 10,000 · product change 10,000, **all confirmed by Dhiren 18 August**. Read owner+admin, **write owner only** — a fee change is a money action, not front-desk work. `change_holder_products()` raises the product-change fee **by reading this table inside the same transaction as the change**, so it cannot be forgotten; a no-op change raises nothing. The old `FM_FEES` constants (ID card 5,000 / reprint 10,000) were **wrong, not stale**, and are corrected. **Open: card #3 onwards has no confirmed price** — charged at the replacement rate and flagged in FOLLOWUPS.
+- **Stall-number regex [FIXED]** (18 August) — was `/^[A-Za-z]+\d{2}$/`, which **no live stall could satisfy** (305/305 are three-digit `A001`–`A347`), so Add Business was unusable for every real stall; Edit meanwhile validated **nothing at all**. One `STALL_RE = /^[A-Za-z]+\d{3}$/` in `FarmersMarketUI.jsx`, used by both.
 
 ---
 
@@ -220,14 +221,14 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 | Mark All Absent only after 11:00 | Attendance → Today | [DONE] |
 | No-show flag >45 min past booking | Table Bookings | [DONE] |
 | BEO auto-generated on Confirm/Start | Events | [DONE] |
-| At-risk auto-flag >90 days, 0 recent visits | Farmers Market | [DONE] |
+| At-risk flag: 0 visits across last 3 market days | Farmers Market | [DONE] (061) — a VIEW, no longer a browser write |
 | GPS outside radius → unverified clock-in | Attendance | [VERIFY] |
 | One inflow, many outflows (main store → depts) | Inventory | [DONE] (051–057) |
 | Movement Ledger shows all types with +/− direction | Inventory | [DONE] (058 + 006) |
 | Bar par level enforced before open | Inventory / bars | [DONE] (059) |
-| Consumption records what/where/who | Inventory / consumption | [NEW] |
-| 3-month no-attendance → stall forfeit to waiting list | Farmers Market | [NEW] |
-| Product change raises 10k fee at point of change | Farmers Market | [NEW] |
+| Consumption records what/where/who | Inventory / consumption | [DONE] (060) |
+| 3-month no-attendance → stall forfeit to waiting list | Farmers Market | [DONE] (061) — flag + manual confirm |
+| Product change raises 10k fee at point of change | Farmers Market | [DONE] (061) — same transaction |
 | QR scan writes clock-in/out at fixed station | Attendance | [NEW] |
 
 ---
@@ -236,7 +237,7 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 
 1. **~~`stock_movements.movement_type` CHECK~~ — SETTLED.** Live constraint is `_v4` (permits `opening_balance`, `issue`, `event_allocation`, `event_return`); migrations 030/055/058 ran.
 2. **GPS clock-in geofence** — the four GPS columns exist live (035); confirm the geofence *logic* in code.
-3. **Stall-number regex** in Add Holder — two-digit or three-digit? If two-digit, the 305 imported stalls are un-editable through the form.
+3. **~~Stall-number regex~~ — SETTLED 18 August.** Was two-digit; no live stall could satisfy it, so Add was unusable and Edit validated nothing. Both now share a three-digit `STALL_RE`.
 4. **Add User role branching** — does it still reference the dead bar1/bar2 `bar_week` logic?
 
 ---

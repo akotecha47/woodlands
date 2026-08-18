@@ -4,13 +4,14 @@ import { QRCodeCanvas } from 'qrcode.react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
-import { FM_FEES } from '../../lib/constants'
+import { FM_FEES, FM_ID_CARD_EXTRA_FEE } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
+import { fetchAttendance, fetchTaxonomy, itemPath, changeHolderProducts, forfeitStall } from '../../lib/fm'
 import {
   STALL_TYPES, FM_PAY_TYPES, FM_PAY_METHODS, HOLDER_STATUS_CFG,
-  fmtDate, fmtMWK,
+  fmtDate, fmtMWK, validateStall,
   getLastNMarketDays, getMarketDaysSince,
   HolderStatusBadge, PaidIcon,
 } from './FarmersMarketUI'
@@ -21,6 +22,7 @@ const FILTER_TABS = [
   { id: 'active',         label: 'Active'        },
   { id: 'at_risk',        label: 'At Risk'       },
   { id: 'inactive',       label: 'Inactive'      },
+  { id: 'forfeited',      label: 'Forfeited'     },
 ]
 
 const BLANK_EDIT = {
@@ -42,14 +44,17 @@ export default function HoldersTab() {
   const [expandedItems,    setExpandedItems]     = useState([])
   const [editHolder,       setEditHolder]        = useState(null)
   const [editForm,         setEditForm]          = useState(BLANK_EDIT)
+  const [editStallError,   setEditStallError]    = useState('')
   const [confirmAction,    setConfirmAction]     = useState(null) // { type: 'approve'|'deactivate', holder }
   const [cardConfirm,      setCardConfirm]       = useState(null) // { type: 'issue'|'reprint', holder, cardNum, fee, cardId? }
   const [cardPayMethod,    setCardPayMethod]     = useState('cash')
   const [cardPayRef,       setCardPayRef]        = useState('')
-  const [removeItemId,     setRemoveItemId]      = useState(null)
-  const [newItemText,      setNewItemText]       = useState('')
   const [qrHolder,         setQrHolder]          = useState(null)
   const [lastMarketDay,    setLastMarketDay]      = useState(null) // { date, attended, collected, noShows }
+  const [attendance,       setAttendance]         = useState({ byHolder: {}, marketDates: [] })
+  const [taxonomy,         setTaxonomy]           = useState(null)
+  const [productEdit,      setProductEdit]        = useState(null) // { holder, selected:Set, categoryId }
+  const [forfeitTarget,    setForfeitTarget]      = useState(null) // holder pending forfeit confirm
   const [busy,             setBusy]              = useState(false)
   const [itemBusy,         setItemBusy]          = useState(false)
   const [toast,            setToast]             = useState(null)
@@ -89,46 +94,29 @@ export default function HoldersTab() {
   }
 
   async function load() {
-    const yearStart     = `${new Date().getFullYear()}-01-01`
-    const lastThreeDays = getLastNMarketDays(3)
-    const lastDay       = getLastNMarketDays(1)[0] ?? null
+    const yearStart = `${new Date().getFullYear()}-01-01`
+    const lastDay   = getLastNMarketDays(1)[0] ?? null
 
-    const [holdersR, yearVisitsR, atRiskVisitsR, lastVisitsR] = await Promise.all([
+    // NO AUTO-FLAG WRITE. Until 061 this function UPDATEd fm_holders.status to
+    // 'at_risk' for every matching holder, from the browser, on every page
+    // load — a mutation performed by a read, running as whoever happened to
+    // open the tab, silently overwriting a status a manager may have set by
+    // hand. v_fm_attendance now computes the same judgement and writes nothing.
+    const [holdersR, yearVisitsR, lastVisitsR, attendanceR, taxonomyR] = await Promise.all([
       supabase.from('fm_holders').select('*').order('stall_number'),
       supabase.from('fm_visits').select('holder_id').gte('visit_date', yearStart),
-      lastThreeDays.length > 0
-        ? supabase.from('fm_visits').select('holder_id, visit_date').in('visit_date', lastThreeDays)
-        : Promise.resolve({ data: [] }),
       lastDay
         ? supabase.from('fm_visits').select('holder_id, fee_paid').eq('visit_date', lastDay)
         : Promise.resolve({ data: [] }),
+      fetchAttendance().catch(() => ({ byHolder: {}, marketDates: [] })),
+      fetchTaxonomy().catch(() => null),
     ])
 
     setYearVisits(yearVisitsR.data ?? [])
+    setAttendance(attendanceR)
+    setTaxonomy(taxonomyR)
 
-    let allHolders     = holdersR.data ?? []
-    const atRiskVisits = atRiskVisitsR.data ?? []
-
-    // Auto-flag: active holders with 0 visits across last 3 market days AND created > 90 days ago
-    if (lastThreeDays.length > 0 && allHolders.length > 0) {
-      const now        = Date.now()
-      const visitedIds = new Set(atRiskVisits.map(v => v.holder_id))
-      const toFlag     = allHolders
-        .filter(h => {
-          if (h.status !== 'active') return false
-          const daysSinceCreation = (now - new Date(h.created_at).getTime()) / 86400000
-          if (daysSinceCreation < 90) return false
-          return !visitedIds.has(h.id)
-        })
-        .map(h => h.id)
-
-      if (toFlag.length > 0) {
-        await supabase.from('fm_holders').update({ status: 'at_risk' }).in('id', toFlag)
-        const flaggedSet = new Set(toFlag)
-        allHolders = allHolders.map(h => flaggedSet.has(h.id) ? { ...h, status: 'at_risk' } : h)
-      }
-    }
-
+    const allHolders = holdersR.data ?? []
     setHolders(allHolders)
 
     // Last market day summary
@@ -156,7 +144,17 @@ export default function HoldersTab() {
   }
 
   const activeHolders = holders.filter(h => h.status === 'active')
-  const atRiskHolders = holders.filter(h => h.status === 'at_risk')
+
+  // At risk is now READ, not written. A holder is at risk when the attendance
+  // view says they missed the whole three-month window; they are FORFEIT
+  // ELIGIBLE when they also registered before the window began. The status
+  // column is still honoured if a manager set it by hand.
+  const att = attendance.byHolder ?? {}
+  const atRiskHolders = holders.filter(h =>
+    h.status === 'at_risk' ||
+    (h.status === 'active' && att[h.id] && att[h.id].attended_count === 0)
+  )
+  const forfeitEligible = holders.filter(h => att[h.id]?.forfeit_eligible)
 
   // Outstanding fees = 0 until an explicit invoicing system is added.
   // Do not infer debt from application_paid / acceptance_paid flags alone.
@@ -178,13 +176,9 @@ export default function HoldersTab() {
       setExpandedVisits([])
       setExpandedIdCards([])
       setExpandedItems([])
-      setNewItemText('')
-      setRemoveItemId(null)
       return
     }
     setExpandedId(holder.id)
-    setNewItemText('')
-    setRemoveItemId(null)
     const [pR, vR, idR, itR] = await Promise.all([
       supabase.from('fm_payments').select('*').eq('holder_id', holder.id).order('payment_date', { ascending: false }),
       supabase.from('fm_visits').select('*').eq('holder_id', holder.id),
@@ -248,6 +242,7 @@ export default function HoldersTab() {
 
   function openEdit(holder) {
     setEditHolder(holder)
+    setEditStallError('')
     setEditForm({
       full_name:     holder.full_name,
       business_name: holder.business_name ?? '',
@@ -262,12 +257,18 @@ export default function HoldersTab() {
 
   async function handleEditSave(e) {
     e.preventDefault()
+    // Edit enforced no stall format at all, while Add enforced a two-digit one
+    // that no live stall could satisfy. Both now share validateStall().
+    const stall = editForm.stall_number.trim().toUpperCase()
+    const stallMsg = validateStall(stall)
+    if (stallMsg) { setEditStallError(stallMsg); return }
+    setEditStallError('')
     setBusy(true)
     try {
       const { error } = await supabase.from('fm_holders').update({
         full_name:     editForm.full_name,
         business_name: editForm.business_name || null,
-        stall_number:  editForm.stall_number,
+        stall_number:  stall,
         stall_type:    editForm.stall_type,
         phone:         editForm.phone,
         email:         editForm.email || null,
@@ -287,6 +288,74 @@ export default function HoldersTab() {
   }
 
   const ef = field => e => setEditForm(p => ({ ...p, [field]: e.target.value }))
+
+  // ── forfeiture ─────────────────────────────────────────────────────────────
+  // The confirm step is the whole point: the system flags, a person decides.
+  // Eligibility is re-checked server-side by forfeit_stall(), so a stale screen
+  // cannot force one through.
+
+  async function doForfeit(holder) {
+    setForfeitTarget(null)
+    setBusy(true)
+    try {
+      const res = await forfeitStall({
+        holderId: holder.id,
+        reason:   `No attendance across the last 3 market days. Confirmed by ${profile?.role} in the Businesses tab.`,
+      })
+      flash(
+        res.offered_to_name
+          ? `Stall ${res.stall_number} forfeited and offered to ${res.offered_to_name}`
+          : `Stall ${res.stall_number} forfeited. Waiting list is empty — nobody to offer it to.`
+      )
+      if (expandedId === holder.id) setExpandedId(null)
+      load()
+    } catch (err) { flash(err.message, false) }
+    finally { setBusy(false) }
+  }
+
+  // ── approved products, from the controlled taxonomy ────────────────────────
+  // Goes through change_holder_products(), never a direct write: the RPC raises
+  // the MWK 10,000 product-change fee in the same transaction. A direct insert
+  // would change the products and skip the charge.
+
+  function openProductEdit(holder) {
+    setProductEdit({
+      holder,
+      selected:   new Set(expandedItems.map(i => i.item_id)),
+      categoryId: holder.category_id ?? '',
+    })
+  }
+
+  function toggleProduct(itemId) {
+    setProductEdit(p => {
+      const next = new Set(p.selected)
+      if (next.has(itemId)) next.delete(itemId); else next.add(itemId)
+      return { ...p, selected: next }
+    })
+  }
+
+  async function saveProducts() {
+    const { holder, selected, categoryId } = productEdit
+    if (selected.size === 0) { flash('Select at least one product', false); return }
+    setItemBusy(true)
+    try {
+      const res = await changeHolderProducts({
+        holderId:   holder.id,
+        itemIds:    [...selected],
+        categoryId: categoryId || null,
+      })
+      flash(
+        res.fee_raised
+          ? `Products updated — ${fmtMWK(res.fee_amount)} product change fee raised`
+          : 'No change to the product list — no fee raised'
+      )
+      setProductEdit(null)
+      const { data } = await supabase.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at')
+      setExpandedItems(data ?? [])
+      load()
+    } catch (err) { flash(err.message, false) }
+    finally { setItemBusy(false) }
+  }
 
   // ── ID card actions ────────────────────────────────────────────────────────
 
@@ -313,24 +382,29 @@ export default function HoldersTab() {
           issued_by:   session?.user?.id ?? null,
         })
         if (cardErr) throw cardErr
-        const { error: payErr } = await supabase.from('fm_payments').insert({
-          holder_id:      holder.id,
-          payment_type:   'id_card',
-          amount:         fee,
-          payment_date:   today,
-          payment_method: method,
-          reference,
-          recorded_by:    session?.user?.id ?? null,
-        })
-        if (payErr) throw payErr
-        flash(`Card #${cardNum} issued`)
+        // Card #2 is already covered by the 30,000 charged on card #1, so it
+        // raises no payment. fm_payments has a CHECK (amount > 0), so a zero
+        // row would be rejected by the database rather than stored as "free".
+        if (fee > 0) {
+          const { error: payErr } = await supabase.from('fm_payments').insert({
+            holder_id:      holder.id,
+            payment_type:   'id_card',
+            amount:         fee,
+            payment_date:   today,
+            payment_method: method,
+            reference,
+            recorded_by:    session?.user?.id ?? null,
+          })
+          if (payErr) throw payErr
+        }
+        flash(fee > 0 ? `Card #${cardNum} issued` : `Card #${cardNum} issued — covered by the initial fee`)
       } else {
         const { error: repErr } = await supabase.from('fm_id_cards').update({ status: 'reprinted' }).eq('id', cardId)
         if (repErr) throw repErr
         const { error: payErr } = await supabase.from('fm_payments').insert({
           holder_id:      holder.id,
           payment_type:   'reprint',
-          amount:         FM_FEES.reprint,
+          amount:         FM_FEES.id_card_replace,
           payment_date:   today,
           payment_method: method,
           reference,
@@ -353,32 +427,13 @@ export default function HoldersTab() {
 
   // ── approved item actions ──────────────────────────────────────────────────
 
-  async function handleAddItem(holder) {
-    const name = newItemText.trim()
-    if (!name) return
-    setItemBusy(true)
-    try {
-      const { error } = await supabase.from('fm_approved_items').insert({
-        holder_id: holder.id,
-        item_name: name,
-        added_by:  session?.user?.id ?? null,
-      })
-      if (error) throw error
-      setNewItemText('')
-      const { data } = await supabase.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at')
-      setExpandedItems(data ?? [])
-    } catch (err) { flash(err.message, false) }
-    finally { setItemBusy(false) }
-  }
-
-  async function doRemoveItem(itemId) {
-    setRemoveItemId(null)
-    try {
-      const { error } = await supabase.from('fm_approved_items').delete().eq('id', itemId)
-      if (error) throw error
-      setExpandedItems(prev => prev.filter(i => i.id !== itemId))
-    } catch (err) { flash(err.message, false) }
-  }
+  // REMOVED at 061: the free-text add/remove pair that wrote fm_approved_items
+  // directly. Two reasons it could not stay. It inserted only item_name, which
+  // is no longer the classification and no longer sufficient — item_id is NOT
+  // NULL — so it would fail outright. And it changed a holder's products
+  // without raising the MWK 10,000 fee, which is the precise failure
+  // FUNCTIONAL_SPEC §7 exists to prevent. Both paths now go through
+  // change_holder_products(); see saveProducts above.
 
   return (
     <div className="p-6">
@@ -431,6 +486,32 @@ export default function HoldersTab() {
               </p>
               <p className="text-xs text-gray-500 mt-0.5">No-shows</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forfeit-eligible banner — three months absent, awaiting a decision */}
+      {forfeitEligible.length > 0 && canManage && (
+        <div className="bg-stone-100 border border-stone-300 rounded-xl p-4 mb-5">
+          <p className="text-sm font-semibold text-stone-800 mb-1">
+            {forfeitEligible.length} stall{forfeitEligible.length !== 1 ? 's' : ''} eligible for forfeiture
+          </p>
+          <p className="text-xs text-stone-600 mb-3">
+            No attendance across the last three market days, and registered before that window began.
+            Nothing happens automatically — each one needs a decision.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {forfeitEligible.map(h => (
+              <div key={h.id} className="flex items-center gap-2 bg-white border border-stone-300 rounded-lg px-3 py-1.5">
+                <span className="text-sm text-gray-800">{h.full_name} ({h.stall_number})</span>
+                <button
+                  onClick={() => setForfeitTarget(h)}
+                  className="text-xs font-medium text-white bg-red-600 hover:bg-red-700 px-2 py-0.5 rounded transition-colors"
+                >
+                  Forfeit
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -685,7 +766,7 @@ export default function HoldersTab() {
                                       <td className="py-1.5">
                                         {c.status === 'active' && (
                                           <button
-                                            onClick={() => openCardConfirm({ type: 'reprint', holder: h, cardNum: c.card_number, fee: FM_FEES.reprint, cardId: c.id })}
+                                            onClick={() => openCardConfirm({ type: 'reprint', holder: h, cardNum: c.card_number, fee: FM_FEES.id_card_replace, cardId: c.id })}
                                             className="text-xs px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded transition-colors"
                                           >
                                             Reprint
@@ -700,7 +781,11 @@ export default function HoldersTab() {
                           )}
                           {canManage && (() => {
                             const nextNum = expandedIdCards.filter(c => c.status !== 'cancelled').length + 1
-                            const issueFee = nextNum <= 2 ? FM_FEES.id_card_standard : FM_FEES.id_card_extra
+                            // 30,000 covers the first TWO cards, so card #2 adds nothing. Card 3+ has no
+                            // confirmed price and is charged at the replacement rate - see constants.js.
+                            const issueFee = nextNum === 1 ? FM_FEES.id_card_initial
+                                           : nextNum === 2 ? 0
+                                           : FM_ID_CARD_EXTRA_FEE
                             return (
                               <button
                                 onClick={() => openCardConfirm({ type: 'issue', holder: h, cardNum: nextNum, fee: issueFee })}
@@ -712,49 +797,73 @@ export default function HoldersTab() {
                           })()}
                         </div>
 
-                        {/* Approved Items */}
+                        {/* Approved products, from the controlled taxonomy */}
                         <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Approved Items to Sell</p>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Approved Products</p>
                           {expandedItems.length === 0 ? (
-                            <p className="text-sm text-gray-400 mb-3">No approved items yet. Add what this business is permitted to sell.</p>
+                            <p className="text-sm text-gray-400 mb-3">
+                              Not yet classified. {canManage && 'Set the products this business is approved to sell.'}
+                            </p>
                           ) : (
                             <ul className="space-y-1.5 mb-3">
                               {expandedItems.map(item => (
-                                <li key={item.id} className="flex items-center justify-between gap-2">
-                                  <span className="text-sm text-gray-700">{item.item_name}</span>
-                                  {canManage && (
-                                    removeItemId === item.id ? (
-                                      <span className="flex gap-1.5 items-center shrink-0">
-                                        <button onClick={() => doRemoveItem(item.id)} className="text-xs text-red-600 hover:text-red-800 font-medium">Confirm</button>
-                                        <button onClick={() => setRemoveItemId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                                      </span>
-                                    ) : (
-                                      <button onClick={() => setRemoveItemId(item.id)} className="text-xs text-gray-400 hover:text-red-500 transition-colors shrink-0 leading-none">✕</button>
-                                    )
-                                  )}
+                                <li key={item.id} className="text-sm text-gray-700">
+                                  {itemPath(taxonomy, item.item_id)}
+                                  {item.item_name && <span className="text-gray-400"> · {item.item_name}</span>}
                                 </li>
                               ))}
                             </ul>
                           )}
-                          {canManage && (
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={newItemText}
-                                onChange={e => setNewItemText(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter' && newItemText.trim()) handleAddItem(h) }}
-                                placeholder="Item name"
-                                className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal min-w-0"
-                              />
-                              <button
-                                onClick={() => handleAddItem(h)}
-                                disabled={!newItemText.trim() || itemBusy}
-                                className="text-xs px-3 py-1.5 bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors disabled:opacity-40 whitespace-nowrap"
-                              >
-                                Add Item
-                              </button>
-                            </div>
+                          {h.products && (
+                            <p className="text-xs text-gray-400 mb-3 italic">
+                              From the Feb 2026 register: {h.products}
+                            </p>
                           )}
+                          {canManage && (
+                            <button
+                              onClick={() => openProductEdit(h)}
+                              className="text-xs px-3 py-1.5 bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors"
+                            >
+                              Change Products
+                            </button>
+                          )}
+                        </div>
+
+                        {/* 3-month attendance */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Attendance — last 3 market days</p>
+                          {(() => {
+                            const a = att[h.id]
+                            if (!a) return <p className="text-sm text-gray-400">No attendance window available.</p>
+                            return (
+                              <>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {a.days.map(d => (
+                                    <span key={d.market_date}
+                                      className={`inline-flex flex-col items-center px-2.5 py-1 rounded-lg border text-xs ${
+                                        d.attended
+                                          ? 'bg-green-50 border-green-200 text-green-800'
+                                          : 'bg-red-50 border-red-200 text-red-700'
+                                      }`}>
+                                      <span className="font-medium">{fmtDate(d.market_date)}</span>
+                                      <span>{d.attended ? (d.fee_paid ? 'Attended · paid' : 'Attended') : 'Absent'}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                  {a.attended_count} of {a.days.length} attended · last visit {a.last_visit_date ? fmtDate(a.last_visit_date) : 'never'}
+                                </p>
+                                {a.forfeit_eligible && canManage && (
+                                  <button
+                                    onClick={() => setForfeitTarget(h)}
+                                    className="mt-2 text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                                  >
+                                    Forfeit Stall
+                                  </button>
+                                )}
+                              </>
+                            )
+                          })()}
                         </div>
 
                       </div>
@@ -823,7 +932,10 @@ export default function HoldersTab() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Stall Number *">
-                  <Inp required value={editForm.stall_number} onChange={ef('stall_number')} />
+                  <Inp required placeholder="e.g. A001" value={editForm.stall_number}
+                    onChange={e => { setEditStallError(''); setEditForm(p => ({ ...p, stall_number: e.target.value })) }}
+                    onBlur={() => setEditForm(p => ({ ...p, stall_number: p.stall_number.trim().toUpperCase() }))} />
+                  {editStallError && <p className="text-xs text-red-600 mt-1">{editStallError}</p>}
                 </Field>
                 <Field label="Stall Type *">
                   <Sel required value={editForm.stall_type} onChange={ef('stall_type')}>
@@ -883,7 +995,7 @@ export default function HoldersTab() {
             <p className="text-sm text-gray-600 mb-4">
               {cardConfirm.type === 'issue'
                 ? `Issue Card #${cardConfirm.cardNum} for ${cardConfirm.holder.full_name}? Fee: ${fmtMWK(cardConfirm.fee)}`
-                : `Reprint Card #${cardConfirm.cardNum}? A fee of ${fmtMWK(FM_FEES.reprint)} applies.`
+                : `Reprint Card #${cardConfirm.cardNum}? A fee of ${fmtMWK(FM_FEES.id_card_replace)} applies.`
               }
             </p>
             <div className="space-y-3 mb-5">
@@ -963,6 +1075,94 @@ export default function HoldersTab() {
                 className="flex-1 bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 rounded-lg text-sm transition-colors"
               >
                 Print
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forfeit confirm — the manual step the whole rule turns on */}
+      {forfeitTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-md w-full mx-4">
+            <h4 className="text-base font-semibold text-gray-900 mb-2">Forfeit stall {forfeitTarget.stall_number}?</h4>
+            <p className="text-sm text-gray-600 mb-3">
+              <strong>{forfeitTarget.full_name}</strong> has not attended any of the last three market days.
+              Forfeiting will end their tenancy, free stall {forfeitTarget.stall_number}, and offer it to the
+              next business on the waiting list.
+            </p>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+              This is recorded permanently and cannot be undone from this screen.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => doForfeit(forfeitTarget)} disabled={busy}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                {busy ? 'Forfeiting…' : 'Forfeit Stall'}
+              </button>
+              <button onClick={() => setForfeitTarget(null)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Product change — controlled list, and the fee is raised by the save */}
+      {productEdit && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h4 className="text-base font-semibold text-gray-900 mb-1">
+              Change products — {productEdit.holder.full_name} ({productEdit.holder.stall_number})
+            </h4>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+              Saving a changed product list raises the <strong>{fmtMWK(FM_FEES.product_change)}</strong> product
+              change fee automatically. Saving an unchanged list raises nothing.
+            </p>
+
+            <Field label="Primary Category">
+              <Sel value={productEdit.categoryId}
+                onChange={e => setProductEdit(p => ({ ...p, categoryId: e.target.value }))}>
+                <option value="">— none —</option>
+                {(taxonomy?.categories ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Sel>
+            </Field>
+
+            <div className="mt-4 space-y-4">
+              {(taxonomy?.byCategory ?? []).map(cat => (
+                <div key={cat.id}>
+                  <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">{cat.name}</p>
+                  {cat.types.map(t => (
+                    <div key={t.id} className="mb-2 pl-3 border-l-2 border-gray-100">
+                      <p className="text-xs text-gray-500 mb-1">{t.name}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {t.items.map(i => {
+                          const on = productEdit.selected.has(i.id)
+                          return (
+                            <button key={i.id} type="button" onClick={() => toggleProduct(i.id)}
+                              className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                                on ? 'bg-brand-teal text-white border-brand-teal'
+                                   : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                              }`}>
+                              {i.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={saveProducts} disabled={itemBusy || productEdit.selected.size === 0}
+                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-50">
+                {itemBusy ? 'Saving…' : `Save (${productEdit.selected.size} selected)`}
+              </button>
+              <button onClick={() => setProductEdit(null)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+                Cancel
               </button>
             </div>
           </div>
