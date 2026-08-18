@@ -9,6 +9,10 @@
 // all, and the one thing it must never do (report a 100% margin when cost is
 // simply missing) is only provable here.
 //
+// The LIVE_ fixtures below are production's real rows, amounts included, so the
+// figures here are the same figures the live role proof produced: recognised
+// 1,300,000 and bill 1,800,000 as owner and as admin.
+//
 // The reversal cases run BEFORE migration 062 exists. That is deliberate: the
 // revenue figures must already be right on the day reversals start being
 // written, not fixed afterwards.
@@ -27,8 +31,8 @@ const check = (name, cond, detail) => {
 // to real data and not only to invented rows.
 const LIVE_PAYMENTS = [
   { payment_type: 'deposit',    amount: 300000 },
-  { payment_type: 'balance',    amount: 60000  },
-  { payment_type: 'balance',    amount: 40000  },
+  { payment_type: 'balance',    amount: 50002  },
+  { payment_type: 'balance',    amount: 49998  },
   { payment_type: 'additional', amount: 1000000 },
   { payment_type: 'refund',     amount: 100000 },
 ]
