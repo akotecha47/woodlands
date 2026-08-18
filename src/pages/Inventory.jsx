@@ -6,6 +6,7 @@ import TransfersTab    from '../components/inventory/TransfersTab'
 import AdjustmentsTab     from '../components/inventory/AdjustmentsTab'
 import MovementLedgerTab from '../components/inventory/MovementLedgerTab'
 import BarCountTab       from '../components/inventory/BarCountTab'
+import ConsumptionTab    from '../components/inventory/ConsumptionTab'
 
 const TABS = [
   { id: 'stock',        label: 'Stock Levels', Component: StockLevelsTab  },
@@ -16,6 +17,10 @@ const TABS = [
   { id: 'requisitions', label: 'Requisitions', Component: RequisitionsTab },
   { id: 'transfers',    label: 'Transfers',    Component: TransfersTab    },
   { id: 'adjustments',  label: 'Adjustments',  Component: AdjustmentsTab  },
+  // Consumption attribution (060). Sits after the movement tabs because it
+  // reads what they produce: the draw leg it writes itself, and the bar leg
+  // that a posted Bar Count generates without anyone typing it in.
+  { id: 'consumption',  label: 'Consumption',  Component: ConsumptionTab  },
   // Was 'Delivery Log' (delivery-only). The Ledger shows every movement type;
   // the delivery-only view survives as a preset filter inside it.
   { id: 'log',          label: 'Movement Ledger', Component: MovementLedgerTab },

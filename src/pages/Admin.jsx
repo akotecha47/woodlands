@@ -4,6 +4,7 @@ import UsersTab       from '../components/admin/UsersTab'
 import AddUserTab     from '../components/admin/AddUserTab'
 import DepartmentsTab from '../components/admin/DepartmentsTab'
 import StockItemsTab  from '../components/admin/StockItemsTab'
+import RoomsTab       from '../components/admin/RoomsTab'
 
 const TABS = [
   { id: 'staff',       label: 'Staff',        Component: StaffTab       },
@@ -11,6 +12,9 @@ const TABS = [
   { id: 'add_user',    label: 'Add User',     Component: AddUserTab     },
   { id: 'departments', label: 'Departments',  Component: DepartmentsTab },
   { id: 'stock_items', label: 'Stock Items',  Component: StockItemsTab  },
+  // The rooms reference list (060). Lives here rather than in Inventory
+  // because it is reference data, like Departments and Stock Items.
+  { id: 'rooms',       label: 'Rooms',        Component: RoomsTab       },
 ]
 
 export default function Admin() {
