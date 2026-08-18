@@ -79,20 +79,33 @@ One main store is the single inbound point — everything logged in on arrival. 
 
 **Deferred to the real-data session (see FOLLOWUPS "TWO-TIER INVENTORY — DEFERRED"):** catalogue dedupe (559 → 283; 276 products duplicated RBA/SBA, lossless suffix key exists) **and** the `stock_catalogue`/`stock_locations` table split, done as one data operation. `stock_items.department` is deprecated but still populated (no longer the location authority). Until dedupe runs, each product shows twice in the main store (559 store rows) — accepted deliberately; frame for Dhiren as placeholder-pending-stocktake.
 
-### 2.2 Rooms [NEW]
+### 2.2 Rooms [DONE] (migration 060, 18 August)
 
-Not currently a concept anywhere in the system. Required so stock consumption can be attributed to a room (housekeeping, laundry). A rooms reference list must exist before §2.3 works. Room list (numbers or names) comes from Dhiren.
+`rooms` — `room_number` (unique), name, `room_type` (**plain text, no CHECK**, same reasoning that keeps departments plain text), block, `is_active`, notes. RLS in the same migration: SELECT to every authenticated role (a room list is not sensitive, and the draw form needs it for `department_head`), write owner/admin, **no DELETE policy and no DELETE grant** — a room stock was consumed against is audit trail, so it is deactivated, never removed (`stock_movements.room_id` is `ON DELETE RESTRICT`). Seeded with 24 placeholders: 20 rooms across Block A / Block B / Cottages plus 4 public areas (`PUB-REST`, `PUB-POOL`, `PUB-CONF`, `PUB-LOBBY`). **Real room list still comes from Dhiren**; replacing the placeholders is one delete-and-insert. Managed from **Admin → Rooms**.
 
-### 2.3 Consumption ledger [NEW]
+**Deliberately NOT wired to Table Bookings' "Private Room"** — that is a dining area for restaurant tables and shares no key with this list.
 
-Every consumption event records three dimensions: **what** (item + quantity), **where** (department, and room for housekeeping/laundry), **who** (staff member who drew it). Named as a real current pain: they cannot see which rooms used which stock. Laundry history retained one year minimum — treat 12 months as the floor for the whole ledger.
+### 2.3 Consumption ledger [DONE] (migration 060, 18 August)
+
+**`v_stock_consumption` — a VIEW, not a table**, `security_invoker = true`. Consumption is already recorded by two different acts, and a third table would have to be written by both paths and kept in step with both — the exact drift class `data-ops/003`, `004` and `006` each spent a session repairing. The view has no state to drift, and base-table RLS is its access control, so it carries no policy surface of its own.
+
+- **Bar leg** — `bar_count_lines` where `system_qty > counted_qty`, on posted sessions. 059 established that a bar count IS a stock take (nothing deducts sales), so the count-vs-system delta IS the night's consumption. Bar consumption therefore appears with no one typing it in, and carries no room or staff member — correct, not missing data.
+- **Draw leg** — `stock_movements` where `movement_type = 'consumption'`, carrying `room_id`, `consumed_by` and `sub_location`.
+
+Three dimensions per FUNCTIONAL_SPEC: **what** (item + quantity), **where** (`from_department` + `sub_location` + room), **who** (`consumed_by` → `staff.id`, one of the 62-row roster). `consumed_by` and `performed_by` are two different people in two different tables and both are kept: a housekeeper has no login, so collapsing them would make "who" unanswerable for exactly the department that asked for it.
+
+Written through **`record_consumption`** (SECURITY DEFINER, gated owner/admin or the head whose department IS the location; Main Store refused — the store issues stock, it does not consume it), which delegates the balance write to `apply_stock_delta` so there is one implementation of locking. `apply_stock_delta` was widened with `p_room_id` / `p_consumed_by` — a signature change, so drop-and-recreate, guarded in-migration on `proacl` equality and one-signature-in-`pg_proc`.
+
+`staff_dept_select` added so a `department_head` can read their own department's roster for the "who" picker — without it the dropdown would be empty with no error.
+
+**Still open:** the 12-month retention floor is **not yet enforced** — nothing prunes or archives, and nothing deletes either, so history is currently kept indefinitely (which satisfies the floor by accident, not by design). Revisit at real-data time.
 
 ---
 
 ## 3. INVENTORY MODULE
 
 **File:** `src/pages/Inventory.jsx`
-**Tabs:** Stock Levels · Log Delivery · Bar Count · Requisitions · Transfers · Adjustments · Movement Ledger
+**Tabs:** Stock Levels · Log Delivery · Bar Count · Requisitions · Transfers · Adjustments · Consumption · Movement Ledger
 
 ### Existing tabs [DONE unless marked]
 
@@ -107,9 +120,9 @@ Every consumption event records three dimensions: **what** (item + quantity), **
 
 - **Two-tier stock [DONE]** — per §2.1 (051–057). Per-department sub-stores, per-location balances, store→department issue recorded, RLS-scoped visibility.
 - **Bar par levels + end-of-day cycle [DONE]** (`059`, 17 August) — **Bar Count** tab. Each bar holds a per-item minimum before opening, stored as `current_stock.par_level` (per item per location, beside the per-tier `reorder_level` from `051`; NULL = not on the cycle, so today only Main Bar and Sports Bar). Nightly: the count sheet opens **pre-filled with the system balance** for every par-managed item; the bartender corrects what they counted; **Post Count** does everything in one server-side transaction — reconciles each balance to the counted number (a stock take: nothing deducts sales, so the balance is fiction between counts and the delta IS the night's consumption), stamps each line with system qty / par / shortfall, and raises a **pre-filled** refill requisition per short item (`source='par_refill'`, `status='pending'`, tagged with the count session). Requisitions groups those into a **Bar Refills** panel with Approve all / Fulfil all; fulfil issues Main Store → bar through the existing `issue_stock` path. Tables: `bar_count_sessions`, `bar_count_lines`. RPCs: `post_bar_count` (SECURITY DEFINER, gated to owner/admin or the head whose department IS the location), `fulfil_requisition_batch` (INVOKER, one transaction, a store-short line is skipped and named rather than aborting the refill). Par quantities are placeholder (2× catalogue reorder) until the bar heads supply real ones. **Proven live as the roles, 19/19 scenarios, rolled back.**
-- **Consumption attribution [NEW]** — per §2.3. Draw-from-department writes a consumption row (what/where/who, room where relevant).
+- **Consumption attribution [DONE]** (`060`, 18 August) — per §2.3. A new **Consumption** tab: a draw form (location → sub-location → item, with the item list narrowed to what that location actually holds, plus room, staff member, quantity, reason) writing through `record_consumption`, above a ledger reading `v_stock_consumption` with filters for department, room, item, staff and date range. Both legs render in one list, badged **Draw** or **Bar count**. A `department_head` sees only their own department's consumption and only their own roster in the "who" picker — enforced by RLS, not by the UI. Placeholder Housekeeping catalogue shipped in the same migration (7 items at Main Store, Housekeeping and Housekeeping/Laundry), or the tab would ship empty for the one department that asked for it.
 
-**[DONE 14 Aug]** `stock_movements.movement_type` CHECK is `..._check_v4`, permitting `delivery/transfer/adjustment/requisition/opening_balance/issue/event_allocation/event_return`. The event-allocation/event-return widening the Movement Ledger required (`058`) is applied; event code re-typed.
+**[DONE 18 Aug]** `stock_movements.movement_type` CHECK is `..._check_v5`, permitting `delivery/transfer/adjustment/requisition/opening_balance/issue/event_allocation/event_return/consumption`. Widened in all three places in `060`: the table CHECK, `apply_stock_delta`'s allowlist, and `MOVEMENT_TYPES` in `src/lib/stock.js` — plus the Movement Ledger's own `TYPES` list, which is a fourth place that silently loses the *filter* (not the row) when it drifts.
 
 ---
 
@@ -193,7 +206,7 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 ### End-goal additions
 
 - **Expanded role model [DONE]** — per §1 (owner/admin/department_head/hr), migrations 037–044. Add-User and Users support assigning `department_head` scoped by department, and `hr`.
-- **Rooms management [NEW]** — per §2.2. A place to maintain the rooms reference list.
+- **Rooms management [DONE]** (`060`, 18 August) — per §2.2. **Admin → Rooms**: add, inline-edit and Deactivate/Reactivate, with a "show inactive" toggle and an active/total count. **No delete control, deliberately** — the table has no DELETE policy and no DELETE grant, and `stock_movements.room_id` is `ON DELETE RESTRICT`, so a room with consumption history cannot be removed at all. `room_type` is a free-text input with a `datalist` of the seeded values: suggested, not constrained, because the real classes come from Dhiren.
 
 ---
 

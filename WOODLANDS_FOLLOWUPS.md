@@ -512,15 +512,115 @@ Deferred / decided items from that session:
   proven live as the roles (19/19 scenarios) and the build is clean, but the new
   tab has not been exercised in a browser. Needs an owner or bar-head session.
 
+### 4e. ROOMS + CONSUMPTION LEDGER — BUILT (migration 060, 18 August 2026)
+
+Decisions taken and items consciously deferred in that session:
+
+- **🔴 THE ONE THING TO CARRY FORWARD: `apply_stock_delta`'s oid is no longer
+  comparable to the pre-060 record.** `055`, `058` and `059` each proved grant
+  survival by showing **oid unchanged** (42385 / 42386), because each was a true
+  in-place replace with a byte-identical parameter list. `060` added
+  `p_room_id` / `p_consumed_by`, which is a SIGNATURE change, and there is no
+  DDL that alters a function's argument list while keeping its oid — a
+  `CREATE OR REPLACE` with extra parameters OVERLOADS rather than replaces (the
+  052 trap), so the old signature had to be dropped. **oid 42385 → 42960.**
+  A future session comparing oids against the old record will find a mismatch
+  that is expected, not a regression.
+
+  What was asserted instead, in-migration, aborting the whole thing on failure:
+  **`proacl` identical** (`{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}`
+  before and after, raw text and sorted set), and **exactly one signature in
+  `pg_proc`** — which is the assertion that actually catches the overload trap
+  the oid check never could. Plus, in the live proof, `admin` successfully
+  calling `apply_stock_delta` directly as `authenticated` under RLS, which is
+  the only thing that proves the re-GRANT really restored the privilege.
+
+- **🔴 The guard earned its keep on the first dry run, and the finding is the
+  same class run 6 found.** The first attempt granted but did not
+  `revoke execute ... from public`, and a newly created function gets Postgres's
+  BUILT-IN default of EXECUTE to PUBLIC — so `proacl` came back as
+  `{=X/postgres,postgres=…,authenticated=…,service_role=…}`. That leading `=X`
+  is PUBLIC, i.e. **anon**, on the function that performs every stock write in
+  the system. The migration aborted, the file was fixed at source, and the
+  re-run passed. **Every function CREATE in this project must pair with
+  `revoke … from public` (and now `anon` explicitly, per 059 §10) — the
+  convention is load-bearing, not decorative.**
+
+- **Consumption is a VIEW (`v_stock_consumption`), not a table** — decided
+  before the build and worth restating: it unions the bar leg
+  (`bar_count_lines` shortfall on posted sessions) with the draw leg
+  (`stock_movements` where `movement_type='consumption'`). A table would have to
+  be written by both paths and kept in step with both, which is the drift class
+  `data-ops/003`, `004` and `006` each cost a session. `security_invoker = true`
+  so base-table RLS is the access control and the view adds no policy surface.
+
+- **`stock_movements.sub_location` was added — a THIRD column, beyond the two
+  the session scoped.** `051` made 'Laundry' a sub-location of Housekeeping
+  rather than a department, and `apply_stock_delta` already RECEIVED
+  `p_sub_location` and already moved the right balance — it just never recorded
+  which one. Without the column a Laundry draw reports as plain "Housekeeping",
+  losing the one attribution the laundry case exists to prove. Additive and
+  nullable; it also recovers sub-location for issue/transfer, where it was being
+  discarded. **Flagged as a deviation from the stated scope, not slipped in.**
+
+- **`record_consumption` takes its location from an ARGUMENT, unlike
+  `post_bar_count`**, which reads it off a locked session row. There is no
+  session row here, so the rule ("location never from an arg alone") is
+  preserved in substance rather than form: the argument must be a real
+  department, must not be 'Main Store', and for a `department_head` must EQUAL
+  `current_app_department()`. A head cannot name a location they do not own,
+  which is the property the rule exists to enforce. **Stated explicitly so a
+  later reader does not read it as the rule being quietly dropped.**
+
+- **🟡 ON DELETE RESTRICT on `room_id` and `consumed_by` WILL block the
+  real-data roster reconciliation.** Both are deliberate: a movement is a
+  document, and both `rooms` and `staff` carry `is_active`, so the intent is
+  deactivate-never-delete. But at real-data time the 62-row placeholder roster
+  is expected to be reconciled, and **a hard delete of any staff row that has
+  drawn stock will now fail**. That is intended behaviour — it forces a
+  conscious decision rather than silently orphaning attribution — but it must be
+  met as a decision, not as a surprise. Deactivate, or repoint `consumed_by`.
+
+- **🟡 The 12-month laundry/consumption retention floor is NOT enforced.**
+  FUNCTIONAL_SPEC §2.3 asks for a one-year minimum. Nothing prunes and nothing
+  archives — and nothing deletes either, so the floor is currently satisfied by
+  accident rather than by design. No action needed while the data is
+  placeholder; decide at real-data time whether "minimum" also implies a
+  maximum.
+
+- **🟡 Placeholder Housekeeping catalogue is 7 items with invented balances.**
+  Housekeeping held **zero** stock items before this (verified live), so the
+  Consumption tab would have shipped empty for the one department the feature
+  was requested for — the standing "blank screens are not fine" rule. Seeded
+  `HK-001`–`HK-007` at three coordinates: Main Store (100 each), Housekeeping,
+  and Housekeeping/Laundry for the three laundry items only (seeding all seven
+  there would claim the laundry stocks tea bags). **Unlike `053`'s and `059`'s
+  seeds this one is self-contained** — it creates its own catalogue rows rather
+  than updating rows that came from `scripts/data-ops/002` — so it applies
+  identically on a from-files rebuild. Real department stock lists remain out of
+  scope until Dhiren verifies the modules.
+
+- **🟡 No Housekeeping `department_head` account exists.** The role proof
+  re-pointed the Restaurant head to 'Housekeeping' inside the rolled-back
+  transaction, the same technique `056` and `059` used before a Main Bar head
+  existed. The scoping is proven; the *account* still needs creating before
+  anyone in Housekeeping can actually use the tab.
+
+- **🟡 OPEN — neither the Consumption tab nor the Rooms tab has been
+  browser-verified.** The database layer is proven live as the roles and the
+  build is clean (31/31 ledger tests), but no browser session has exercised
+  either. This is now the **second** tab in that state — the Bar Count tab from
+  `059` is still unverified too. Both need one owner session.
+
 ### 5. Still not built, in order
 
 ~~RLS pass~~ ✅ (`056`, 14 August) → ~~`TransfersTab` wiring~~ ✅ (`057` +
 frontend, 14 August) → ~~`movement_type` widening~~ ✅ (`058`, 14 August) →
 ~~Movement Ledger~~ ✅ (`058` + data-ops/`006`, 14 August — see the CLOSED block
 below) → ~~bar par levels + end-of-day cycle~~ ✅ (`059`, 17 August — see 4d
-above) → **rooms + consumption ledger** ← next feature → **FM taxonomy +
-waiting list + fees** → **QR attendance** → **events payments-edit + revenue** →
-**real-data dedupe + table split**.
+above) → ~~rooms + consumption ledger~~ ✅ (`060`, 18 August — see 4e above) →
+**FM taxonomy + waiting list + fees** ← next feature → **QR attendance** →
+**events payments-edit + revenue** → **real-data dedupe + table split**.
 
 ### 5b. §2.6 REBUILD RE-PROOF — `051`–`057` CLOSED (run 5); `058` now owed
 
@@ -572,6 +672,20 @@ types, 4 indexes on `stock_movements`). STATE and this log both claimed
 "`001`–`058`". Repaired via `migration repair --status applied 058`, re-read on a
 fresh connection: **58 rows, max 58, no gaps**, `db push --dry-run` clean. `059`
 was then written on a genuinely proven base rather than a believed one.
+
+**NOW OWED: `060` has not been rebuild-proven.** It was written on a proven base
+(run 7 closed `001`–`059` before any `060` DDL existed), but `060` itself is
+unproven and a full throwaway rebuild of `001`–`060` diffed against production is
+owed **BEFORE the next migration is written, not after**. A rebuild proof is a
+claim about a file range on a date, not a permanent property. Code-only and
+data-op changes do not touch this clock.
+
+`060` gives that run three specific things to check that no earlier run could:
+its first VIEW (`v_stock_consumption`, and whether `security_invoker` survives a
+rebuild), its first migration-borne catalogue seed (7 `HK-` stock_items and 17
+`current_stock` rows that WILL now exist on a rebuild, unlike `053`/`059`'s
+data-ops-dependent seeds), and `apply_stock_delta` at its **new oid** — compare
+`proacl` and `md5(prosrc)`, never the oid.
 
 **~~Now owed: `059` has not been rebuild-proven.~~ — CLOSED BY RUN 7,
 17 August 2026, before any `060` DDL was written.**

@@ -2,7 +2,7 @@
 
 *Current state, live commitments, next action. Updated at the end of every session that changed state.*
 
-**Last updated: 17 August 2026**
+**Last updated: 18 August 2026**
 **Governing doctrine:** STREAMLINE_BUILD_STANDARD.md v1.5, STREAMLINE_MATERIALS.md v2.4, STREAMLINE_SESSION.md v2.0.
 
 ---
@@ -57,7 +57,7 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 
 **Placeholder / demo:** bar stock quantities (pending stocktake); attendance (2–3 seed days); 1 seeded event; a few table bookings.
 
-**Empty / not there:** Kitchen, Restaurant, Housekeeping, Grounds, Security stock lists (departments exist, items don't); Laundry (not yet a department); Farmers Market visits + payments; menu items from POS PDFs.
+**Empty / not there:** Kitchen, Restaurant, Grounds, Security stock lists (departments exist, items don't); Farmers Market visits + payments; menu items from POS PDFs. **Housekeeping now holds a 7-item placeholder catalogue** (`060`) at Main Store / Housekeeping / Housekeeping-Laundry — Laundry is a sub-location, deliberately never a department. **24 placeholder rooms** (`060`), real list still owed by Dhiren.
 
 ---
 
@@ -196,10 +196,42 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 - **Browser-verify the Bar Count tab.** DB layer proven live as the roles and the build is clean, but the new tab has not been exercised in a browser — needs an owner or bar-head session.
 - **No par-level editing UI.** Par is seeded and visible but only changeable by UPDATE. Fine while placeholder; needed at real-data time.
 - **~~`AdjustmentsTab` is location-blind~~ — FIXED AND PROVEN LIVE, 17 August 2026.** Frontend-only, no migration: `setStockQuantity()` now takes `{ location, subLocation }` and `AdjustmentsTab` has a Location selector (plus a Sub-location selector where `SUB_LOCATIONS` defines one), its `stockMap` keyed on `(item, location, sub_location)`, and the `tier='department'` filter that hid all 559 main-store balances removed. Proved as `admin` (`SET LOCAL ROLE`, rolled back): a Main Store take moved Main Store 100 → 42 with **Main Bar unchanged at 5** and wrote `adjustment −58, from_department='Main Store'`; the same call with no location still falls back to the item's department (Main Bar 5 → 7, store untouched) — the old bug, demonstrated rather than described. A `department_head` is still denied `42501` at the store, and `054`'s guard still rejects an invalid location. Rollback re-verified on a fresh connection: 1118 balances, 725 movements, 0 adjustment rows.
-- **`059` is not rebuild-proven.** Owed on the next migration written.
+- ~~**`059` is not rebuild-proven.**~~ — CLOSED by run 7, 17 August (this line
+  contradicted the §2.6 section below and was stale when written). **`060` is
+  now the one owed**, before the next migration is written.
+
+**Done 18 August 2026 — ROOMS + CONSUMPTION LEDGER (`060`):**
+
+- **Applied per-file via `scripts/apply-sql.ps1`** (the UTF-8 + mojibake-refusal path from the 17 August tooling fix), dry-run-with-rollback first, then proven live as the roles. **Migration history now `001`–`060`, 60 rows, no gaps**, recorded via `migration repair` immediately after applying — run 6's "applied but never recorded" finding is not repeated. **0 mojibake** in every function body and every comment, checked after applying.
+- **`rooms`** — 24 placeholder rows (20 rooms across Block A / Block B / Cottages, 4 public areas), RLS in the same migration: SELECT to all authenticated, write owner/admin, **no DELETE policy and no DELETE grant**. `room_type` is plain text with no CHECK. **Not wired to Table Bookings' Private Room**, deliberately. **Admin → Rooms** tab manages it.
+- **`v_stock_consumption`** — the consumption ledger as a **VIEW**, `security_invoker = true`, unioning the bar leg (posted `bar_count_lines` where `system_qty > counted_qty` — 059's stock take IS the night's consumption) with the draw leg (`stock_movements` where `movement_type='consumption'`). No second copy of a number the system already holds, and base-table RLS is its access control.
+- **`record_consumption`** (SECURITY DEFINER, gated owner/admin or the head whose department IS the location; Main Store refused) delegates the balance write to `apply_stock_delta` — one implementation of locking. `staff_dept_select` added so a head can read their own roster for the "who" picker.
+- **`movement_type` CHECK `_v4` → `_v5`** (adds `consumption`), widened in all three places in the one migration, plus the Movement Ledger's own `TYPES` list — a fourth place that silently loses the *filter* when it drifts.
+- **🔴 `apply_stock_delta`'s oid CHANGED, 42385 → 42960, and that is expected.** Adding `p_room_id`/`p_consumed_by` is a signature change; `CREATE OR REPLACE` with extra parameters overloads rather than replaces (the 052 trap), so the old signature had to be dropped, and no DDL preserves an oid across an argument-list change. **`proacl` was asserted identical in-migration instead** (raw text and sorted set), plus **exactly one signature in `pg_proc`** — the assertion that actually catches the overload trap — plus a live `apply_stock_delta` call as `admin` under RLS, which is the only thing that proves the re-GRANT worked. 055/058/059's oid-unchanged evidence does not apply to this function any more; compare `proacl` and `md5(prosrc)` from here on.
+- **🔴 The guard fired on the first dry run and caught a real defect in the file.** It granted without `revoke execute … from public`, and a new function gets Postgres's built-in PUBLIC EXECUTE default — `proacl` came back with a leading `=X/postgres`, i.e. **anon**, on the function performing every stock write. Same class as run 6's anon-EXECUTE finding. Migration aborted, file fixed at source, re-run clean. Production never saw it.
+- **Proven live as the roles, rolled back, on a REAL depletion — not a flat sheet.** Both 17 August counts are 100% flat (0 lines where system ≠ counted), so they generate no consumption at all and `v_stock_consumption` read **0 rows** immediately after applying: a pre-filled sheet posted unchanged passes every test while measuring nothing. The proof therefore posted a fresh Sports Bar count as the Sports Bar head with three items counted genuinely DOWN (SBA-1001 17→14, SBA-1004 10→7, SBA-1005 24→21), and recorded two attributed draws.
+
+  | Scenario (as the role, `SET LOCAL ROLE`, rolled back) | Result |
+  |---|---|
+  | Sports Bar head posts its own count, 3 lines depleted | ✅ balances reconciled to 14/7/21, 1 refill requisition raised |
+  | Housekeeping head draws HK-001 ×4, room **A03 (Mopane)**, staff **Agness Kamande** | ✅ Housekeeping 24 → 20 |
+  | Housekeeping head draws HK-006 ×5 at **Housekeeping/Laundry** | ✅ Laundry 30 → 25, **Housekeeping main untouched at 20** |
+  | Housekeeping head reads the ledger | ✅ **2 rows, both own**; 0 bar rows, 0 other-department rows |
+  | Housekeeping head reads `staff` | ✅ **6 rows, all Housekeeping**; 0 other-department |
+  | Housekeeping head at another department's location | ✅ denied **42501** |
+  | Housekeeping head at 'Main Store' | ✅ denied **23514** |
+  | Housekeeping head attributing a **Kitchen** staff member | ✅ denied **42501** ("not on the Housekeeping roster") |
+  | Housekeeping head calling `apply_stock_delta` **directly** | ✅ denied **42501** on `current_stock` — the DEFINER wrapper is the only path |
+  | Sports Bar head reads the ledger | ✅ **3 rows, own bar leg**; 0 draws, 0 Housekeeping staff |
+  | owner / admin | ✅ **5 rows** — 3 `bar_count` + 2 `draw`, correct what/where/who on every row |
+  | admin calls `apply_stock_delta` directly | ✅ succeeds — **the grant-survival proof** |
+
+  Movement rows carry `from_department` (never `to_`), `sub_location='Laundry'` where it applied, room, `consumed_by` (roster) **and** `performed_by` (login) as two distinct non-null columns. **Fresh connection after rollback:** 0 consumption movements, 0 view rows, 725 movements, 1135 balances, balances all back to 24/30/17/10/24, the re-pointed head reverted, `apply_stock_delta` still one signature with unchanged `proacl`, and **0 rows written today anywhere**.
+- **Frontend:** Inventory gains a **Consumption** tab (draw form — location → sub-location → item narrowed to what that location actually holds, plus room, staff, quantity, reason — above a filterable ledger over both legs, badged Draw / Bar count); Admin gains a **Rooms** tab (add, inline edit, Deactivate/Reactivate, no delete control). Build clean, ledger tests 31/31.
+- **Placeholder Housekeeping catalogue shipped in the same step** — Housekeeping held **zero** stock items, so the tab would have shipped empty for the one department that asked for the feature. 7 items at Main Store / Housekeeping / Housekeeping-Laundry. Self-contained, so unlike `053`/`059` it applies on a from-files rebuild too.
 
 **Forward path — build order:**
-1. ~~**`movement_type` widening**~~ ✅ (`058`) → ~~**Movement Ledger**~~ ✅ (`058` + data-ops/`006`) → ~~**bar par levels + end-of-day cycle**~~ ✅ (`059`) → **rooms + consumption ledger** ← next feature → **real-data dedupe + table split** (deferred to real-data).
+1. ~~**`movement_type` widening**~~ ✅ (`058`) → ~~**Movement Ledger**~~ ✅ (`058` + data-ops/`006`) → ~~**bar par levels + end-of-day cycle**~~ ✅ (`059`) → ~~**rooms + consumption ledger**~~ ✅ (`060`) → **Farmers Market taxonomy + waiting list + fees** ← next feature → **real-data dedupe + table split** (deferred to real-data).
 2. **Remaining Phase 2 features** — consumption attribution + rooms + laundry retention; Farmers Market taxonomy + waiting list + fees; QR attendance; Events UX fixes (payments editable, revenue display — revenue blocked on Dhiren).
 3. **Per-role UI pass** — deferred to end.
 4. **Production cleanup** — drop the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`) from production. Cosmetic, not blocking.
@@ -218,7 +250,11 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 - **🔴 Run 7 caught a new one, and it was on PRODUCTION, not the files: two function bodies and two column comments carried mojibake.** `post_bar_count` held 92 × `U+00E2` where the file has 92 × `U+2500`; `set_stock_quantity` 1 × `U+00E2` for an em-dash; plus the `current_stock.par_level` and `event_stock_allocations.deducted_qty` comments. Cause reproduced, not inferred: the apply helper read files with bare `Get-Content`, which decodes UTF-8 as Windows-1252 on PS 5.1. Cosmetic in effect — every corrupted character sat inside a `--` comment, all 123/73 body lines present, **0 executable lines differed** — but it made `md5(prosrc)` unmatchable forever. `standards.md` §4 already carried the rule; it had been applied to the import path and never to the apply path. **Fixed in `scripts/apply-sql.ps1` (UTF-8 read + a mojibake refusal guard) and healed by `scripts/data-ops/007_encoding_heal.sql`** — tooling first, then the heal, in that order, because a heal through the broken path re-corrupts silently. Both functions now carry the rebuild's exact md5; `oid` (42712 / 42386) and `proacl` unchanged; 0 mojibake anywhere in `pg_description`.
 - **🟡 Noted, not a gap:** a fresh Supabase project now ships an `ensure_rls` event trigger (`rls_auto_enable`) that production predates. It means RLS enablement on a rebuild is not self-evidencing — closed from the other side, since production has no such trigger and still carries RLS on all 30 tables.
 
-**Now owed: `060` will not be rebuild-proven.** The next migration written after it triggers a full throwaway rebuild of `001`–`060` diffed against production. **Before the next migration is written, not after.** A rebuild proof expires — it is a claim about a file range on a date, not a permanent property of the project. Code-only and data-op changes do not touch this clock.
+**`060` — WRITTEN AND APPLIED 18 August, NOT REBUILD-PROVEN. This is the outstanding proof.** It was written on a proven base (run 7 closed `001`–`059` before any `060` DDL existed), which is what the gate required — but `060` itself is unproven, and a full throwaway rebuild of `001`–`060` diffed against production is owed **before the next migration is written, not after**. A rebuild proof expires: it is a claim about a file range on a date, not a permanent property of the project. Code-only and data-op changes do not touch this clock.
+
+**`060` gives that run three things no earlier run could check:** its first VIEW (`v_stock_consumption` — does `security_invoker` survive a rebuild), its first migration-borne catalogue seed (7 `HK-` items and 17 `current_stock` rows that WILL exist on a rebuild, unlike `053`/`059`'s data-ops-dependent seeds, so the row counts diverge from production by exactly that much and no more), and `apply_stock_delta` at its **new oid** — compare `proacl` and `md5(prosrc)`, never the oid.
+
+Known-expected residuals, so they are not misread as new findings: the 2 legacy `service_role` duplicate policies (`departments`, `user_profiles`), the `handle_new_user` orphan, `attendance_records` ordinal divergence 14–18, and the platform `ensure_rls` event trigger / `rls_auto_enable()` on fresh projects — so RLS enablement must be argued from production's side, never read off the rebuild.
 
 
 
@@ -233,5 +269,7 @@ Revenue display is blocked on Dhiren (what "different" means). Everything else i
 ---
 
 ## STATUS SUMMARY
+
+**Rooms + consumption ledger done (`060`, 18 August)** — `rooms` seeded and RLS'd, `v_stock_consumption` as a security_invoker VIEW over both legs (bar count shortfall + attributed draw), `record_consumption` gated and delegating to `apply_stock_delta`, `staff_dept_select` so a head's "who" picker is populated and scoped. Proven live as the roles on a REAL depletion, not a flat sheet — 12 scenarios, rolled back, nothing persisted. `apply_stock_delta`'s oid changed by necessity (signature change) and `proacl` was asserted identical instead; the guard caught a genuine PUBLIC/anon EXECUTE defect in the file on the first dry run. **Next: `060`'s rebuild proof is owed before any `061` is written**, then Farmers Market taxonomy + waiting list + fees. Two tabs (Bar Count from `059`, Consumption + Rooms from `060`) still need one browser session.
 
 Hardening done, real data live, migration gate closed, role model live, department vocabulary reconciled. **Two-tier inventory is functionally complete end to end** — location dimension, main store, store→department issuing, department↔department transfers, and the RLS scoping that lets a receiving department *see* what it holds, all proven live as the roles. **Movement Ledger done (`058` + data-ops/`006`)**, with the delivery Supplier column restored. **Bar par levels + the end-of-day count/refill cycle done (`059`, 17 August)** — count sheet pre-filled, posting reconciles the bar balance and raises a pre-filled refill in one transaction, batch approve/fulfil through the existing `issue_stock` path; 19/19 live role scenarios passed. **§2.6 re-proof run 6 closed `001`–`058` on measured evidence** and caught both a real files gap (anon EXECUTE on the role functions) and an unrecorded `058` in production's history — both fixed. Building the rest of Phase 2 to functional-complete on placeholder data — **rooms + consumption ledger next**, with `bar_count_lines` as its natural feed. Re-proof: `059` owed on the next migration written. Deadline: full-system walkthrough with Dhiren Mon 31 Aug / Tue 1 Sep.
