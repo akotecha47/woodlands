@@ -4,6 +4,23 @@ import { supabase } from '../lib/supabase'
 import { getDefaultRoute } from '../lib/roles'
 import { DEACTIVATED_MESSAGE } from '../components/RouteGuard'
 
+// U-11: staff sign in with a plain name -- "rose", not "rose@woodlands.com".
+//
+// Nothing about the stored identity changes. There is no username column on
+// user_profiles and no alternate auth path; sign-in is
+// supabase.auth.signInWithPassword with an email, and all 8 live accounts are
+// @woodlands.com (verified against auth.users). So the whole fix is here, in
+// the browser, on the typed string: if what was typed has no '@', the known
+// domain is appended before the call. Anyone who types a full address -- an
+// owner with an outside address, a future account on another domain -- is
+// passed through untouched, so this narrows nothing.
+const LOGIN_DOMAIN = '@woodlands.com'
+
+function toEmail(typed) {
+  const v = (typed ?? '').trim()
+  return v.includes('@') ? v : (v && v + LOGIN_DOMAIN)
+}
+
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -18,7 +35,10 @@ export default function Login() {
     setError(null)
     setLoading(true)
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email: toEmail(email),
+      password,
+    })
     if (authError) {
       setError(authError.message)
       setLoading(false)
@@ -54,15 +74,25 @@ export default function Login() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
+              Username
             </label>
+            {/* type="text", not "email": the browser's own validation on
+                type="email" rejects a bare "rose" before submit ever runs. */}
             <input
-              type="email"
+              type="text"
               required
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              autoComplete="username"
+              placeholder="rose"
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
             />
+            <p className="text-xs text-gray-400 mt-1">
+              Just your name — no need to type {LOGIN_DOMAIN}
+            </p>
           </div>
 
           <div>

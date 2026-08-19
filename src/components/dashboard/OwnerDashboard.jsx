@@ -46,16 +46,40 @@ function getInitials(name) {
 
 // White KPI card with a 30 px tinted icon square in the top-left.
 // `valueCls` lets callers shrink the number for longer strings (e.g. date).
-function KpiCard({ Icon, iconBg, iconColor, label, value, valueCls = 'text-2xl', children }) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5">
+// Same shape as EventsUI.fmtMWK / FarmersMarketUI.fmtMWK. Held locally rather
+// than imported: this module does not otherwise reach across into a feature
+// folder, and lib/ has no currency helper to share yet.
+function fmtMWK(n) {
+  return `MWK ${Number(n || 0).toLocaleString('en-US')}`
+}
+
+// U-01: each card navigates to the module it summarises. Navigation only --
+// nothing is read or written differently. A card with no `onClick` still
+// renders as the plain div it always did, so the component stays usable
+// un-linked. The <button> carries type="button" because these can sit inside a
+// form in future; text-left undoes the browser's centring.
+function KpiCard({ Icon, iconBg, iconColor, label, value, valueCls = 'text-2xl', onClick, ariaLabel, children }) {
+  const body = (
+    <>
       <div className={`w-[30px] h-[30px] rounded-lg flex items-center justify-center mb-4 ${iconBg}`}>
         <Icon size={15} className={iconColor} />
       </div>
       <p className="text-xs font-medium text-gray-400 tracking-wide mb-1">{label}</p>
       <p className={`${valueCls} font-bold text-gray-900 leading-tight`}>{value}</p>
       {children && <div className="mt-2">{children}</div>}
-    </div>
+    </>
+  )
+  const base = 'bg-white border border-gray-200 rounded-lg p-5'
+  if (!onClick) return <div className={base}>{body}</div>
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel ?? label}
+      className={`${base} w-full text-left cursor-pointer transition-colors hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-teal`}
+    >
+      {body}
+    </button>
   )
 }
 
@@ -117,9 +141,14 @@ export default function OwnerDashboard() {
           .select('quantity, stock_items(id, department, reorder_level, is_active)')
           .eq('tier', 'department'),
 
+        // `name`, not `title`: the app has only ever written `name` (title is
+        // NULL on every live row, schema residue). `deposit_required` is the
+        // figure that is actually set when an event is quoted; `deposit_amount`
+        // is written by nothing in src/ and is 0 live, which is what made the
+        // unpaid-deposit card unreachable. AUDIT_3 C-01.
         supabase
           .from('events')
-          .select('id, title, deposit_amount, deposit_paid')
+          .select('id, name, status, deposit_required, deposit_paid')
           .gte('event_date', today)
           .neq('status', 'cancelled'),
 
@@ -130,9 +159,20 @@ export default function OwnerDashboard() {
           .eq('status', 'confirmed')
           .order('booking_time'),
 
+        // Named via `staff`, NOT `user_profiles`. attendance_records carries
+        // both a staff_id (FK -> staff, the 62-row roster these screens operate
+        // on) and a user_id (FK -> auth.users, only ever set by a self-service
+        // clock-in). Every live row is manager-written: staff_id is populated on
+        // 15/15 and user_id is NULL on 15/15 (measured), so the old
+        // user_profiles!user_id embed resolved to nothing and every card read
+        // "Unknown staff". AUDIT_3 C-27.
         supabase
           .from('attendance_records')
-          .select('id, user_id, user_profiles!user_id(full_name)')
+          // Bare `staff(...)` embed, not `staff!staff_id(...)`: attendance_records
+          // has exactly ONE foreign key to staff (attendance_records_staff_id_fkey
+          // on staff_id, measured), so the relationship is unambiguous, and every
+          // other embed that works in this codebase is written in this bare form.
+          .select('id, staff_id, staff(full_name, department)')
           .eq('status', 'unverified')
           .eq('date', today),
 
@@ -163,7 +203,11 @@ export default function OwnerDashboard() {
       setBookings(bookingsR.data ?? [])
 
       setUnverified(
-        (unverifiedR.data ?? []).map(r => ({ name: r.user_profiles?.full_name ?? 'Unknown staff' }))
+        (unverifiedR.data ?? []).map(r => ({
+          key:  r.id,
+          name: r.staff?.full_name ?? 'Unknown staff',
+          dept: r.staff?.department ?? null,
+        }))
       )
 
       // Reads events.deposit_paid rather than deriving "a deposit row exists".
@@ -173,7 +217,13 @@ export default function OwnerDashboard() {
       // reverse_event_payment() in the same transaction as the reversal, and it
       // is already the definition the Events List highlight uses — so this
       // removes a second, now-wrong definition rather than adding one.
-      setUnpaidEvents(allEvents.filter(e => Number(e.deposit_amount) > 0 && !e.deposit_paid))
+      // The gate is CONFIRMED-and-not-paid: confirming an event is the point at
+      // which its deposit is owed. That is character-for-character the rule the
+      // Events List already highlights amber with (EventsListTab.jsx:39), so the
+      // two surfaces cannot disagree. The old test was
+      // `Number(e.deposit_amount) > 0`, and deposit_amount is written by no code
+      // in src/ and is 0 on the live event — the card could never appear.
+      setUnpaidEvents(allEvents.filter(e => e.status === 'confirmed' && !e.deposit_paid))
 
       setAtRiskCount((atRiskR.data ?? []).length)
       setLoading(false)
@@ -190,19 +240,25 @@ export default function OwnerDashboard() {
 
   const attentionItems = [
     ...unverified.map(u => ({
-      key:       `unv-${u.name}`,
+      // Keyed on the record id, not the name: two unverified rows for people
+      // with the same name would otherwise collide on one React key.
+      key:       `unv-${u.key}`,
       Icon:      AlertTriangle,
       iconColor: 'text-amber-500',
       primary:   u.name,
-      secondary: 'clocked in off-site, needs review',
+      secondary: u.dept
+        ? `${u.dept} — clocked in off-site, needs review`
+        : 'clocked in off-site, needs review',
       link:      '/attendance',
     })),
     ...unpaidEvents.map(e => ({
       key:       `evt-${e.id}`,
       Icon:      AlertCircle,
       iconColor: 'text-red-500',
-      primary:   e.title,
-      secondary: 'deposit unpaid',
+      primary:   e.name,                       // was e.title, NULL on every row (C-01)
+      secondary: Number(e.deposit_required) > 0
+        ? `Deposit of ${fmtMWK(e.deposit_required)} unpaid`
+        : 'Deposit unpaid',
       link:      '/events',
     })),
     ...(lowStock.count > 0 ? [{
@@ -286,6 +342,8 @@ export default function OwnerDashboard() {
             iconColor="text-brand-teal"
             label="Today's Attendance"
             value={attendance.total}
+            onClick={() => navigate('/attendance')}
+            ariaLabel="Today's Attendance — open Attendance"
           >
             <div className="flex flex-col gap-0.5 text-xs">
               <span className="text-green-700">Present: {attendance.present}</span>
@@ -304,6 +362,8 @@ export default function OwnerDashboard() {
             iconColor="text-amber-500"
             label="Low Stock Items"
             value={lowStock.count}
+            onClick={() => navigate('/')}
+            ariaLabel="Low Stock Items — open Inventory"
           >
             <p className={`text-xs ${lowStock.count > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
               {lowStock.count === 0 ? 'All items stocked' : 'at or below reorder level'}
@@ -319,6 +379,8 @@ export default function OwnerDashboard() {
             iconColor="text-brand-navy"
             label="Upcoming Events"
             value={eventCount}
+            onClick={() => navigate('/events')}
+            ariaLabel="Upcoming Events — open Events"
           >
             <p className="text-xs text-gray-400">from today onwards</p>
           </KpiCard>
@@ -335,6 +397,8 @@ export default function OwnerDashboard() {
             label="Next Market Day"
             value={mdDateLabel}
             valueCls="text-base"
+            onClick={() => navigate('/farmers-market')}
+            ariaLabel="Next Market Day — open Farmers Market"
           >
             <p className={`text-xs font-medium ${mdDaysColor}`}>{mdDaysLabel}</p>
           </KpiCard>

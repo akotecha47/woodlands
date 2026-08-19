@@ -45,6 +45,16 @@ export async function applyStockDelta(stockItemId, delta, {
   reason = null,
   fromDepartment = null,
   toDepartment = null,
+  // WHICH BALANCE ROW is touched. apply_stock_delta resolves
+  // `coalesce(p_location, stock_items.department)` and matches
+  // `sub_location IS NOT DISTINCT FROM p_sub_location` (migration 060:370).
+  // Left null these keep the pre-existing behaviour exactly — the item's own
+  // catalogue department, no sub-location. Naming the location explicitly is
+  // what lets a caller READ the same row it is about to WRITE (see
+  // allocatableQuantities below); leaving it to the fallback means the read and
+  // the write can disagree once an item is held in more than one place.
+  location = null,
+  subLocation = null,
 } = {}) {
   if (!MOVEMENT_TYPES.includes(movementType)) {
     throw new Error(`applyStockDelta: movementType must be one of ${MOVEMENT_TYPES.join(', ')}`)
@@ -56,9 +66,58 @@ export async function applyStockDelta(stockItemId, delta, {
     p_reason:          reason,
     p_from_department: fromDepartment,
     p_to_department:   toDepartment,
+    p_location:        location,
+    p_sub_location:    subLocation,
   })
   if (error) throw error
   return Number(data)
+}
+
+/**
+ * How much of each item an EVENT can actually draw — the balance
+ * `applyStockDelta` will deduct from, and no other.
+ *
+ * An item does NOT have one department-tier balance. Migration 051 gives it a
+ * main-store row as well, and a sub-location splits the department tier further
+ * still: live, HK-005/006/007 each hold TWO department-tier rows, `Housekeeping`
+ * and `Housekeeping -> Laundry`. Both readers of "how much is available" assumed
+ * one row per item and were wrong in opposite directions (AUDIT_3 C-18): the
+ * event-confirm pre-flight used `.eq('tier','department').maybeSingle()`, which
+ * THROWS "multiple (or no) rows returned" and aborted the whole confirm; the
+ * allocation dropdown built a map keyed by item alone, so whichever row arrived
+ * last silently won and the Laundry balance could be shown as the Housekeeping one.
+ *
+ * The row that matters is the one the deduction lands on: the item's catalogue
+ * department, with NO sub-location. That is what this returns, and event callers
+ * pass the same `location` to applyStockDelta so the two cannot drift.
+ *
+ * `items` is [{ id, department }] (stock_items rows). Returns a
+ * Map<stock_item_id, number>; an item with no such balance row maps to 0 rather
+ * than being absent, because "none in the department" is a real answer.
+ */
+export async function allocatableQuantities(items) {
+  const list = (items ?? []).filter(i => i?.id)
+  const out = new Map(list.map(i => [i.id, 0]))
+  if (list.length === 0) return out
+
+  const { data, error } = await supabase
+    .from('current_stock')
+    .select('stock_item_id, location, quantity')
+    .in('stock_item_id', list.map(i => i.id))
+    .eq('tier', 'department')
+    .is('sub_location', null)
+  if (error) throw error
+
+  // Key on (item, location) so an item held in two departments resolves to the
+  // one its catalogue row names — the same coalesce apply_stock_delta performs.
+  const byItemAndLocation = new Map()
+  for (const r of (data ?? [])) {
+    byItemAndLocation.set(`${r.stock_item_id}|${r.location}`, Number(r.quantity))
+  }
+  for (const item of list) {
+    out.set(item.id, byItemAndLocation.get(`${item.id}|${item.department}`) ?? 0)
+  }
+  return out
 }
 
 /**

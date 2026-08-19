@@ -20,9 +20,24 @@ export function currentTimeStr() {
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 }
 
+// table_bookings.booking_date is `timestamp with time zone` (NOT `date`), so
+// PostgREST returns "2026-07-26T00:00:00+00:00", not "2026-07-26". Everything
+// in this module treats a booking date as a calendar day, so the day part is
+// taken off the front of the string rather than parsed: a full ISO timestamp
+// fed to `new Date(s + 'T12:00:00')` yields Invalid Date, and parsing it as a
+// real instant would let the UTC->Malawi offset move the day. Accepts both
+// shapes so a plain 'YYYY-MM-DD' (what Today and the date inputs hold) still
+// works unchanged.
+export function toDateStr(value) {
+  if (!value) return ''
+  return String(value).slice(0, 10)
+}
+
 export function fmtDate(dateStr) {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr + 'T12:00:00')
+  const day = toDateStr(dateStr)
+  if (!day) return '—'
+  const d = new Date(day + 'T12:00:00')
+  if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 

@@ -12,7 +12,16 @@
 // sharing stock_item_id, movement_type, from_department, to_department and
 // created_at (now() is transaction-constant). Both are true rows; showing them
 // separately would read as two events and as a double count.
-export const PAIRED_TYPES = new Set(['issue', 'transfer'])
+//
+// 'requisition' is here for the same reason: issue_stock writes both legs with
+// the CALLER's p_movement_type, and requisition fulfil (and
+// fulfil_requisition_batch) pass 'requisition' rather than 'issue'. Those pairs
+// are structurally identical to an issue pair — same item, same type, same
+// from/to, same created_at — so they collapse by the same rule. AUDIT_3 C-07,
+// decision D-1(a): the DISPLAY is corrected, the 188 live rows are left exactly
+// as written. Re-typing them to 'issue' would also change what the Requisition
+// type filter shows, and is a data-op, not this.
+export const PAIRED_TYPES = new Set(['issue', 'transfer', 'requisition'])
 
 /**
  * Collapse the ±legs of issue/transfer movements into one line each.

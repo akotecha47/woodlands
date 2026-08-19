@@ -196,5 +196,38 @@ console.log('\n9. From -> To routing')
         routeFor({ movement_type: 'adjustment', from_department: null, to_department: null }) === null)
 }
 
+// -- 8. A requisition-fulfil pair, exactly as issue_stock writes it when the
+//       caller passes p_movement_type = 'requisition' (AUDIT_3 C-07, D-1(a)).
+//       94 such pairs are live; before 'requisition' joined PAIRED_TYPES they
+//       rendered as 188 separate +/- lines.
+console.log('\n8. requisition fulfil pair (Main Store -> Sports Bar, 6 units)')
+{
+  const rows = [
+    { id: 'r1', stock_item_id: 'i9', movement_type: 'requisition', quantity_change: -6,
+      from_department: 'Main Store', to_department: 'Sports Bar', created_at: T },
+    { id: 'r2', stock_item_id: 'i9', movement_type: 'requisition', quantity_change: 6,
+      from_department: 'Main Store', to_department: 'Sports Bar', created_at: T },
+  ]
+  const out = collapsePairs(rows)
+  check('requisition legs collapse to ONE line', out.length === 1, out.length)
+  check('requisition line is a pair', out[0]?.kind === 'pair')
+  check('requisition quantity is the positive magnitude', Number(out[0]?.row.quantity_change) === 6)
+  check('requisition From -> To preserved', out[0]?.row.from_department === 'Main Store' && out[0]?.row.to_department === 'Sports Bar')
+  check('requisition source leg retained', out[0]?.sourceLeg?.id === 'r1')
+}
+
+// The 1 pre-055 single-leg requisition row (95 negative vs 94 positive live):
+// an unmatched leg must still render, not vanish.
+console.log('\n8b. an UNMATCHED requisition leg still renders')
+{
+  const rows = [
+    { id: 'r3', stock_item_id: 'i9', movement_type: 'requisition', quantity_change: -4,
+      from_department: null, to_department: 'Main Bar', created_at: T2 },
+  ]
+  const out = collapsePairs(rows)
+  check('lone requisition leg survives as a single', out.length === 1 && out[0].kind === 'single', out)
+  check('lone requisition quantity untouched', Number(out[0]?.row.quantity_change) === -4)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

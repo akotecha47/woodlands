@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 import { MANAGE_ROLES } from '../../lib/roles'
 import {
-  EVENT_TYPES, VENUES, EVENT_STATUSES,
+  EVENT_TYPES, VENUES,   // EVENT_STATUSES dropped with the Edit modal's Status control (C-10/D-4)
   fmtDate, fmtTime, fmtMWK,
   EventStatusBadge, EmptyRow, todayStr,
   useRevenueReading, RevenueReadingPicker,
@@ -88,8 +88,11 @@ function applySort(events, sortBy) {
 const BLANK_EDIT = {
   name: '', event_type: 'wedding', event_date: '', start_time: '', end_time: '',
   guest_count: '', venue_area: '', organiser_name: '', organiser_contact: '',
-  organiser_email: '', deposit_paid: 'false',
-  status: 'enquiry', special_requirements: '', notes: '',
+  organiser_email: '',
+  // No deposit_paid / status here either -- the Edit modal no longer offers
+  // them, and a default the form cannot reach is just a trap for the next
+  // reader (C-10/C-11, D-4).
+  special_requirements: '', notes: '',
 }
 
 export default function EventsListTab({ onView }) {
@@ -194,8 +197,12 @@ export default function EventsListTab({ onView }) {
       organiser_name:       ev.organiser_name ?? '',
       organiser_contact:    ev.organiser_contact ?? '',
       organiser_email:      ev.organiser_email ?? '',
-      deposit_paid:         ev.deposit_paid ? 'true' : 'false',
-      status:               ev.status,
+      // `status` and `deposit_paid` are deliberately NOT in this form.
+      // AUDIT_3 C-10/C-11, decision D-4: status belongs to the detail view's
+      // changeStatus(), which also deducts/returns stock and generates the BEO;
+      // deposit_paid is maintained by Add Payment and recomputed by
+      // reverse_event_payment() (062). Hand-setting either here bypassed all of
+      // it, so the controls are gone rather than merely discouraged.
       special_requirements: ev.special_requirements ?? '',
       notes:                ev.notes ?? '',
     })
@@ -217,8 +224,7 @@ export default function EventsListTab({ onView }) {
         organiser_name:       editForm.organiser_name || null,
         organiser_contact:    editForm.organiser_contact || null,
         organiser_email:      editForm.organiser_email || null,
-        deposit_paid:         editForm.deposit_paid === 'true',
-        status:               editForm.status,
+        // No `status`, no `deposit_paid` -- see openEdit above (C-10/C-11, D-4).
         special_requirements: editForm.special_requirements || null,
         notes:                editForm.notes || null,
         updated_at:           new Date().toISOString(),
@@ -239,7 +245,18 @@ export default function EventsListTab({ onView }) {
       flash('Event deleted')
       setDeleteId(null)
       load()
-    } catch (err) { flash(err.message, false) }
+    } catch (err) {
+      // C-37 / D-3: the only expected failure is the event_payments foreign key
+      // (NO ACTION), which arrives as a raw Postgres constraint string. Say what
+      // it means; anything else still surfaces verbatim rather than being hidden.
+      const fkBlocked = err?.code === '23503' || /foreign key|violates/i.test(err?.message ?? '')
+      flash(
+        fkBlocked
+          ? 'This event has payments recorded against it and cannot be deleted — the money history has to survive. Cancel the event from its own page instead.'
+          : err.message,
+        false,
+      )
+    }
     finally { setDelBusy(false) }
   }
 
@@ -459,19 +476,15 @@ export default function EventsListTab({ onView }) {
                     onChange={e => setEditForm(f => ({ ...f, organiser_email: e.target.value }))} />
                 </Field>
               </div>
-              <Field label="Deposit Paid">
-                <Sel value={editForm.deposit_paid}
-                  onChange={e => setEditForm(f => ({ ...f, deposit_paid: e.target.value }))}>
-                  <option value="false">No</option>
-                  <option value="true">Yes</option>
-                </Sel>
-              </Field>
-              <Field label="Status">
-                <Sel value={editForm.status}
-                  onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
-                  {EVENT_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </Sel>
-              </Field>
+              {/* Status and Deposit Paid used to be edited here. Removed:
+                  C-10/C-11, decision D-4. Status is changed from the event's
+                  detail view (which deducts or returns stock and builds the
+                  BEO); the deposit follows the payment ledger. */}
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                Status is changed from the event's own page, so stock and the run
+                sheet stay in step. The deposit follows the payments recorded
+                against the event.
+              </p>
               <Field label="Special Requirements">
                 <textarea rows={2} className={`${fieldCls} resize-none`} value={editForm.special_requirements}
                   onChange={e => setEditForm(f => ({ ...f, special_requirements: e.target.value }))} />
@@ -501,7 +514,14 @@ export default function EventsListTab({ onView }) {
           <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
             <h3 className="text-base font-semibold text-gray-900 mb-2">Delete Event?</h3>
             <p className="text-sm text-gray-500 mb-5">
-              This permanently deletes the event along with all checklists, payments, and bill items.
+              {/* C-37 / D-3: event_payments.event_id is ON DELETE NO ACTION, so
+                  the database refuses this outright once money is recorded.
+                  That block is deliberate -- payment history must survive -- so
+                  the text says so instead of promising the payments away. */}
+              This permanently deletes the event along with its checklists, stock
+              allocations and bill items. An event that already has payments
+              recorded against it cannot be deleted, so the money history is
+              never lost — cancel it from its own page instead.
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setDeleteId(null)}

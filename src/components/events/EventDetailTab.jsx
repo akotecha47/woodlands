@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { applyStockDelta } from '../../lib/stock'
+import { applyStockDelta, allocatableQuantities } from '../../lib/stock'
 import { useAuth } from '../../contexts/AuthContext'
 import { Toast, useFlash } from '../admin/AdminUI'
 import { MANAGE_ROLES } from '../../lib/roles'
@@ -73,23 +73,24 @@ export default function EventDetailTab({ eventId, onBack }) {
   async function assertStockAvailableForConfirm() {
     const { data: pending, error } = await supabase
       .from('event_stock_allocations')
-      .select('id, stock_item_id, allocated_qty, stock_items(name, unit)')
+      .select('id, stock_item_id, allocated_qty, stock_items(name, unit, department)')
       .eq('event_id', eventId)
       .eq('status', 'pending')
     if (error) throw error
 
+    // One batched, location-aware read of the exact balance rows the confirm
+    // loop below will deduct from. This replaced a per-allocation
+    // `.eq('tier','department').maybeSingle()`, which THREW for any item holding
+    // two department-tier rows — HK-005/006/007 are live examples (Housekeeping
+    // and Housekeeping -> Laundry), so allocating one of them made Confirm fail
+    // with a raw PostgREST "multiple (or no) rows returned". AUDIT_3 C-18.
+    const availableByItem = await allocatableQuantities(
+      (pending ?? []).map(a => ({ id: a.stock_item_id, department: a.stock_items?.department ?? null }))
+    )
+
     const shortfalls = []
     for (const alloc of (pending ?? [])) {
-      // tier='department' is load-bearing, not a filter for tidiness: after
-      // migration 051 an item has a main-store balance as well, and
-      // maybeSingle() throws on more than one row — this pre-flight would fail
-      // for every allocation.
-      const { data: cs, error: csErr } = await supabase
-        .from('current_stock').select('quantity')
-        .eq('stock_item_id', alloc.stock_item_id)
-        .eq('tier', 'department').maybeSingle()
-      if (csErr) throw csErr
-      const available = Number(cs?.quantity ?? 0)
+      const available = Number(availableByItem.get(alloc.stock_item_id) ?? 0)
       const required  = Number(alloc.allocated_qty)
       if (available < required) {
         const name = alloc.stock_items?.name ?? 'Unknown item'
@@ -116,14 +117,14 @@ export default function EventDetailTab({ eventId, onBack }) {
         .eq('event_id', eventId)
         .eq('status', 'pending')
       if (pendingErr) throw pendingErr
+      // Same location-aware read as the pre-flight (C-18) — and the same rows
+      // the applyStockDelta calls below name explicitly, so the number checked
+      // and the number deducted come from one balance row, not two.
+      const availableByItem = await allocatableQuantities(
+        (pending ?? []).map(a => ({ id: a.stock_item_id, department: a.stock_items?.department ?? null }))
+      )
       for (const alloc of (pending ?? [])) {
-        // Department tier only — same reason as the pre-flight above.
-        const { data: cs, error: readErr } = await supabase
-          .from('current_stock').select('quantity')
-          .eq('stock_item_id', alloc.stock_item_id)
-          .eq('tier', 'department').maybeSingle()
-        if (readErr) throw readErr
-        const available = Number(cs?.quantity ?? 0)
+        const available = Number(availableByItem.get(alloc.stock_item_id) ?? 0)
         const required  = Number(alloc.allocated_qty)
         // Fail closed. This previously clamped with Math.max(0, available -
         // required) and carried on, marking the allocation 'deducted' while
@@ -145,6 +146,10 @@ export default function EventDetailTab({ eventId, onBack }) {
           movementType:   'event_allocation',
           reason:         `Event stock allocated (event ${eventId})`,
           fromDepartment: alloc.stock_items?.department ?? null,
+          // Names the balance row rather than leaving it to the server's
+          // coalesce fallback — identical target, but now the read above and
+          // this write provably agree on which row (C-18).
+          location:       alloc.stock_items?.department ?? null,
         })
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')
@@ -176,6 +181,8 @@ export default function EventDetailTab({ eventId, onBack }) {
           movementType: 'event_return',
           reason:       `Event cancelled, stock returned (event ${eventId})`,
           toDepartment: alloc.stock_items?.department ?? null,
+          // Return to the SAME row the confirm deducted from (C-18).
+          location:     alloc.stock_items?.department ?? null,
         })
         const { error: allocErr } = await supabase
           .from('event_stock_allocations')

@@ -3,18 +3,30 @@ import { supabase } from '../../lib/supabase'
 import { UNITS } from '../../lib/constants'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from './AdminUI'
 
+// Keyed on the canonical 11-value department vocabulary (data-ops/003), NOT
+// the pre-003 names. It previously keyed 'Restaurant Bar' and 'Grounds', which
+// no longer exist in `departments` -- so Main Bar, Grounds & Landscape, Front
+// Office, Administration, Maintenance and Transport all fell through to 'GEN'
+// and generated colliding GEN-nnn SKUs. AUDIT_3 C-12.2.
 const DEPT_CODES = {
-  'Kitchen':         'KIT',
-  'Restaurant Bar':  'RBA',
-  'Sports Bar':      'SBA',
-  'Restaurant':      'RST',
-  'Housekeeping':    'HSK',
-  'Grounds':         'GRD',
-  'Security':        'SEC',
+  'Administration':      'ADM',
+  'Front Office':        'FRO',
+  'Grounds & Landscape': 'GRD',
+  'Housekeeping':        'HSK',
+  'Kitchen':             'KIT',
+  'Main Bar':            'MBA',
+  'Maintenance':         'MNT',
+  'Restaurant':          'RST',
+  'Security':            'SEC',
+  'Sports Bar':          'SBA',
+  'Transport':           'TRP',
 }
 
 function deptCode(dept) { return DEPT_CODES[dept] ?? 'GEN' }
 
+// Cosmetic default only -- the user can change the unit before saving.
+// AUDIT_3 C-12.3: the 'bar' substring test already catches Main Bar and Sports
+// Bar under either vocabulary; the named cases are spelled canonically.
 function defaultUnit(dept) {
   if (!dept) return 'units'
   if (dept === 'Kitchen' || dept === 'Restaurant') return 'kg'

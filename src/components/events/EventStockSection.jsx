@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Lock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { applyStockDelta } from '../../lib/stock'
+import { applyStockDelta, allocatableQuantities } from '../../lib/stock'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
 
@@ -43,22 +43,24 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
   }
 
   async function loadStockItems() {
-    const [itemsR, stockR] = await Promise.all([
-      supabase
-        .from('stock_items')
-        .select('id, name, sku, unit, department')
-        .eq('is_active', true)
-        .order('department').order('name'),
-      // Department tier only — see migration 051. Events draw from department
-      // stock, and this map is keyed by item, so it must stay one row per item.
-      supabase
-        .from('current_stock')
-        .select('stock_item_id, quantity')
-        .eq('tier', 'department'),
-    ])
-    const qtyMap = {}
-    for (const row of (stockR.data ?? [])) qtyMap[row.stock_item_id] = row.quantity
-    setStockItems((itemsR.data ?? []).map(item => ({ ...item, quantity: qtyMap[item.id] ?? 0 })))
+    const { data: items, error } = await supabase
+      .from('stock_items')
+      .select('id, name, sku, unit, department')
+      .eq('is_active', true)
+      .order('department').order('name')
+    if (error) { flash(error.message, false); return }
+
+    // This used to build a map keyed by stock_item_id alone from every
+    // tier='department' row. An item can hold MORE THAN ONE department-tier row
+    // (a sub-location splits it; HK-005/006/007 are live examples: Housekeeping
+    // and Housekeeping -> Laundry), so whichever row happened to arrive last
+    // silently overwrote the other — the dropdown could show the Laundry
+    // balance as if it were the allocatable one. allocatableQuantities returns
+    // the single row an allocation actually deducts from. AUDIT_3 C-18.
+    try {
+      const qty = await allocatableQuantities(items ?? [])
+      setStockItems((items ?? []).map(item => ({ ...item, quantity: qty.get(item.id) ?? 0 })))
+    } catch (err) { flash(err.message, false) }
   }
 
   useEffect(() => {
@@ -112,6 +114,8 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
             movementType:   'event_allocation',
             reason:         `Event stock allocated (event ${eventId})`,
             fromDepartment: selectedItem?.department ?? null,
+            // The row the dropdown's quantity was read from (C-18).
+            location:       selectedItem?.department ?? null,
           })
         } catch (deductErr) {
           await supabase.from('event_stock_allocations').delete().eq('id', newAlloc.id)
@@ -181,6 +185,8 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
             movementType: 'event_return',
             reason:       `Event clearance, unused stock returned (event ${eventId})`,
             toDepartment: a.stock_items?.department ?? null,
+            // Back to the row it was deducted from (C-18).
+            location:     a.stock_items?.department ?? null,
           })
         }
         // Mark cleared. returned_qty is persisted so the audit trail matches

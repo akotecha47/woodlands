@@ -89,7 +89,7 @@ export default function UsersTab() {
   return (
     <div className="p-6 space-y-4">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800">System Users (4)</h2>
+      <h2 className="text-base font-semibold text-gray-800">System Users ({users.length})</h2>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>

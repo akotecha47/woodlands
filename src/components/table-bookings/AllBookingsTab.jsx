@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Th, Td, Toast, useFlash, Field, Inp, Sel, fieldCls } from '../admin/AdminUI'
 import { TB_MANAGE_ROLES } from '../../lib/roles'
-import { BOOKING_STATUSES, STATUS_CFG, fmtDate, fmtTime, StatusBadge } from './TableBookingsUI'
+import { BOOKING_STATUSES, STATUS_CFG, fmtDate, fmtTime, toDateStr, StatusBadge } from './TableBookingsUI'
 
 export default function AllBookingsTab() {
   const { profile, session } = useAuth()
@@ -52,9 +52,13 @@ export default function AllBookingsTab() {
       const q = search.toLowerCase()
       if (!b.guest_name.toLowerCase().includes(q) && !(b.guest_phone ?? '').toLowerCase().includes(q)) return false
     }
-    if (filterStatus && b.status !== filterStatus)  return false
-    if (filterFrom   && b.booking_date < filterFrom) return false
-    if (filterTo     && b.booking_date > filterTo)   return false
+    if (filterStatus && b.status !== filterStatus) return false
+    // booking_date is a timestamptz string; compare on the day part only, or a
+    // To-filter set to a booking's own day excludes it (the 'T00:00:00+00:00'
+    // tail sorts after the bare date).
+    const day = toDateStr(b.booking_date)
+    if (filterFrom && day < filterFrom) return false
+    if (filterTo   && day > filterTo)   return false
     return true
   })
 
@@ -63,7 +67,7 @@ export default function AllBookingsTab() {
       guest_name:       booking.guest_name,
       guest_phone:      booking.guest_phone,
       party_size:       String(booking.party_size),
-      booking_date:     booking.booking_date,
+      booking_date:     toDateStr(booking.booking_date),
       booking_time:     fmtTime(booking.booking_time),
       table_id:         booking.table_id ?? '',
       special_requests: booking.special_requests ?? '',

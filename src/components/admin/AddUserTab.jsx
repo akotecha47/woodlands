@@ -72,7 +72,11 @@ export default function AddUserTab() {
       )
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Failed to create user')
-      setSuccess({ email: form.email, password: form.password, role: form.role })
+      // The password is deliberately NOT carried into this object. It was
+      // echoed back on screen in plaintext after creation, which is the one
+      // place it appears outside the (masked) input the owner just typed into.
+      // Open since AUDIT_1; C-47#3.
+      setSuccess({ email: form.email, role: form.role })
       setForm(BLANK)
       setShiftOptions([])
     } catch (err) {
@@ -96,12 +100,10 @@ export default function AddUserTab() {
           <p className="text-sm text-green-700">
             Email: <span className="font-mono bg-green-100 px-1.5 py-0.5 rounded">{success.email}</span>
           </p>
-          <p className="text-sm text-green-700">
-            Password: <span className="font-mono bg-green-100 px-1.5 py-0.5 rounded">{success.password}</span>
-          </p>
           <p className="text-sm text-green-700">Role: {ROLE_LABELS[success.role] ?? success.role}</p>
           <p className="text-xs text-green-600 mt-2">
-            Share these credentials securely. The user can change their password after first login.
+            The account is ready. Give the temporary password to {success.email} yourself —
+            it is not shown again here. They can change it after their first login.
           </p>
         </div>
       )}
@@ -124,7 +126,10 @@ export default function AddUserTab() {
             placeholder="user@woodlandslodge.mw" />
         </Field>
         <Field label="Temporary Password *">
-          <Inp required minLength={6} value={form.password}
+          {/* type="password": this was type="text", so the password sat legible
+              on screen while the owner filled the rest of the form. C-47#3. */}
+          <Inp required type="password" minLength={6} value={form.password}
+            autoComplete="new-password"
             onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
             placeholder="Min 6 characters" />
         </Field>

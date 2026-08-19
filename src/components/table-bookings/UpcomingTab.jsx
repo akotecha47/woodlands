@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
 import { TB_MANAGE_ROLES } from '../../lib/roles'
-import { fmtDate, fmtTime, todayStr, StatusBadge } from './TableBookingsUI'
+import { fmtDate, fmtTime, toDateStr, todayStr, StatusBadge } from './TableBookingsUI'
 
 function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T12:00:00')
@@ -66,7 +66,7 @@ export default function UpcomingTab() {
       guest_name:       booking.guest_name,
       guest_phone:      booking.guest_phone,
       party_size:       String(booking.party_size),
-      booking_date:     booking.booking_date,
+      booking_date:     toDateStr(booking.booking_date),
       booking_time:     fmtTime(booking.booking_time),
       table_id:         booking.table_id ?? '',
       special_requests: booking.special_requests ?? '',

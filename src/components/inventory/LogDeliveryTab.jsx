@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
 import { todayStr, itemLabel, AccessDenied, fetchActiveItems, fetchStaffUsers } from './InventoryUI'
 import { applyStockDelta } from '../../lib/stock'
+import { MAIN_STORE } from '../../lib/constants'
 import { MANAGE_ROLES } from '../../lib/roles'
 
 // 'store_supervisor' removed — deleted from roles.js in June, so no user could
@@ -46,6 +47,13 @@ export default function LogDeliveryTab() {
       await applyStockDelta(form.stock_item_id, Number(form.quantity), {
         movementType: 'delivery',
         reason:       noteValue,
+        // FUNCTIONAL_SPEC section 2.1: the main store is the single inbound
+        // point -- everything arrives there and is issued out to departments
+        // afterwards. With no location named, apply_stock_delta falls back to
+        // the item's own catalogue department, so a delivery landed straight on
+        // the department balance and the store never showed the stock it had
+        // just taken in. AUDIT_3 C-40, decision D-6.
+        location:     MAIN_STORE,
       })
       flash('Delivery logged')
       setForm({ stock_item_id: '', quantity: '', supplier: '', date: todayStr(), notes: '', received_by_id: '' })
