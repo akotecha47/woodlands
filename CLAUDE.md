@@ -11,7 +11,9 @@
 Every session obeys **STREAMLINE_BUILD_STANDARD.md v1.5** (in repo root). Read it before making any technical decision.
 
 ## The current goal
-The build is in **Phase 2**: turning the hardened six-module system into the full system Dhiren asked for at the 27 July feedback meeting. The target is a **fully functioning app on placeholder data by the week of 11 August** — every screen works and is populated. Real data (bar stocktake, department stock lists, staff reconciliation, menus, real stallholder details) is **out of scope** until Dhiren verifies the modules work.
+The build is in **Phase 2**: turning the hardened six-module system into the full system Dhiren asked for at the 27 July feedback meeting. The old target — a fully functioning app on placeholder data by the week of 11 August — **was met; every Phase 2 build feature exists.**
+
+**The live target is the full-system walkthrough with Dhiren, Mon 31 Aug / Tue 1 Sep 2026**, with a feedback call on 28 August. The work between here and there is **remediation and curation, not construction** — tracked block by block in `WOODLANDS_FIX_PLAN.md`. Real data (bar stocktake, department stock lists, staff reconciliation, menus, real stallholder details) stays **out of scope** until Dhiren verifies the modules work.
 
 Read these three, in this order, to know what to build:
 1. **WOODLANDS_STATE.md** — current state, what's live, what's blocking, what's next. Source of truth at the start of any session.
@@ -39,7 +41,7 @@ Both are **dated read-only snapshots**, kept side-by-side as the diff record and
 ## Modules
 **Six built and hardened:** Inventory, Attendance, Events, Table Bookings, Farmers Market, Admin.
 
-**Phase 2 additions (see FUNCTIONAL_SPEC):** two-tier inventory (main store → per-department sub-stores), bar par levels + end-of-day refill cycle, consumption attribution (what/where/who + rooms + 1-year laundry), expanded role model, QR staff attendance, Farmers Market 3-month attendance history + waiting-list forfeiture + 3-level product taxonomy + fee schedule, and two Events UX fixes (payments editable, revenue display).
+**Phase 2 additions (see FUNCTIONAL_SPEC):** two-tier inventory (main store → per-department sub-stores), bar par levels + end-of-day refill cycle, consumption attribution (what/where/who + rooms + 1-year laundry), expanded role model, ~~QR staff attendance~~ (**dropped — see Standing rules**), Farmers Market 3-month attendance history + waiting-list forfeiture + 3-level product taxonomy + fee schedule, and two Events UX fixes (payments editable, revenue display).
 
 ## Roles
 **Current (authoritative in `src/lib/roles.js`):** `owner`, `manager`, `kitchen_manager`, `restaurant_manager`.
@@ -53,7 +55,12 @@ The `staff` table (62 rows) is disjoint from login roles — the roster the mana
 - **Stock deduction triggers:**
   - Requisitions deduct on **Fulfil** (a distinct step *after* Approve). Not on Approve, not on submission.
   - Event allocations deduct on **Confirm**.
-- **QR staff check-in supersedes "manual clock in/out only."** QR is not biometrics, so no biometrics rule is broken — but attendance is no longer manual-only. Still no biometrics this phase.
+- **Automated attendance capture is PARKED. QR is not being built.** QR staff check-in was explored and dropped — the design arc and the reasons are in `WOODLANDS_HISTORY.md` (19 August); do not restate or relitigate them here.
+  - The lodge **already owns an FA03H face/fingerprint attendance device.**
+  - **The recommendation Streamline puts to Dhiren from 28 August:** do **not** build attendance capture into this system. Invest in a proper networked fingerprint unit with its own PC software, run by a manager.
+  - Whether to instead import the FA03H's USB export is **still open and will be asked at that meeting** — but the leaning is to recommend the dedicated device and keep this system out of biometric capture entirely.
+  - **PARKED means parked, not deleted.** The built Attendance module (Today / History / Settings) and manual clock-in **stay in the codebase**. Manual marking by front desk / ops is the working fallback. **Do not delete the attendance module or its screens.** Whether anything is hidden for the walkthrough is a presentation decision, decided separately — never a code deletion.
+- **No biometrics in this system.** It performs **no biometric capture, storage, or matching of its own.** If attendance data is ever taken in, what enters is the **already-matched result** from a device the client owns and operates — a staff identifier and a timestamp. **No template, image, or comparison enters this codebase.** This restates the rule for the FA03H path; the older QR-era reasoning ("QR is not biometrics") no longer applies and must not be inherited.
 - **Placeholder data is fine, blank screens are not.** Every new table ships with placeholder seed as part of its build step.
 - **Do not re-read all files on session start** — read STATE, then only the files the session needs.
 - **Verify against live, don't trust the doc, for anything marked [VERIFY]** in FUNCTIONAL_SPEC (movement_type CHECK, GPS clock-in, stall regex, Add-User role branching).
