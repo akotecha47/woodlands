@@ -123,6 +123,35 @@ Blocker 4c was killed and proved on the same scenario before and after: issue Ma
 
 ---
 
+**18 August 2026 — two audits, run in parallel, deliberately.** Aman ran a role-by-role **browser pass** over the live app while Claude Code ran `WOODLANDS_AUDIT_3.md`, a read-only **code audit** — every file under `src/` (all 69), both Edge Functions, targeted migrations, plus a measured read-only dump of production through `scripts/apply-sql.ps1 -ReadOnly`. Two ID series: `U-nn` for the browser findings, `C-nn` for the code ones. The split was the point, and AUDIT_3 §8 says so in its own words: *"behaviour as each role in a browser"* is listed as **not audited**, because the browser pass was the runtime half. Neither half is complete alone — the code audit found 48 findings including things no amount of clicking would reveal (a `maybeSingle()` that throws only for items holding two department-tier rows; a pair-collapse rule that had never had live data to exercise), while the browser pass found things no amount of reading would (`Invalid Date` on every All Bookings row; a department head being offered a tab that then refuses them). The two lists were merged into one queue.
+
+**19 August 2026 — attendance: QR is dead, and the reason is that the client already owns the machine.** The design went through four positions in one conversation, and the arc is worth keeping because the ending invalidates the beginning:
+
+1. **QR code per staff member** — the 27 July meeting proposal, specified in FUNCTIONAL_SPEC §4, reusing the Farmers Market `public-checkin` pattern.
+2. **Card-and-scanner** — the design correction raised at the time: staff hold the card, *the lodge holds the scanner*, at a fixed on-premises point. A wall of QR codes scanned by staff phones fails twice over — not every staff member has a smartphone, and anyone can scan anyone's code off a wall.
+3. **PIN** — considered as the no-hardware fallback, and rejected on the same ground that kills shared cards: a PIN is trivially given to a colleague, which defeats the entire stated requirement.
+4. **The FA03H.** Dhiren **already owns a face-and-fingerprint machine.** Building a parallel capture mechanism next to a device already installed, already on site, and already used by staff would have produced a worse system than reading the one he has.
+
+**Recommendation put to him: export/import, or invest.** Either the FA03H's records come off the device (USB or a vendor export) and we import them into `attendance_records` on a schedule, reconciling against the roster — no new hardware, no new spend — or it cannot export, and he invests in a networked unit with PC software we can read from. **He has to establish which; that is a question for the device or its supplier, not for us.** Pending the 28 August call. The whole module is frozen until it is answered.
+
+**The requirement never changed, and separating it from the technology is the lesson.** Dhiren's own framing — *no login from home; catch lateness and no-shows; the owner should not have to sit and check* — is what QR, cards, PINs and the FA03H were all candidate answers to. Three months of design work sat on a solution nobody had checked against the hardware already in the building.
+
+**Doctrine note, revised and not glossed.** The standing `CLAUDE.md` rule reads *"no biometrics this phase — manual clock in/out only."* The QR decision superseded the manual-only half on the reasoning that QR is not biometrics. **That reasoning does not carry to the FA03H path**, because the export path reads data off a face-and-fingerprint device. The honest position: **the system would not perform biometric matching — it would import the result of matching already performed on a device the client owns and operates.** No template, image or comparison would enter this codebase; only a staff identifier and a timestamp. That is defensible, but it is a *different* claim from the QR one, and it goes to Dhiren in those words rather than sitting implicit in a doc.
+
+**19 August 2026 — Block 1 (correctness) landed** (`5d340b2`). The merged audit queue was split into three blocks — **Block 1 correctness · Block 2 look · Block 3 fee wiring**, then demo curation — and the first shipped: 17 findings, frontend plus exactly one data-op, **no DDL**, so the owed `062` rebuild proof was never triggered and still gates any `063`.
+
+The corrections worth naming: the Movement Ledger had been rendering **every requisition fulfil twice** (94 live pairs, 188 of ~194 routed rows — the collapse rule had never had live data to exercise, so the defect shipped invisible); the Events List Edit modal was writing `status` and `deposit_paid` **directly**, bypassing the stock pipeline and 062's deposit machinery entirely, so confirming via Edit deducted nothing and cancelling returned nothing; Delete Event promised to delete payments and then threw a raw foreign-key string, because `event_payments.event_id` is `ON DELETE NO ACTION` by design; and event confirm **threw outright** for any item holding two department-tier balances, which HK-005/006/007 do.
+
+**`scripts/data-ops/009_shift_settings_retag.sql`** finished a job `data-ops/003` left half-done on 12 August: 003 re-tagged `departments`, `staff` and `stock_items` to the canonical vocabulary and **missed `shift_settings`**, so staff in the affected departments matched no shift at all — Shift `—`, no late calculation, no coverage alert. AUDIT_3 named two stale values; **printing all twelve rows live found three** (`Grounds` → `Grounds & Landscape` was the third, stranding five further staff for identical reasons), and all three were re-tagged rather than leaving the bug half-live.
+
+**Lesson (⚑ DOCTRINE FLAG for Workspace) — run the code audit BEFORE the fix pass, not alongside it.** This session fixed 17 findings and *then* wrote the plan that tracks them (`WOODLANDS_FIX_PLAN.md`, created after the work landed). It came out right, but only because the fix session was handed decisions D-1 through D-7 pre-made and a per-finding brief. That is the audit doing the plan's job informally. The failure mode it courts is real and was visibly close: **the Grounds re-tag was a scope deviation decided mid-execution** — correct, but decided by the executor because there was no plan document to amend and no reviewer between finding and fix. Writing the tracker first costs an hour and buys the thing the Standard's own sequencing exists for: **a decision recorded before the code moves, not reconstructed after it.** The audit → merged plan → block execution order should be the doctrine, with the plan doc as a required artefact between audit and fix.
+
+**Lesson — a `[DONE]` marker that means "the code compiles" is a lie to the reader.** FUNCTIONAL_SPEC §4 carried Clock In/Out as `[DONE]` while **nothing in the app imports the component**. The marker was defensible as a claim about the code and false as a claim about the running system — and "how does a staff member clock in?" is precisely the question a client asks. Fixed by adding a `[NOT WIRED]` marker to the spec's legend and re-marking. **The test for `[DONE]` is "can a person reach it in a browser", never "does the file exist."** Worth noting the spec got this *right* elsewhere in the same document: §7's fee schedule is marked **PARTIAL** precisely because the table is wired and no charging surface reads it. The honest marker already existed; it just wasn't applied consistently.
+
+**Also logged (positive) — the read-before-write discipline paid twice in one session.** STEP 0 diagnosis before any fix caught two things that would otherwise have shipped wrong: the C-27 attendance join turned out to need `staff.full_name` via `staff_id` (there is no `staff.name`, and `user_id` is NULL on 15/15 live rows), and the U-11 login fix was verified safe only *after* confirming there is no `username` column and all 8 auth rows share the domain. The shift re-tag was dry-run inside a rolled-back transaction, the baseline re-queried and confirmed before applying for real, and C-18's fix was proven against the actual HK-006 rows — old read returns 2 rows, new read returns 1, byte-identical to the row `apply_stock_delta` targets.
+
+---
+
 ## EXEC DECISIONS
 
 - **Free build at inception (implicit but decided).** Aman will not charge Dhiren. Non-negotiable.
@@ -181,6 +210,17 @@ Blocker 4c was killed and proved on the same scenario before and after: issue Ma
 ---
 
 ## LOOKING AHEAD (not commitments, orientation only)
+
+**⚠ The list below was written pre-11-August and is now historical — the dates in it have passed and AUDIT_3 ran on 18 August, ahead of real data rather than after it. Current forward plan:**
+
+- **19–27 August** — Block 2 (look) and Block 3 (fee wiring) from `WOODLANDS_FIX_PLAN.md`, then demo curation and walkthrough rehearsal.
+- **Fri 28 August — feedback call.** Dhiren owes **decisions, not data**: which revenue reading, and the FA03H export-or-invest answer. Full ask list in `WOODLANDS_CLIENT_INPUTS.md`.
+- **Mon 31 Aug / Tue 1 Sep — full-system walkthrough.** The deadline everything is judged against.
+- **Then:** real-data load (joint session with Rose + Martin), an audit against real data, `062`'s owed rebuild proof before any `063`, and Sprint F handover mechanics.
+- **Attendance is frozen** until the FA03H answer lands. QR is superseded and will not be built.
+
+*Historical, kept as written:*
+
 
 - **27 July — Feedback meeting held.** Went well. Produced a second phase of scope, captured in `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md`. Forward planning of that phase is the next working session; the items below predate the meeting and remain broadly valid, but the 8–10 August window now also carries the feedback scope, sequenced behind migration reconciliation.
 - **28 July → 6 August — Aman travelling.** No dev work. Meeting notes marinate.

@@ -2,7 +2,7 @@
 
 *Current state, live commitments, next action. Updated at the end of every session that changed state.*
 
-**Last updated: 18 August 2026**
+**Last updated: 19 August 2026**
 **Governing doctrine:** STREAMLINE_BUILD_STANDARD.md v1.5, STREAMLINE_MATERIALS.md v2.4, STREAMLINE_SESSION.md v2.0.
 
 ---
@@ -17,17 +17,69 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 - **Staff:** 62 in `staff` table
 - **Modules built (6):** Inventory, Attendance, Events, Table Bookings, Farmers Market, Admin
 - **Roles (4):** `owner`, `admin`, `department_head`, `hr`
-- **System users:** 4
+- **System users:** 8 (measured 18 August — 5 department heads, hr, admin, owner; all active)
 
 ---
 
 ## THE GOAL — PHASE 2, FUNCTIONAL-COMPLETE ON PLACEHOLDER DATA
 
-**Target: a fully functioning app on placeholder data by the week of 11 August (deadline 15th).** Every screen works and is populated. Once Dhiren verifies the modules work to his satisfaction, real data goes in — not before.
+**✅ MET — every Phase 2 build feature exists** (last one `062`, 18 August). The original target was *a fully functioning app on placeholder data by the week of 11 August (deadline 15th)*, and it landed. Every screen works and is populated.
+
+**The live target is now the walkthrough: Mon 31 Aug / Tue 1 Sep 2026**, with a feedback call on **28 August**. The work between here and there is **remediation and curation, not construction** — see "WHERE THE BUILD IS" below and `WOODLANDS_FIX_PLAN.md`.
+
+Once Dhiren verifies the modules work to his satisfaction, real data goes in — not before.
 
 **The end-goal system is specified in `WOODLANDS_FUNCTIONAL_SPEC.md`.** Scope source is `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md`. Read the spec for what "finished" looks like module by module.
 
 **Client framing decision (Dhiren, 27 July):** prove the modules work before perfecting the data. Existing real data (305 stallholders, 62 staff, 559 stock items) stays as the test bed; the missing-data chase (bar stocktake, department stock lists, staff reconciliation, menus, 12 missing phone numbers) is off the critical path for this week.
+
+---
+
+## WHERE THE BUILD IS — 19 AUGUST 2026
+
+**Every Phase 2 build feature exists. The work now is remediation, not construction.**
+
+Two audits ran in parallel ahead of the walkthrough: Aman's role-by-role **browser pass** (`U-nn`) and `WOODLANDS_AUDIT_3.md`, a read-only **code audit** (`C-nn`). They were merged into one queue in **`WOODLANDS_FIX_PLAN.md`** — that is the tracker, and the detail lives there. It is not duplicated here.
+
+**Three blocks, then demo curation:**
+
+1. **Block 1 — Correctness.** ✅ **DONE, committed `5d340b2`, 19 August.**
+2. **Block 2 — Look.** Internal project narrative in client-facing UI, decorative controls, display halves left behind by their data layer. Planned.
+3. **Block 3 — Fee wiring.** `fm_fee_schedule` is read by no charging surface (C-08 / D-5). Planned; the decision is still open.
+
+**What Block 1 shipped, at a summary level** — per-fix file:line and live proof in `WOODLANDS_FIX_PLAN.md`:
+
+- Admin → Users header reads the **live** count (8, was a literal `4`).
+- Movement Ledger collapses requisition fulfil pairs — **94 double-rendered movements**, display-only fix, no data touched.
+- **`scripts/data-ops/009_shift_settings_retag.sql`** — the shift re-tag. See below.
+- Events List Edit modal no longer writes `status` or `deposit_paid`; Delete Event tells the truth about payments instead of throwing a raw FK string.
+- Event confirm no longer throws for items holding two department-tier balances (HK-005/006/007).
+- Dashboard: the unpaid-deposit card can actually fire and names the event; unverified-attendance cards name the real person instead of "Unknown staff"; the four stat cards navigate.
+- Deliveries land on **Main Store**, per FUNCTIONAL_SPEC §2.1, not the department tier.
+- A `department_head` is no longer offered Inventory tabs they will be refused.
+- Table Bookings → All Bookings shows real dates (`booking_date` is `timestamptz`, not `date` — see the trap in FOLLOWUPS).
+- Login accepts a bare username; the new-user temporary password is masked and no longer echoed on screen.
+
+**Verification:** `vite build` clean · `ledger.test.mjs` 38/38 · `revenue.test.mjs` 68/68 · real data unchanged throughout (62 staff / 311 stallholders / 15 attendance).
+
+**`scripts/data-ops/009_shift_settings_retag.sql` — applied 19 August.** data-ops/003 re-tagged `departments`, `staff` and `stock_items` on 12 August and **missed `shift_settings`**, so staff in the affected departments matched no shift at all. Three stale values found live and re-tagged: `Restaurant Bar` → `Main Bar`, `Front Desk` → `Front Office`, `Grounds` → `Grounds & Landscape`. Dry-run first inside a rolled-back transaction, baseline re-confirmed, then applied. 12 rows, 0 stale, 0 mojibake. **8 staff still show `—`** (Administration 3, Maintenance 3, Transport 2) because those departments have **no `shift_settings` row at all** — a data gap needing Rose's real times, logged in `WOODLANDS_CLIENT_INPUTS.md`.
+
+---
+
+## ATTENDANCE — THE PLAN CHANGED. QR IS NO LONGER IT.
+
+**QR staff attendance is superseded.** It was the plan out of the 27 July meeting and is still written that way in `WOODLANDS_FUNCTIONAL_SPEC.md` §4 (now re-marked). It is not what gets built.
+
+**The pivot:** Dhiren already owns an **FA03H face-and-fingerprint machine**. The open question is now a **procurement decision, not a build decision**:
+
+- **(a)** the FA03H's records can be exported (USB or a vendor export) → we import them into `attendance_records` and reconcile against the roster. No new hardware, no new spend.
+- **(b)** they cannot → he invests in a networked unit with PC software that we can read from.
+
+**He has to find out which.** That is a question for the device or its supplier; we cannot answer it from here. **Pending the 28 August call.** Design arc in `WOODLANDS_HISTORY.md` (19 August); the ask, and what it blocks, in `WOODLANDS_CLIENT_INPUTS.md`.
+
+**Consequence to be honest about at the walkthrough:** there is **no staff clock-in surface in the app today.** `ClockInOutTab` — the only self-service clock-in and the only GPS code in the codebase — is built and **mounted nowhere**. All 15 live attendance rows are manager-written. Whether that component is wired, rewritten or deleted depends entirely on the answer above.
+
+**Doctrine note, updated:** the standing rule in `CLAUDE.md` reads that QR supersedes "manual clock in/out only". That is now itself superseded and the no-biometrics position needs restating rather than assumed — **path (a) reads data off a face/fingerprint device**, which is a materially different claim from "QR is not biometrics, so no rule is broken." **The system would not perform biometric matching; it would import the result of matching done on a device the client already owns and already uses.** Worth stating to Dhiren in those words rather than leaving it implicit.
 
 ---
 
@@ -96,15 +148,17 @@ Full detail — all four runs, every divergence found and fixed, and the residua
 ## VERIFY-AGAINST-LIVE (don't trust the docs)
 
 - **~~`stock_movements.movement_type` CHECK~~ — SETTLED 9 August.** Live constraint permits `opening_balance`; migration 030 ran. FOLLOWUPS was the wrong doc (a stale pre-apply probe); HISTORY/ARTIFACTS were right. Now corrected.
-- **GPS clock-in geofence** — the four GPS columns are now migrated (035); three attendance components read them. Confirm the geofence *logic* in code before relying on it.
-- **Stall-number regex** in Add Holder — two-digit vs live three-digit `A001`–`A347`.
-- **Add User** — does it still branch on dead bar1/bar2 `bar_week` logic?
+- **~~GPS clock-in geofence~~ — ANSWERED 18 August (AUDIT_3 §9).** The logic exists and is **sound**: 100 m haversine against `LODGE_LAT`/`LODGE_LNG`, 5 s timeout, outside-or-unavailable → `unverified` + `within_radius = false`, inside → late-vs-present (`ClockInOutTab.jsx:81-142`). **But it is reachable only through `ClockInOutTab`, which is mounted nowhere — so GPS clock-in is currently dead code.** The manager views do render the radius flag. Whether this survives at all depends on the FA03H decision above.
+- **~~Stall-number regex~~ — SETTLED 18 August.** One shared three-digit `STALL_RE = /^[A-Za-z]+\d{3}$/`, used by **both** Add and Edit. Confirmed in code.
+- **~~Add User bar1/bar2 branching~~ — ANSWERED 18 August.** Gone from the UI; the dropdown derives from `ROLE_LABELS` and rotating shifts are excluded from selection. Residue only: `create-user` still accepts an inert `bar_week` body field the UI never sends, and `AttendanceUI` still carries bar-week shift logic used solely by dead code (FIX_PLAN C-05, PARKED).
+
+**Nothing is currently open in this section.** Add to it when a new claim enters the docs unverified.
 
 ---
 
 ## PHASE 2 SCOPE (see FUNCTIONAL_SPEC for detail)
 
-Two-tier inventory + per-department stock lists · bar par levels + end-of-day refill cycle · consumption attribution (what/where/who) + rooms + 1-year laundry retention · QR staff attendance · Farmers Market 3-month attendance history + waiting-list forfeiture + 3-level product taxonomy + fee schedule (10k / 30k / 20k) · Events payments editable + revenue display.
+Two-tier inventory + per-department stock lists · bar par levels + end-of-day refill cycle · consumption attribution (what/where/who) + rooms + 1-year laundry retention · ~~QR staff attendance~~ **→ SUPERSEDED, see ATTENDANCE below** · Farmers Market 3-month attendance history + waiting-list forfeiture + 3-level product taxonomy + fee schedule (10k / 30k / 20k) · Events payments editable + revenue display.
 
 **Role model (`department_head` scoped, `admin`, `hr`) — DONE**, out of open scope. See "NEXT ACTION" above.
 
@@ -123,16 +177,24 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 - **26–27 July** — hardening (Sprints A–E) + FM import + bar import + feedback meeting.
 - **28 July – 7 August** — Aman travelling (South Africa, medical). No dev work.
 - **9 August** — docs brought current to end goal; migration diagnosis + Session A (history repaired).
-- **10 August (today)** — docs updated post-Session A; Session B (012 auth) next to close the gate.
-- **10–15 August** — Session B closes the gate, then Phase 2 build to functional-complete on placeholder data. Deadline 15th.
-- **Call with Dhiren** — early in the week, day TBC; then the full working app for verification.
-- **After Dhiren verifies** — real data goes in (joint session with Rose + Martin), then `WOODLANDS_AUDIT_3.md` against real data, then Sprint F handover mechanics.
+- **10 August** — docs updated post-Session A; Session B (012 auth) closed the migration gate.
+- **10–18 August** — Phase 2 built to functional-complete on placeholder data: two-tier inventory (`051`–`057`), Movement Ledger (`058`), bar par cycle (`059`), rooms + consumption (`060`), Farmers Market taxonomy/waiting list/fees (`061`), Events payments + revenue (`062`). **All of it shipped.**
+- **18 August** — two audits run in parallel: Aman's role-by-role browser pass and `WOODLANDS_AUDIT_3.md` (read-only code audit).
+- **19 August (today)** — **Block 1 (correctness) committed** (`5d340b2`); `data-ops/009` applied; attendance pivoted off QR to the FA03H decision; docs synced (this update, plus `WOODLANDS_FIX_PLAN.md` and `WOODLANDS_CLIENT_INPUTS.md` created).
+- **19–27 August** — Block 2 (look), Block 3 (fee wiring), demo curation. Walkthrough rehearsal.
+- **Fri 28 August** — **feedback call with Dhiren.** He owes decisions, not data: the revenue reading, and the FA03H export-or-invest answer. Full ask list in `WOODLANDS_CLIENT_INPUTS.md`.
+- **Mon 31 Aug / Tue 1 Sep** — **full-system walkthrough.** The deadline everything is judged against.
+- **After Dhiren verifies** — real data goes in (joint session with Rose + Martin), then an audit against real data, then Sprint F handover mechanics.
 
 ---
 
 ## NEXT ACTION
 
-**Migration gate closed, role model live, department vocabulary reconciled — none of these block anything anymore.** Two-tier inventory is the actual next build.
+**→ The next action is Block 2 (look), then Block 3 (fee wiring), then demo curation. Tracker: `WOODLANDS_FIX_PLAN.md`.**
+
+*Everything below this line is the dated build record of how Phase 2 landed — kept as provenance, not as a queue. Nothing in it is outstanding except where explicitly marked.*
+
+**Migration gate closed, role model live, department vocabulary reconciled — none of these block anything anymore.**
 
 **Done since the last update (12 August 2026):**
 - **Migration gate — CLOSED.** See "THE GATE" above; `db push` trustworthy for new schema.
@@ -193,7 +255,7 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 - **Folded in:** the delivery **Supplier column** is restored as a real column in the Movement Ledger (and `Route` no longer tries to render a supplier as a route). **Main Bar DOES have a `department_head`** (`mainbar@woodlands.com`) — that STATE/FOLLOWUPS note was stale, and the account was used as a real denial subject in the `059` proof.
 
 **OPEN — carry into next session (none blocking):**
-- **Browser-verify the Bar Count tab.** DB layer proven live as the roles and the build is clean, but the new tab has not been exercised in a browser — needs an owner or bar-head session.
+- **~~Browser-verify the Bar Count tab.~~ — OVERTAKEN BY EVENTS, confirmed 18 August (AUDIT_3 §7).** The cycle has been exercised **against production**, not just in a browser: **2 posted `bar_count_sessions`** (Main Bar + Sports Bar, 17 Aug), **559 `bar_count_lines`**, and **190 par-refill requisitions** (94 fulfilled / 96 rejected) are live. Someone posted and fulfilled for real. The same applies to the Consumption tab — **2 `v_stock_consumption` rows** live. What those 188 ledger rows and 190 requisitions now are is a *demo-curation* question (keep, re-type or purge as test data), not a verification one — `WOODLANDS_FIX_PLAN.md` C-47#8.
 - **No par-level editing UI.** Par is seeded and visible but only changeable by UPDATE. Fine while placeholder; needed at real-data time.
 - **~~`AdjustmentsTab` is location-blind~~ — FIXED AND PROVEN LIVE, 17 August 2026.** Frontend-only, no migration: `setStockQuantity()` now takes `{ location, subLocation }` and `AdjustmentsTab` has a Location selector (plus a Sub-location selector where `SUB_LOCATIONS` defines one), its `stockMap` keyed on `(item, location, sub_location)`, and the `tier='department'` filter that hid all 559 main-store balances removed. Proved as `admin` (`SET LOCAL ROLE`, rolled back): a Main Store take moved Main Store 100 → 42 with **Main Bar unchanged at 5** and wrote `adjustment −58, from_department='Main Store'`; the same call with no location still falls back to the item's department (Main Bar 5 → 7, store untouched) — the old bug, demonstrated rather than described. A `department_head` is still denied `42501` at the store, and `054`'s guard still rejects an invalid location. Rollback re-verified on a fresh connection: 1118 balances, 725 movements, 0 adjustment rows.
 - ~~**`059` is not rebuild-proven.**~~ — CLOSED by run 7, 17 August (this line
@@ -227,6 +289,8 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
   | admin calls `apply_stock_delta` directly | ✅ succeeds — **the grant-survival proof** |
 
   Movement rows carry `from_department` (never `to_`), `sub_location='Laundry'` where it applied, room, `consumed_by` (roster) **and** `performed_by` (login) as two distinct non-null columns. **Fresh connection after rollback:** 0 consumption movements, 0 view rows, 725 movements, 1135 balances, balances all back to 24/30/17/10/24, the re-pointed head reverted, `apply_stock_delta` still one signature with unchanged `proacl`, and **0 rows written today anywhere**.
+
+  > **⚠ Read the line above as a dated rollback proof (18 August), not as current state.** It was accurate at that moment. **Measured live 18 August: 727 `stock_movements`, 2 `v_stock_consumption` rows, 1135 `current_stock` balances** — real usage happened after this rollback. AUDIT_3 §7 flagged this exact line as a stale-reading claim; annotated rather than rewritten, because the proof itself was true.
 - **Frontend:** Inventory gains a **Consumption** tab (draw form — location → sub-location → item narrowed to what that location actually holds, plus room, staff, quantity, reason — above a filterable ledger over both legs, badged Draw / Bar count); Admin gains a **Rooms** tab (add, inline edit, Deactivate/Reactivate, no delete control). Build clean, ledger tests 31/31.
 - **Placeholder Housekeeping catalogue shipped in the same step** — Housekeeping held **zero** stock items, so the tab would have shipped empty for the one department that asked for the feature. 7 items at Main Store / Housekeeping / Housekeeping-Laundry. Self-contained, so unlike `053`/`059` it applies on a from-files rebuild too.
 
@@ -302,6 +366,13 @@ Known-expected residuals, so they are not misread as new findings: the 2 legacy 
 
 
 
+**⚠ THE 062 PROOF IS STILL OWED — and Block 1 did NOT discharge it.** Block 1 was deliberately scoped to frontend plus one data-op: **no DDL, no migration, no new SQL object**, so the gate was never triggered. It is unchanged and it still gates:
+
+- **Any `063`.** No new migration may be written until `062` is rebuild-proven.
+- **Therefore also**: D-7 (`fm_approved_items` direct-write policies), the C-40 `event_payments` UPDATE policy, the non-atomic-write class (C-29–C-36, each wanting a server-side transaction), dropping the `event_bill_items amount > 0` CHECK if Dhiren wants comped lines, and the legacy `service_role` policy cleanup. **All of Blocks 2 and 3 as currently scoped are frontend-only and clear it** — but check before writing SQL, not after.
+- **Code-only and data-op changes do not touch this clock.** `data-ops/009` (Block 1) is DML against production, quarantined from the migration path, and does not count as a migration.
+- **A rebuild proof expires.** It is a claim about a file range on a date, not a permanent property of the project.
+
 Every new table ships with placeholder seed in its own step.
 
 ---
@@ -315,6 +386,10 @@ Two questions to put to him at the same time, both found in the 18 August diagno
 ---
 
 ## STATUS SUMMARY
+
+**19 August — Block 1 (correctness) committed (`5d340b2`).** Two audits merged into one queue in **`WOODLANDS_FIX_PLAN.md`**; 17 findings fixed, proven live or in a browser, real data unchanged (62 staff / 311 stallholders / 15 attendance). `data-ops/009` re-tagged the three stale `shift_settings` departments the 12 August re-tag missed. **No DDL — the 062 rebuild proof is untouched and still owed.** Blocks 2 (look) and 3 (fee wiring) are next, then demo curation. **Attendance pivoted off QR** to an FA03H export-or-invest decision pending the 28th — see ATTENDANCE above and `WOODLANDS_CLIENT_INPUTS.md`.
+
+*The paragraphs below are the 18-August state, retained as the record of how each Phase 2 feature landed.*
 
 **Events UX done (`062`, 18 August) — and with it EVERY Phase 2 build feature exists.** Payments are correctable by **reversing entry**, the fork the schema had already made (`event_payments` has no DELETE grant and no DELETE policy while `events` and `event_bill_items` both do). One nullable `reverses_payment_id` + a partial UNIQUE index + two CHECKs + a subquery-needing trigger + `reverse_event_payment()`, which writes the reversal **and** recomputes `deposit_paid` in one transaction. **11/11 live role scenarios passed, rolled back** — reversing the only deposit moved paid 1,300,000 → 1,000,000 **and `deposit_paid` true → false**, a later balance reversal correctly left it false, double reversal and reverse-a-reversal refused, the hand-rolled direct-insert path refused by the trigger and by the CHECK, `department_head` and `hr` denied 42501. **Revenue shipped toggleable** (three readings, default provisional on screen, 68/68 tests, `f452a39`) rather than guessing Dhiren's intent — he picks one on 28 August and the other two come out. That build also found `deliveries` to be a **dead table with RLS on and zero policies**, which is why "the system knows no cost" is structural rather than a data gap. **§2.6 run 9 closed `001`–`061` first, with no new finding; `062` is now the proof owed.** History `001`–`062`, no gaps.
 

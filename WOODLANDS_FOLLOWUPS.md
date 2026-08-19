@@ -10,9 +10,79 @@ Some items below are no longer loose cleanup — they are part of the Phase 2 bu
 
 - **Delivery Log → consolidated Movement Ledger**, and the **`movement_type` CHECK widening** for `event_allocation` / `event_return` — the two-tier inventory work makes store→department issues exactly what a delivery-only view hides, so consolidation is now in scope. See FUNCTIONAL_SPEC §3.
 - **The five empty department stock lists** (Kitchen, Restaurant, Housekeeping, Grounds, Security) plus **Laundry** — these get populated as departmental sub-stores under two-tier inventory, on placeholder data first. See FUNCTIONAL_SPEC §2.1 / §3.
-- **QR raw-UUID / signed-token weakness** (originally FM-only, below) now also applies to **QR staff attendance**, which reuses the `public-checkin` pattern. See FUNCTIONAL_SPEC §4.
+- **QR raw-UUID / signed-token weakness** (originally FM-only, below). **⚠ UPDATED 19 August:** this used to say it *also* applied to QR staff attendance. **QR staff attendance is superseded** (FUNCTIONAL_SPEC §4) and will not be built, so this weakness is **Farmers Market only** again — the `public-checkin` endpoint and its printed holder QR cards. Still open, unchanged in substance.
 
 Everything else below stays a genuine followup.
+
+---
+
+## BLOCK 1 RECONCILIATION — 19 August 2026
+
+*What Block 1 closed, what it corrected in this log, and what it newly surfaced. The merged remediation tracker is `WOODLANDS_FIX_PLAN.md` — per-finding file:line and live proof live there, not here. This section records only the effect on **this** log.*
+
+### CLOSED by Block 1 (commit `5d340b2`)
+
+Each was a live defect; each is fixed, built and proven. Full proof per row in `WOODLANDS_FIX_PLAN.md`.
+
+| Ref | What closed |
+|---|---|
+| **C-43** | Admin → Users header was a hard-coded `(4)` above a table of 8. Now reads the live count |
+| **C-07** | Movement Ledger rendered every requisition fulfil twice — 94 live ± pairs. `'requisition'` added to `PAIRED_TYPES`; **display-only, no data touched** (decision D-1(a)) |
+| **C-12** | `shift_settings` re-tagged by **`scripts/data-ops/009_shift_settings_retag.sql`** — see the new entry below for what it left behind |
+| **C-12.2** | `DEPT_CODES` re-keyed to the canonical 11; Main Bar SKUs generate `MBA-` instead of colliding on `GEN-` |
+| **C-10 / C-11** | Events List Edit modal no longer writes `status` or `deposit_paid` (decision D-4). `changeStatus()` and the payment ledger are again the only writers |
+| **C-37** | Delete Event: block **kept** (decision D-3), modal text and error message now tell the truth instead of promising payments away and then throwing a raw FK string |
+| **C-18** | Event confirm no longer throws for items holding two department-tier balances. New `allocatableQuantities()` in `lib/stock.js` reads the exact row the deduction lands on |
+| **C-01** | Dashboard unpaid-deposit card regated on the same rule the Events List highlight uses, and renders `name` instead of the never-written `title` |
+| **C-27** | Unverified-attendance cards join `staff`, not `user_profiles` — they name the real person instead of "Unknown staff" |
+| **D-6 / C-40** | Deliveries pass `location: MAIN_STORE`, honouring FUNCTIONAL_SPEC §2.1's single inbound point |
+| **U-01** | The four Dashboard stat cards navigate to their modules |
+| **U-07** | Table Bookings → All Bookings rendered `Invalid Date` on every row — see the new systemic entry below for the cause |
+| **U-11** | Login accepts a bare username; `@woodlands.com` is appended client-side. **Stored identities unchanged** |
+| **U-12** | A `department_head` is no longer offered Inventory tabs they will be refused. **The other five modules were checked and do not have this pattern** |
+| **C-47#3** | New-user temporary password input masked, and no longer echoed in plaintext after creation. Open since AUDIT_1 |
+
+**Block 1 took no DDL. The 062 rebuild proof is untouched and still owed** before any `063`.
+
+---
+
+### NEW — surfaced by Block 1
+
+#### 🔴 `booking_date` and `event_date` are `timestamptz`, not `date` — and every `.eq(date)` in the app works only by accident
+
+**This is the root cause of U-07 and it is systemic, not local.**
+
+`table_bookings.booking_date` and `events.event_date` are both `timestamp with time zone` (measured). PostgREST therefore returns `"2026-07-26T00:00:00+00:00"`, never `"2026-07-26"`. Two consequences, and the second is the dangerous one:
+
+**1. Formatting — found and fixed.** `fmtDate` did `new Date(dateStr + 'T12:00:00')`, which on a full ISO string yields `Invalid Date`. Fixed at source in `TableBookingsUI.jsx` (`toDateStr` + a hardened `fmtDate` that returns `—` rather than `Invalid Date` on anything unparseable).
+
+**2. Equality — NOT fixed, and currently invisible.** Queries like `.eq('booking_date', today)` and `.eq('date', today)` compare a `timestamptz` against a bare `YYYY-MM-DD` string. Postgres casts the literal to **midnight UTC**, so the match succeeds **only for rows stored at exactly `00:00:00+00`**. Every live row is, because every one was seeded or inserted from a date-only form field. So it works today, everywhere, for the wrong reason.
+
+**When it bites:** the moment any row acquires a real time-of-day component — a real booking entered with a timestamp, an import that carries clock time, an insert from a different timezone context. Then `Today` silently shows fewer bookings than exist, and the failure looks like missing data rather than a bug. **Malawi is UTC+2**, so a booking legitimately stored at `2026-08-19T23:00:00+02:00` is `21:00 UTC` on the 19th and matches nothing.
+
+**Where it lives:** `TodayTab.jsx` (Table Bookings), `UpcomingTab.jsx` `.gte`/`.lte`, `AllBookingsTab` filters (the day-part comparison there **is** fixed), `OwnerDashboard` bookings query, and the `events` date filters. Also `attendance_records.date`, though that column is a true `date` and is therefore safe.
+
+**Right fix, post-handover:** either narrow the columns to `date` (a migration — behind the 062 gate) or move every comparison to an explicit half-open range (`.gte(day)` / `.lt(nextDay)`). **Do not "fix" it by casting in the client** — that just moves the assumption. **Not urgent before the walkthrough** (all demo data is midnight-UTC), **but it must not survive real data entry.**
+
+#### 🟡 Three departments have no shift at all — 8 staff, and it needs Rose, not code
+
+After `data-ops/009`, eight of the eleven departments resolve a shift correctly. **Administration (3 staff), Maintenance (3) and Transport (2) still show `—`** — not because their tag is stale, but because `shift_settings` has **no row for them at all**. There is nothing to re-tag.
+
+For those 8 staff: no Shift column value, no late-minute calculation, no overtime flag, and the coverage-alert loop can never fire. All silently inert.
+
+**This needs Rose's actual times** — start, end, late threshold, days per week. **Do not invent placeholder shifts here.** A made-up shift would produce confident, wrong lateness figures for real named people, which is materially worse than a visible `—`. Logged as an ask in **`WOODLANDS_CLIENT_INPUTS.md`**.
+
+#### 🟡 Mojibake in a live table booking — demo-visible
+
+`table_bookings.special_requests` on the **Hannah Gondwe** row reads `Birthday Ã¢â¬â cake to be brought in` — an em-dash misdecoded when the row was seeded on 26 July.
+
+Same UTF-8-read-as-Windows-1252 fault that `scripts/data-ops/007_encoding_heal.sql` healed elsewhere, from **before** `apply-sql.ps1` grew its guard. **Found during Block 1, not caused by it** — the guard has been in place since 17 August and refused nothing this session.
+
+It is on **one of only three live bookings**, so it is likely to be on screen at the walkthrough. One-row data-op to heal, through `apply-sql.ps1`, never bare `Get-Content`. Not fixed in Block 1 because that block's single data-op was scoped to the shift re-tag. Also logged in `WOODLANDS_CLIENT_INPUTS.md` as a *when*, not a *whether*.
+
+#### 🟢 `react-refresh/only-export-components` count moved 159 → 160
+
+Exporting `toDateStr` from `TableBookingsUI.jsx` adds a 4th instance of a rule already firing 3× in that file, which mixes helpers and components by design. Recorded so a future lint-baseline comparison does not read it as a regression. The six `*UI.jsx` files all share this shape — it resolves properly only with the C-19 extraction to a single `lib/format.jsx`, which is PARKED as churny.
 
 ---
 
@@ -57,8 +127,10 @@ else** — each confirmed by diffing the full detail, not inferred from a count:
   the counts cancel at 16, which is exactly why the md5 was needed. **All 15
   shared functions were byte-identical by `md5(prosrc)` with identical
   `prosecdef` and identical `proacl`.**
-- The 2 legacy duplicate `service_role` policies on `departments` and
+- The 2 legacy `service_role` policy residuals on `departments` and
   `user_profiles`.
+
+  **⚠ CORRECTED 19 August (AUDIT_3 §6): this is NOT two duplicate pairs.** Measured: **`user_profiles` carries a true duplicate PAIR** (`service role full access on user_profiles` **and** `service_role_all_user_profiles`). **`departments` carries only ONE policy**, non-canonically *named* (`service role full access on departments`) — there is no duplicate there to drop. **The cleanup must drop one policy on `user_profiles` and RENAME (not drop) the one on `departments`** — dropping the `departments` policy would remove its only `service_role` grant. Re-measure both before touching either.
 - The platform `ensure_rls` event trigger (rebuild-only; both databases carry
   the same 6 platform event triggers otherwise). RLS enablement was therefore
   argued from **production's** side: 0 public tables without RLS on production.
@@ -345,7 +417,7 @@ snapshot ✅ → merge 008 ✅ → ghost-table CREATEs 031/032/033 ✅ (applied 
 
 No DELETE policy, deliberately: nothing in `src/` deletes an attendance record and `authenticated` holds no DELETE grant, so DELETE is fail-closed at the grant layer. Recorded as a decision, unlike the unplanned `stock_items` asymmetry noted earlier in this log.
 
-Role set is `('owner','manager')` = `ROUTE_ACCESS['/attendance']`, not the four-role set. `kitchen_manager` and `restaurant_manager` cannot open the module. **Note: `AT_MANAGE_ROLES` in `AttendanceUI.jsx:3` lists `restaurant_manager`, whom `RouteGuard` blocks before any tab renders — a dead role gate, same class as the `store_supervisor` gates already logged. Sprint E.**
+Role set is `('owner','manager')` = `ROUTE_ACCESS['/attendance']`, not the four-role set. `kitchen_manager` and `restaurant_manager` cannot open the module. **~~Note: `AT_MANAGE_ROLES` in `AttendanceUI.jsx:3` lists `restaurant_manager`, whom `RouteGuard` blocks before any tab renders — a dead role gate.~~ — CLOSED, confirmed 18 August 2026 (AUDIT_3 §7).** The constant now lives in `roles.js:27` as `['owner','admin','hr']`, and a whole-`src` grep confirms **no component gates on a role the router blocks**. This entry was stale.
 
 **Access proved by running as the roles themselves**, not through the Management API (which connects as `postgres`, `rolbypassrls = true` — a statement succeeding there proves nothing about what a role may do). 17 scenarios, each `SET LOCAL ROLE authenticated` with a real `sub` claim; the write scenarios wrapped in a transaction that rolled back, rollback re-verified on a fresh connection (still 15 rows, 0 with `user_id`, no test note). All passed: owner/manager read 15; kitchen_manager, restaurant_manager and an unknown-`sub` user read 0; a staff user can insert/read/update only their own row, cannot update another's (0 rows affected), cannot insert one attributed to another user (denied), cannot insert a roster row with `user_id` NULL (denied); a manager can insert and update roster rows; neither can DELETE.
 
@@ -384,7 +456,11 @@ Fresh throwaway (`zhzcrqrkmipdpycsnnka`, `eu-west-3`), confirmed empty first. Sa
 4. **🟡 The GRANT layer is ungoverned by any file.** 588 grants on the rebuild vs 435 on production. Root cause (via `pg_default_acl`): production restricts what `anon`/`authenticated`/`service_role` receive on newly created postgres-owned objects (tables `Dxtm`, sequences `w`, functions postgres-only); a fresh project grants full `arwdDxtm`/`rwU`/`X` to all three. Nothing in any migration ever recorded that restriction. **Currently inert** — every table has RLS enabled on both sides and no policy anywhere targets `anon`, verified on both databases — but production defends twice (GRANT + RLS) where a rebuild defends once. One future migration that forgets `ENABLE ROW LEVEL SECURITY` is harmless on production and a full public exposure on a rebuilt database. → `050_default_privileges_reconcile.sql`. Note the ordering trap it documents: `ALTER DEFAULT PRIVILEGES` is **not retroactive**, so the file must *also* reset the 28 already-created tables and re-grant production's exact matrix (generated from the live grant table, not transcribed) — the default-privileges statement alone would have fixed nothing.
 5. **🟢 Two legacy duplicate `service_role` policies on production only** (`departments`, `user_profiles`) — the files correctly omit them. This is the Sprint A "six tables carry duplicate service_role policies" item, still open. Deliberately NOT reproduced. **This one is a production-cleanup item, not a files fix** — see below.
 
-**New open item — production cleanup (do not do it as part of a rebuild fix):** drop the legacy-named duplicate `service_role` policies from production so the two databases converge from the other side. Functionally inert (`ALL/service_role/USING(true)`, identical to the canonical `service_role_all_*`), so this is tidiness, not a fix. Confirmed present on `departments` and `user_profiles`; the Sprint A entry named six tables, so re-check the full set before dropping.
+**New open item — production cleanup (do not do it as part of a rebuild fix):** reconcile the legacy-named `service_role` policies on production so the two databases converge from the other side. Functionally inert (`ALL/service_role/USING(true)`), so this is tidiness, not a fix. The Sprint A entry named six tables, so re-check the full set first.
+
+**⚠ CORRECTED 19 August (AUDIT_3 §6): this is NOT two duplicate pairs.** Measured: **`user_profiles` carries a true duplicate PAIR** (`service role full access on user_profiles` **and** `service_role_all_user_profiles`). **`departments` carries only ONE policy**, non-canonically *named* (`service role full access on departments`) — there is no duplicate there to drop. **The cleanup must drop one policy on `user_profiles` and RENAME (not drop) the one on `departments`** — dropping the `departments` policy would remove its only `service_role` grant. Re-measure both before touching either.
+
+**This is a migration, so it sits behind the 062 rebuild proof.**
 
 **Why this whole class kept happening, and what the proof was for.** Every one of these — the 016 constraint, ~20 columns, an FK property, a grant-layer default — is hand-applied DDL that worked on production and was never written down. Sessions A and B reconciled *ghost tables and ghost columns* and did not check constraints, column-level nullability, FK properties, or grants. Those four categories are where all of today's findings live. **A future audit must diff `pg_constraint` (including `condeferrable`/`condeferred`), `information_schema.columns` (nullability AND defaults AND ordinal order), `pg_default_acl`, and the per-table grant matrix — existence checks alone would have passed every one of these.**
 
@@ -411,7 +487,9 @@ Every prior finding confirmed fixed by direct re-check, not by count alone: the 
 
 **Two claims checked directly this run and found NOT to hold** — recorded so they aren't mistaken for real findings later: (1) *"`event_payments.received_by` has no FK, bare uuid"* — false, verified FK'd on both databases. (2) *"`event_checklists` has a CASCADE-vs-SET-NULL divergence, production stricter"* — false; `event_checklists_event_id_fkey` is `ON DELETE CASCADE` on **both** databases, byte-identical `pg_get_constraintdef`. No such residual was ever recorded in this log — checked before writing this entry — so there is nothing to remove; noted here only so the claim isn't reintroduced later.
 
-**The one real, expected residual — a production-cleanup item, not a file gap:** 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`), production-only. Functionally inert (`ALL/service_role/USING(true)`, identical to the canonical `service_role_all_*`). The Sprint A entry originally named six tables carrying this pattern; re-check the full set before dropping them from production.
+**The one real, expected residual — a production-cleanup item, not a file gap:** 2 legacy `service_role` policy residuals (`departments`, `user_profiles`), production-only. Functionally inert (`ALL/service_role/USING(true)`). The Sprint A entry originally named six tables carrying this pattern; re-check the full set first.
+
+**⚠ CORRECTED 19 August (AUDIT_3 §6): this is NOT two duplicate pairs.** Measured: **`user_profiles` carries a true duplicate PAIR** (`service role full access on user_profiles` **and** `service_role_all_user_profiles`). **`departments` carries only ONE policy**, non-canonically *named* (`service role full access on departments`) — there is no duplicate there to drop. **The cleanup must drop one policy on `user_profiles` and RENAME (not drop) the one on `departments`** — dropping the `departments` policy would remove its only `service_role` grant. Re-measure both before touching either.
 
 **The gate is closed.** `db push` is trustworthy for new schema going forward — every migration file `001`–`050` has been proven, not merely believed, to reproduce production from empty.
 
@@ -775,17 +853,11 @@ Decisions taken and items consciously deferred in that session:
   identically on a from-files rebuild. Real department stock lists remain out of
   scope until Dhiren verifies the modules.
 
-- **🟡 No Housekeeping `department_head` account exists.** The role proof
-  re-pointed the Restaurant head to 'Housekeeping' inside the rolled-back
-  transaction, the same technique `056` and `059` used before a Main Bar head
-  existed. The scoping is proven; the *account* still needs creating before
-  anyone in Housekeeping can actually use the tab.
+- **~~🟡 No Housekeeping `department_head` account exists.~~ — CLOSED 18 August 2026 (AUDIT_3 §7).** The account now exists and is active — measured live: `department_head | Housekeeping` (`housekeeping@woodlands.com`). This entry was stale. *(Original note, kept for provenance: the role proof re-pointed the Restaurant head to 'Housekeeping' inside a rolled-back transaction, the same technique `056` and `059` used before a Main Bar head existed. The scoping was proven then; the account has since been created.)*
 
-- **🟡 OPEN — neither the Consumption tab nor the Rooms tab has been
-  browser-verified.** The database layer is proven live as the roles and the
-  build is clean (31/31 ledger tests), but no browser session has exercised
-  either. This is now the **second** tab in that state — the Bar Count tab from
-  `059` is still unverified too. Both need one owner session.
+- **~~🟡 OPEN — neither the Consumption tab nor the Rooms tab has been browser-verified.~~ — OVERTAKEN BY EVENTS, 18 August 2026 (AUDIT_3 §7).** These tabs have been exercised **against production**, which is stronger than a browser session: **2 posted `bar_count_sessions`** (Main Bar + Sports Bar, 17 Aug) with **559 `bar_count_lines`**, **190 par-refill requisitions** (94 fulfilled / 96 rejected), and **2 live `v_stock_consumption` rows**. Someone posted and fulfilled for real. **Rooms** remains browser-unexercised but is a plain CRUD tab over 24 live rows with no RPC behind it — the lowest-risk surface in the app.
+
+  **What this created instead:** those 190 requisitions and their 188 ledger rows are now **demo residue on production**, and a decision is owed on whether they are kept, re-typed or purged before the walkthrough. `WOODLANDS_FIX_PLAN.md` C-47#8.
 
 ### 5. Still not built, in order
 
@@ -794,8 +866,15 @@ frontend, 14 August) → ~~`movement_type` widening~~ ✅ (`058`, 14 August) →
 ~~Movement Ledger~~ ✅ (`058` + data-ops/`006`, 14 August — see the CLOSED block
 below) → ~~bar par levels + end-of-day cycle~~ ✅ (`059`, 17 August — see 4d
 above) → ~~rooms + consumption ledger~~ ✅ (`060`, 18 August — see 4e above) →
-**FM taxonomy + waiting list + fees** ← next feature → **QR attendance** →
-**events payments-edit + revenue** → **real-data dedupe + table split**.
+~~**FM taxonomy + waiting list + fees**~~ ✅ (`061`, 18 August) →
+~~**QR attendance**~~ **— SUPERSEDED 19 August, never built** (FUNCTIONAL_SPEC §4;
+replaced by the FA03H export-or-invest decision, pending 28 August) →
+~~**events payments-edit + revenue**~~ ✅ (`062`, 18 August) →
+**real-data dedupe + table split** (deferred to real-data).
+
+**Every Phase 2 build feature now exists.** What remains before the walkthrough is
+remediation and curation — Blocks 1–3 in `WOODLANDS_FIX_PLAN.md`, of which
+Block 1 is done.
 
 ### 5b. §2.6 REBUILD RE-PROOF — `051`–`057` CLOSED (run 5); `058` now owed
 
@@ -1346,7 +1425,11 @@ All three are now written into `src/lib/standards.md` §4 so the next session in
 
 - **`hr` has no `/` (Inventory) access, and the catch-all route redirects there.** `App.jsx:45` sends any unknown path to `/`, which `GuardedPage` then denies, bouncing hr to `/login` while they hold a valid session. Not a loop (Login does not auto-redirect an authenticated visitor) but it reads like a session bug. Consider pointing the catch-all at `/dashboard`.
 
-- **`ClockInOutTab` has no reachable mount point.** It was already unreachable before Phase 2 — the two `Attendance.jsx` branches that rendered it required `restaurant_manager` or a role outside owner/manager, and `ROUTE_ACCESS['/attendance']` was `['owner','manager']`, so `GuardedPage` bounced both first. Those dead branches are now deleted. The component is retained for the QR staff attendance work in FUNCTIONAL_SPEC §4; it needs a real route.
+- **`ClockInOutTab` has no reachable mount point** — **STILL OPEN, but its stated reason expired 19 August.** It was already unreachable before Phase 2 — the two `Attendance.jsx` branches that rendered it required `restaurant_manager` or a role outside owner/manager, and `ROUTE_ACCESS['/attendance']` was `['owner','manager']`, so `GuardedPage` bounced both first. Those dead branches are now deleted.
+
+  **⚠ The component was "retained for the QR staff attendance work". QR is superseded** — see FUNCTIONAL_SPEC §4 and `WOODLANDS_CLIENT_INPUTS.md`. So the retention no longer has a reason attached to it, and the component is now simply unmounted code holding the app's only GPS logic (`getShiftForUser` in `AttendanceUI` is dead alongside it).
+
+  **Do not delete it and do not wire it** until the FA03H export-or-invest decision lands on the 28th. Whether it is wired, rewritten or deleted follows entirely from that answer. `WOODLANDS_FIX_PLAN.md` C-02 / C-44.
 
 - **`create-user` `ALLOWED_ROLES` end-to-end test not performed.** The list was synced to the new four roles and redeployed (version 25, ACTIVE), and `AddUserTab` derives its dropdown from `Object.keys(ROLE_LABELS)` so it now offers exactly the four. But actually creating one user of each role requires an owner browser session, which this session had no credentials for. **Aman to confirm by logging in as owner and adding one `hr` (Martin) and one `department_head`.**
 

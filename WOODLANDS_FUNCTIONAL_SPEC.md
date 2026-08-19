@@ -18,6 +18,8 @@ Every feature below carries one marker:
 - **[BUG]** — built but broken; fix required.
 - **[NEW]** — Phase 2, not yet built. This is the bulk of the remaining work.
 - **[VERIFY]** — a claim carried from the old spec or a session note that has NOT been confirmed against the live code or DB. Do not trust it until probed.
+- **[NOT WIRED]** — built and working *as code*, but reachable from no screen. Distinct from [DONE], which is a claim about the UI, and from [NEW], which is a claim about the code. Added 19 August after AUDIT_3 §9 found `[DONE]` being used for a component nothing imports.
+- **[SUPERSEDED]** — specified here, deliberately no longer the plan. The text is kept, not deleted: what was specified and why it changed is worth more than a clean page.
 
 The target for end of the week of 11 August: **every screen works on placeholder data.** Real data (bar stocktake, department stock lists, staff reconciliation, menus, real stallholder details) is explicitly out of scope until Dhiren verifies the system works. Blank screens fail the bar — every [NEW] table ships with placeholder seed as part of its own build step.
 
@@ -130,18 +132,42 @@ Written through **`record_consumption`** (SECURITY DEFINER, gated owner/admin or
 
 **File:** `src/pages/Attendance.jsx`
 
-### Existing [DONE]
+### Existing [DONE unless marked]
 
-- **Clock In/Out** — states idle/working/break/done; live net hours. On Clock In, GPS compared to lodge coords (100 m); outside/unavailable → `unverified`; inside → `present`/`late` vs shift_start + late_threshold. **[VERIFY] the GPS behaviour against live code.**
+- **Clock In/Out — [NOT WIRED]** *(was `[DONE]`; corrected 19 August, AUDIT_3 §9 / FIX_PLAN C-02)*. States idle/working/break/done; live net hours. On Clock In, GPS compared to lodge coords (100 m); outside/unavailable → `unverified`; inside → `present`/`late` vs shift_start + late_threshold.
+
+  **The component is built and works. Nothing imports it.** `ClockInOutTab.jsx` has no mount point anywhere in the app — the two `Attendance.jsx` branches that once rendered it required roles `RouteGuard` blocked, and those dead branches were deleted in Phase 2 without a replacement route. The `[DONE]` marker was a claim about the code being true and a claim about the UI being false.
+
+  **Consequence, stated plainly because it will be asked at the walkthrough: there is no screen anywhere, for any role, from which a staff member can clock themselves in.** All 15 live `attendance_records` rows are manager-written (`user_id` NULL on 15/15, measured). The manager-facing Today / History / Settings tabs below are genuinely [DONE] and unaffected.
+
+  **What happens to this component is not a build decision — it is the FA03H decision.** See the QR entry below and `WOODLANDS_CLIENT_INPUTS.md`.
+
+- **GPS geofence — [ANSWERED, currently dead code]** *(was `[VERIFY]`; resolved 19 August, AUDIT_3 §9)*. **The logic is sound**: 100 m haversine against `LODGE_LAT`/`LODGE_LNG`, 5 s timeout, outside-or-unavailable → `unverified` + `within_radius = false`, inside → late-vs-present (`ClockInOutTab.jsx:81-142`). The four GPS columns exist live (migration 035) and the manager views do render the radius flag (`TodayTab`).
+
+  **But it is reachable only through the unmounted component above, so no GPS check runs today.** It is correct code that never executes. Two further notes for whoever picks this up: `LODGE_LAT`/`LODGE_LNG`/`RADIUS_M` are **code constants with no DB source** (FIX_PLAN C-44), and a browser-side geofence is trivially spoofable — which is half the reason the geofence exists, so it wants to be server-side on any path that keeps it.
 - **Today** — Present/Late/Absent/Unverified/Not-arrived cards, department filter, Mark All Absent (after 11:00), Override, Note. Absence + coverage alerts. Access: owner, admin, hr.
 - **History** (same access) — Daily and Weekly Summary views, filters, 14-day default.
 - **Settings** (same access) — shift definitions per department (start/end/late threshold/days/type).
 
 ### End-goal additions
 
-- **QR staff check-in [NEW]** — QR code per staff member, scanned at a **fixed on-premises station** (reception the obvious spot) at shift start/end. Scanner on site only → no remote check-in; combats lateness and no-shows. Scan writes clock-in/out; lateness computed vs roster; no scan by threshold after roster start → no-show flag. **Reuses the FM `public-checkin` pattern** (public endpoint, QR payload, scan writes a row). Confirm: does QR replace the manual clock-in flow or supplement it? Optional non-biometric hardening — capture a photo on scan to deter card-sharing (stores an image, doesn't match one) — offer, don't build unasked.
+- **~~QR staff check-in~~ — [SUPERSEDED]** *(was `[NEW]`; superseded 19 August). Never built — it was the one Phase 2 feature not started, and it is now not the plan. The `/attend` route this section implied does not exist in `App.jsx` and will not be added.*
 
-**Doctrine note:** the standing rule "manual clock in/out only" is superseded by the QR decision. QR is not biometrics, so no conflict there.
+  **What was specified, kept as the record:** a QR code per staff member, scanned at a **fixed on-premises station** (reception the obvious spot) at shift start/end. Scanner on site only → no remote check-in; combats lateness and no-shows. Scan writes clock-in/out; lateness computed vs roster; no scan by threshold after roster start → no-show flag. Reusing the FM `public-checkin` pattern. Optional non-biometric hardening: a photo on scan to deter card-sharing (stores an image, doesn't match one).
+
+  **Why it was superseded.** The design went QR → card-and-scanner → PIN, and then the premise collapsed: **Dhiren already owns an FA03H face-and-fingerprint machine.** Building a parallel capture mechanism next to a device already on site, already installed and already used by staff, is a worse system than reading the one he has. Full arc in `WOODLANDS_HISTORY.md` (19 August).
+
+  **What replaces it is a decision, not a design.** Two paths, and he has to establish which is available:
+  - **(a) export / import** — the FA03H's records come off the device (USB or vendor export) and we import them into `attendance_records` on a schedule, reconciling against the roster. No new hardware, no new spend.
+  - **(b) invest** — a networked unit with PC software we can read from directly.
+
+  **Pending the 28 August call.** Nothing gets built in this module until it is answered — the ask, and everything it blocks, is in `WOODLANDS_CLIENT_INPUTS.md`.
+
+  **The requirement is unchanged**, and it is worth separating from the technology: *no login from home; catch lateness and no-shows; the owner should not have to sit and check.* QR was one answer to that. It was never the requirement.
+
+**Doctrine note — REVISED 19 August, and this needs saying out loud rather than assumed.** The standing `CLAUDE.md` rule is "no biometrics this phase — manual clock in/out only." The QR decision superseded the *manual-only* half on the reasoning that QR is not biometrics. **That reasoning does not carry over to the FA03H path**, because path (a) reads data off a face-and-fingerprint device.
+
+The honest position: **the system would not perform biometric matching. It would import the result of matching already performed on a device the client already owns and already operates.** No biometric template, image or comparison would enter this codebase — only a staff identifier and a timestamp. That is a defensible distinction, but it is **not the same claim** as "QR is not biometrics", and it should be put to Dhiren in those words rather than left implicit in a doc.
 
 ---
 
@@ -244,9 +270,23 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 ## 10. ITEMS REQUIRING LIVE VERIFICATION (do not trust the doc — probe)
 
 1. **~~`stock_movements.movement_type` CHECK~~ — SETTLED.** Live constraint is `_v4` (permits `opening_balance`, `issue`, `event_allocation`, `event_return`); migrations 030/055/058 ran.
-2. **GPS clock-in geofence** — the four GPS columns exist live (035); confirm the geofence *logic* in code.
+2. **~~GPS clock-in geofence~~ — ANSWERED 19 August.** Logic confirmed sound in code and re-marked in §4 above. It is **dead code** — reachable only through the unmounted `ClockInOutTab`.
 3. **~~Stall-number regex~~ — SETTLED 18 August.** Was two-digit; no live stall could satisfy it, so Add was unusable and Edit validated nothing. Both now share a three-digit `STALL_RE`.
-4. **Add User role branching** — does it still reference the dead bar1/bar2 `bar_week` logic?
+4. **~~Add User role branching~~ — ANSWERED 19 August.** Gone from `AddUserTab`; the dropdown derives from `ROLE_LABELS` and rotating shifts are excluded from selection. Residue only, both inert: `create-user` still accepts a `bar_week` body field the UI never sends, and `AttendanceUI` still carries bar-week shift logic whose only caller is dead code (FIX_PLAN C-05, PARKED).
+
+**All four items in this section are now settled.** Add to it when a new unverified claim enters the doc — the section earns its keep only if it is populated honestly.
+
+---
+
+## 12. WHAT THIS DOC GOT WRONG, AND THE LESSON
+
+Recorded because it is the second time a marker in this project has been trusted over the code.
+
+`§4 Clock In/Out` carried **[DONE]** while nothing imported the component. The marker was not a lie — the code *is* done — but **[DONE] in this doc has always meant "built and working today", which a reader takes as a claim about the running app.** A feature reachable from no screen is not working today in any sense a client would accept.
+
+`[NOT WIRED]` exists from 19 August to make that distinction impossible to fudge. **When marking something [DONE], the test is "can a person reach it in a browser", not "does the file exist and compile."**
+
+The same failure in the other direction is worth watching for: `§7 fee schedule` is marked **PARTIAL** precisely because the table and its editor are wired while no charging surface reads it (FIX_PLAN C-08). That marker is honest. Copy it.
 
 ---
 
