@@ -207,16 +207,24 @@ The corrections worth naming: the Movement Ledger had been rendering **every req
 - **"Woodlands demo-ready as fully working system for Monday 27 July"** (mid-morning framing). Superseded mid-afternoon by "feedback session, working towards mid-August formal handover." Reason: honest capacity assessment plus real-data absence.
 - **"WOODLANDS_DEMO_PREP.md as project-context-only document"** (26 July afternoon). Superseded — needs to live in the repo for provenance and for Claude Code to read directly.
 
+**Retired 20 August 2026 — three things that were built, shipped, and then deliberately removed.** Recorded here because each was in the Phase 2 scope and a reader will otherwise go looking for it:
+
+- **Events revenue tracking** (`f452a39`, 18 August → removed in Block 3, 20 August). Three toggleable readings — Cash Received / Net of Cost / By Line — with a non-dismissible provisional note, built rather than guessed because "revenue should be different in Events" was never made specific. **Removed rather than resolved:** re-reading the 27 July record, that ask sits among requests about *recording payments*, and building a revenue apparatus he never asked for and then making him adjudicate it was solving the wrong problem. The Events-List tile is now "Payments Received · This Month". No payment path changed; `src/lib/revenue.js` is kept as a library.
+- **The Farmers Market 3-level product taxonomy** (`061`, 18 August → dropped in `063`, 20 August). `fm_categories` › `fm_product_types` › `fm_items`, plus `fm_approved_items` and `fm_holders.category_id`. **It did not survive contact with real data:** 311 of 311 holders sat on `stall_type = 'Other'`, only 50 ever received a `category_id`, and the 51-item catalogue could not describe what these businesses actually sell. Replaced by a per-holder free-text approved list (`fm_holder_products`), backfilled from the register text that had been in the database the whole time. **Retired outright rather than left dormant — two live product models is exactly how "Other: 311" happened.**
+- **`fm_holders.stall_type`** (dropped in `063`). A five-value CHECK column, `NOT NULL`, `'Other'` on every row since the February 2026 import, read by nothing but its own constraint. Deprecated in place by `061` because dropping a `NOT NULL` column is DDL; dropped once the gate allowed it.
+
 ---
 
 ## LOOKING AHEAD (not commitments, orientation only)
 
 **⚠ The list below was written pre-11-August and is now historical — the dates in it have passed and AUDIT_3 ran on 18 August, ahead of real data rather than after it. Current forward plan:**
 
-- **19–27 August** — Block 2 (look) and Block 3 (fee wiring) from `WOODLANDS_FIX_PLAN.md`, then demo curation and walkthrough rehearsal.
-- **Fri 28 August — feedback call.** Dhiren owes **decisions, not data**: which revenue reading, and the FA03H export-or-invest answer. Full ask list in `WOODLANDS_CLIENT_INPUTS.md`.
+- **~~19–27 August — Block 2 and Block 3~~ — both SHIPPED 20 August**, along with migration `063`. `WOODLANDS_FIX_PLAN.md` carries the per-finding record. **Nothing is left to build.** What remains before the walkthrough is demo curation, a full role-by-role run-through, and a final audit pass.
+- **Fri 28 August — feedback call.** Dhiren owes **decisions, not data**. The three that matter: the **FA03H export-or-invest answer**; **whether a product REPLACE counts as one change or two** (`063` charges `|added| + |removed|`, so a swap costs 2× the fee — a money rule on real stallholders, and the brief's wording admits the other reading); and **Rose's shift times** for Administration, Maintenance and Transport (8 staff currently resolving to `—`). Full ask list in `WOODLANDS_CLIENT_INPUTS.md`.
+  - *"Which revenue reading" is no longer on that list.* It was, until 20 August — Events shipped three toggleable readings for him to choose between. **Block 3 removed the feature instead**, on the reading that he asked to record payments rather than to track revenue. Resolved by removal, not by his answer.
 - **Mon 31 Aug / Tue 1 Sep — full-system walkthrough.** The deadline everything is judged against.
-- **Then:** real-data load (joint session with Rose + Martin), an audit against real data, `062`'s owed rebuild proof before any `063`, and Sprint F handover mechanics.
+- **Then:** real-data load (joint session with Rose + Martin), an audit against real data, and Sprint F handover mechanics.
+- **The rebuild-proof gate has moved, not closed.** §2.6 run 10 discharged `062` on 20 August, before `063` was written. **`063` is the proof now owed, before any `064`.** It is a standing per-migration discipline — a proof expires the moment the next migration exists.
 - **Attendance is frozen** until the FA03H answer lands. QR is superseded and will not be built.
 
 *Historical, kept as written:*
