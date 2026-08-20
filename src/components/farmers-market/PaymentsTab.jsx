@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast, EmptyRow, Button } from '../admin/AdminUI'
 import { FM_PAY_METHODS, fmtDate, fmtMWK, todayStr, getMarketDayForMonth } from './FarmersMarketUI'
 import { FM_FEES } from '../../lib/constants'
+import { useFlash } from '../ui/useFlash'
 
 const ALL_PAY_TYPES = [
   { value: 'application', label: 'Application Fee',  amount: FM_FEES.application      },
@@ -200,7 +201,7 @@ export default function PaymentsTab() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-3 flex-wrap">
-            <h3 className="text-sm font-semibold text-gray-800">Business Payment Status</h3>
+            <h3 className="text-sm font-bold text-navy">Business Payment Status</h3>
             {marketDateNow && (
               <span className="text-xs text-gray-400">Market: {fmtDate(marketDateNow)}</span>
             )}
@@ -211,23 +212,23 @@ export default function PaymentsTab() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSortByOut(p => !p)}
-              className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-2.5 py-1.5 rounded-lg transition-colors"
+              className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-2.5 py-1.5 rounded-lg wl-transition"
             >
               {sortByOut ? 'Sort: Outstanding ↓' : 'Sort: Stall No ↑'}
             </button>
             <button
               onClick={() => openLogModal()}
-              className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
+              className="bg-teal hover:bg-teal-deep text-white font-medium px-3 py-1.5 rounded-lg text-sm wl-transition"
             >
               + Log Payment
             </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto border border-gray-200 rounded-xl">
+        <div className="wl-scroll-x border border-line rounded-xl bg-white">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 border-b border-line">
                 <Th>Stall No</Th>
                 <Th>Business Name</Th>
                 <Th>Approved?</Th>
@@ -244,9 +245,9 @@ export default function PaymentsTab() {
                 const outstanding = holderOutstanding(h)
                 const visitOk    = visitPaidIds.has(h.id)
                 return (
-                  <tr key={h.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={h.id} className="border-b border-line hover:bg-gray-50">
                     <Td>{h.stall_number}</Td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 text-sm font-semibold text-navy">
                       {h.business_name || h.full_name}
                       {h.business_name && (
                         <span className="block text-xs font-normal text-gray-400">{h.full_name}</span>
@@ -255,7 +256,7 @@ export default function PaymentsTab() {
                     <td className="px-4 py-3 text-sm">
                       {isActive
                         ? <span className="text-green-600 font-medium">✓ Active</span>
-                        : <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700">Pending</span>
+                        : <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-yellow-100 text-yellow-700">Pending</span>
                       }
                     </td>
                     <td className="px-4 py-3 text-sm">
@@ -287,7 +288,7 @@ export default function PaymentsTab() {
                     <td className="px-3 py-3">
                       <button
                         onClick={() => openLogModal(h)}
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors whitespace-nowrap"
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 wl-transition whitespace-nowrap"
                       >
                         Log Payment
                       </button>
@@ -296,9 +297,10 @@ export default function PaymentsTab() {
                 )
               })}
               {mainHolders.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">No businesses found</td>
-                </tr>
+                <EmptyRow
+                  cols={8}
+                  msg="No business matches this search. Clear it to see the full list."
+                />
               )}
             </tbody>
           </table>
@@ -309,7 +311,7 @@ export default function PaymentsTab() {
       <div>
         <button
           onClick={() => setShowHistory(p => !p)}
-          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors mb-3"
+          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 wl-transition mb-3"
         >
           <span>{showHistory ? '▾' : '▸'}</span>
           Payment History
@@ -321,26 +323,27 @@ export default function PaymentsTab() {
             <div className="flex flex-wrap gap-3 mb-4 items-end">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Filter by Business</label>
-                <select
+                <Sel
                   value={filterHolder}
                   onChange={e => setFilterHolder(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                  aria-label="Filter payment history by business"
+                  wrapClassName="w-64"
                 >
                   <option value="">All businesses</option>
                   {holders.map(h => (
                     <option key={h.id} value={h.id}>{h.stall_number} — {h.full_name}</option>
                   ))}
-                </select>
+                </Sel>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
                 <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
+                  className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
                 <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
+                  className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25" />
               </div>
               {(filterHolder || filterFrom || filterTo) && (
                 <button
@@ -355,10 +358,10 @@ export default function PaymentsTab() {
               </span>
             </div>
 
-            <div className="overflow-x-auto border border-gray-200 rounded-xl">
+            <div className="wl-scroll-x border border-line rounded-xl bg-white">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
+                  <tr className="bg-gray-50 border-b border-line">
                     <Th>Date</Th>
                     <Th>Business</Th>
                     <Th>Stall No</Th>
@@ -371,9 +374,9 @@ export default function PaymentsTab() {
                 </thead>
                 <tbody>
                   {filtered.map(p => (
-                    <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={p.id} className="border-b border-line hover:bg-gray-50">
                       <Td>{fmtDate(p.payment_date)}</Td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      <td className="px-4 py-3 text-sm font-semibold text-navy">
                         {p.fm_holders?.full_name ?? '—'}
                       </td>
                       <Td>{p.fm_holders?.stall_number}</Td>
@@ -389,9 +392,10 @@ export default function PaymentsTab() {
                     </tr>
                   ))}
                   {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">No payments found</td>
-                    </tr>
+                    <EmptyRow
+                      cols={8}
+                      msg="No payments match these filters. Clear them, or log a payment above."
+                    />
                   )}
                 </tbody>
               </table>
@@ -414,7 +418,7 @@ export default function PaymentsTab() {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Business *">
                   <Sel required value={form.holder_id} onChange={f('holder_id')}>
                     <option value="">Select business…</option>
@@ -437,7 +441,7 @@ export default function PaymentsTab() {
                 </Field>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
                 <Field label="Amount (MWK) *">
                   <Inp type="number" required min="0.01" step="any"
                     value={form.amount} onChange={f('amount')} />
@@ -452,7 +456,7 @@ export default function PaymentsTab() {
                 </Field>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Reference">
                   <Inp placeholder="Receipt / transaction ref" value={form.reference} onChange={f('reference')} />
                 </Field>
@@ -462,20 +466,12 @@ export default function PaymentsTab() {
               </div>
 
               <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
-                >
+                <Button type="submit" disabled={busy} className="flex-1">
                   {busy ? 'Recording…' : 'Record Payment'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowLogModal(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
-                >
+                </Button>
+                <Button variant="secondary" onClick={() => setShowLogModal(false)} className="flex-1">
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           </div>

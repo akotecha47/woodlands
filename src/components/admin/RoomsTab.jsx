@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Field, Inp, Th, Td, Toast, useFlash } from './AdminUI'
+import { Field, Inp, Th, Td, Toast, EmptyRow, FormGrid, Button } from './AdminUI'
+import { useFlash } from '../ui/useFlash'
 
 /**
  * Rooms — the reference list stock consumption is attributed against
@@ -104,47 +105,48 @@ export default function RoomsTab() {
       <Toast toast={toast} />
 
       <div className="flex items-baseline justify-between gap-4 flex-wrap">
-        <h2 className="text-base font-semibold text-gray-800">Rooms</h2>
+        <h2 className="text-[15px] font-bold text-navy">Rooms</h2>
         <p className="text-sm text-gray-500">
           {activeCount} active of {rooms.length} · used to attribute stock consumption
         </p>
       </div>
 
-      <form onSubmit={addRoom} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end">
-        <Field label="Room number *">
-          <Inp required placeholder="A11" value={form.room_number}
-            onChange={e => setForm(f => ({ ...f, room_number: e.target.value }))} />
-        </Field>
-        <Field label="Name">
-          <Inp placeholder="Acacia" value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-        </Field>
-        <Field label="Type">
-          <Inp list="room-types" placeholder="Standard" value={form.room_type}
-            onChange={e => setForm(f => ({ ...f, room_type: e.target.value }))} />
-          <datalist id="room-types">
-            {TYPE_SUGGESTIONS.map(t => <option key={t} value={t} />)}
-          </datalist>
-        </Field>
-        <Field label="Block">
-          <Inp placeholder="Block A" value={form.block}
-            onChange={e => setForm(f => ({ ...f, block: e.target.value }))} />
-        </Field>
-        <button type="submit" disabled={busy || !form.room_number.trim()}
-          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60 h-[38px]">
-          {busy ? 'Adding…' : 'Add Room'}
-        </button>
+      <form onSubmit={addRoom}>
+        <FormGrid cols={5} className="items-end">
+          <Field label="Room number *">
+            <Inp required placeholder="A11" value={form.room_number}
+              onChange={e => setForm(f => ({ ...f, room_number: e.target.value }))} />
+          </Field>
+          <Field label="Name">
+            <Inp placeholder="Acacia" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </Field>
+          <Field label="Type">
+            <Inp list="room-types" placeholder="Standard" value={form.room_type}
+              onChange={e => setForm(f => ({ ...f, room_type: e.target.value }))} />
+            <datalist id="room-types">
+              {TYPE_SUGGESTIONS.map(t => <option key={t} value={t} />)}
+            </datalist>
+          </Field>
+          <Field label="Block">
+            <Inp placeholder="Block A" value={form.block}
+              onChange={e => setForm(f => ({ ...f, block: e.target.value }))} />
+          </Field>
+          <Button type="submit" disabled={busy || !form.room_number.trim()} className="h-[38px]">
+            {busy ? 'Adding…' : 'Add Room'}
+          </Button>
+        </FormGrid>
       </form>
 
       <label className="flex items-center gap-2 text-sm text-gray-600">
         <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)}
-          className="rounded border-gray-300 text-brand-teal focus:ring-brand-teal" />
+          className="rounded border-gray-300 text-teal focus:ring-teal" />
         Show inactive rooms
       </label>
 
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-line">
             <tr>
               <Th>Room</Th>
               <Th>Name</Th>
@@ -154,12 +156,13 @@ export default function RoomsTab() {
               <Th>Actions</Th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">Loading…</td></tr>
-            )}
+          <tbody className="divide-y divide-line">
+            {loading && <EmptyRow cols={6} msg="Loading…" />}
             {!loading && visible.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">No rooms yet</td></tr>
+              <EmptyRow
+                cols={6}
+                msg="No rooms yet. Add the lodge rooms above — Consumption attributes a draw to a room from this list."
+              />
             )}
             {!loading && visible.map(r => (
               editing?.id === r.id ? (
@@ -176,9 +179,9 @@ export default function RoomsTab() {
                   <Td>
                     <div className="flex gap-2">
                       <button onClick={saveEdit}
-                        className="px-3 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">Save</button>
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition">Save</button>
                       <button onClick={() => setEditing(null)}
-                        className="px-3 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">Cancel</button>
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-white border border-line hover:bg-gray-50 text-gray-700 rounded-lg wl-transition">Cancel</button>
                     </div>
                   </Td>
                 </tr>
@@ -189,7 +192,7 @@ export default function RoomsTab() {
                   <Td>{r.room_type ?? '—'}</Td>
                   <Td>{r.block ?? '—'}</Td>
                   <Td>
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
                       r.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                     }`}>
                       {r.is_active ? 'Active' : 'Inactive'}
@@ -198,9 +201,9 @@ export default function RoomsTab() {
                   <Td>
                     <div className="flex gap-2">
                       <button onClick={() => setEditing(r)}
-                        className="px-3 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">Edit</button>
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-white border border-line hover:bg-gray-50 text-gray-700 rounded-lg wl-transition">Edit</button>
                       <button onClick={() => toggleActive(r)}
-                        className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors border ${
+                        className={`px-3 py-1 text-xs font-medium rounded-lg wl-transition border ${
                           r.is_active
                             ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200'
                             : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-200'

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Th, Td, Toast, EmptyRow } from '../admin/AdminUI'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
 import { fetchFeeSchedule } from '../../lib/fm'
 import { fmtDate, fmtMWK, AccessDenied } from './FarmersMarketUI'
+import { useFlash } from '../ui/useFlash'
 
 // Reading the schedule is owner + admin; CHANGING it is owner only, enforced by
 // RLS in migration 061 (fm_fee_schedule_owner_insert / _owner_update). A fee
@@ -60,7 +61,7 @@ export default function FeesTab() {
     <div className="p-6">
       <Toast toast={toast} />
 
-      <h2 className="text-base font-semibold text-gray-800">Fee Schedule</h2>
+      <h2 className="text-[15px] font-bold text-navy">Fee Schedule</h2>
       <p className="text-xs text-gray-500 mt-0.5 mb-5">
         The amounts the system charges. All six confirmed by Dhiren, 18 August 2026.
         {canEdit
@@ -68,12 +69,12 @@ export default function FeesTab() {
           : ' Only the owner can change an amount.'}
       </p>
 
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-line">
             <tr><Th>Fee</Th><Th>Code</Th><Th>Amount</Th><Th>Status</Th><Th>Updated</Th>{canEdit && <Th>Actions</Th>}</tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-line">
             {fees.map(fee => (
               <tr key={fee.fee_code} className={fee.is_active ? 'hover:bg-gray-50' : 'bg-gray-50 text-gray-400'}>
                 <Td>
@@ -92,13 +93,13 @@ export default function FeesTab() {
                   {editing?.fee_code === fee.fee_code ? (
                     <input type="number" value={editing.amount} autoFocus
                       onChange={e => setEditing(p => ({ ...p, amount: e.target.value }))}
-                      className="w-32 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
+                      className="w-32 bg-white border border-gray-300 rounded-lg px-2 py-1 text-sm wl-transition focus:border-teal focus:ring-2 focus:ring-teal/25" />
                   ) : (
                     <span className="font-semibold text-gray-900">{fmtMWK(fee.amount)}</span>
                   )}
                 </Td>
                 <Td>
-                  <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
                     fee.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
                     {fee.is_active ? 'Active' : 'Retired'}
                   </span>
@@ -110,16 +111,16 @@ export default function FeesTab() {
                       {editing?.fee_code === fee.fee_code ? (
                         <>
                           <button onClick={save} disabled={busy}
-                            className="text-xs px-2 py-0.5 bg-brand-teal text-white rounded transition-colors disabled:opacity-50">Save</button>
+                            className="text-xs px-2 py-0.5 bg-teal text-white rounded wl-transition disabled:opacity-50">Save</button>
                           <button onClick={() => setEditing(null)}
-                            className="text-xs px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded transition-colors">Cancel</button>
+                            className="text-xs px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded wl-transition">Cancel</button>
                         </>
                       ) : (
                         <>
                           <button onClick={() => setEditing({ fee_code: fee.fee_code, amount: String(fee.amount) })}
-                            className="text-xs px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded transition-colors">Edit</button>
+                            className="text-xs px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded wl-transition">Edit</button>
                           <button onClick={() => toggleActive(fee)}
-                            className="text-xs px-2 py-0.5 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded transition-colors">
+                            className="text-xs px-2 py-0.5 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded wl-transition">
                             {fee.is_active ? 'Retire' : 'Reactivate'}
                           </button>
                         </>
@@ -130,7 +131,10 @@ export default function FeesTab() {
               </tr>
             ))}
             {fees.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">No fees configured.</td></tr>
+              <EmptyRow
+                cols={6}
+                msg="No fees configured. This schedule is what the market charges for stalls, ID cards and product changes — until it has rows there is nothing to quote from."
+              />
             )}
           </tbody>
         </table>

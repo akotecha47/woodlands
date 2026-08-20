@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader, Tabs, Card } from '../components/ui/kit'
 import StaffTab       from '../components/admin/StaffTab'
 import UsersTab       from '../components/admin/UsersTab'
 import AddUserTab     from '../components/admin/AddUserTab'
@@ -22,23 +23,18 @@ export default function Admin() {
   const { Component } = TABS.find(t => t.id === tab)
 
   return (
-    <div className="space-y-5">
-      <h1 className="font-brand text-2xl font-semibold text-gray-900">Admin</h1>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Configuration"
+        title="Admin"
+        subtitle="The reference data the rest of the system runs on — people, logins, departments, the catalogue and the rooms."
+      />
 
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              tab === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={TABS} value={tab} onChange={setTab} ariaLabel="Admin sections" />
 
-      <div className="bg-white border border-gray-200 rounded-xl">
+      <Card className="overflow-hidden">
         <Component />
-      </div>
+      </Card>
     </div>
   )
 }

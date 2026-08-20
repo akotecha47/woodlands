@@ -1,42 +1,53 @@
-export const fieldCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal disabled:bg-gray-50'
+/**
+ * Admin module helpers — and, historically, the de-facto shared UI file: 37
+ * screens across all six modules import Field / Inp / Sel / Th / Td / Toast /
+ * fieldCls from here.
+ *
+ * Block 2 turned that accident into the adoption path. These are now thin
+ * re-exports of the canonical kit in src/components/ui/kit.jsx, so every one of
+ * those 37 screens picked up the locked palette, the landscape form row and the
+ * styled select without being individually rewritten.
+ *
+ * New code should import from '../ui/kit' directly. This file stays as the
+ * compatibility seam, not as a second source of truth.
+ *
+ * WHAT IT DOES NOT RE-EXPORT: `fieldCls`, `useFlash` and `cx` are not
+ * components, and a module that mixes components with plain values loses Fast
+ * Refresh for all of them. Take those from '../ui/kit.constants' and
+ * '../ui/useFlash' directly — they are one import line either way.
+ */
 
-export function Field({ label, children }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
-    </div>
-  )
-}
-
-export function Inp(props) { return <input className={fieldCls} {...props} /> }
-export function Sel({ children, ...props }) { return <select className={fieldCls} {...props}>{children}</select> }
-
-export function Th({ children }) {
-  return <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{children}</th>
-}
-
-export function Td({ children }) {
-  return <td className="px-4 py-3 text-sm text-gray-600">{children ?? '—'}</td>
-}
+export {
+  Field,
+  Inp,
+  Sel,
+  Txt,
+  Th,
+  Td,
+  TdBold,
+  Thead,
+  Toast,
+  Button,
+  Card,
+  CardHeader,
+  CardBody,
+  SectionHead,
+  TableWrap,
+  EmptyRow,
+  EmptyState,
+  Badge,
+  Tabs,
+  PageHeader,
+  FormGrid,
+  FormPanel,
+  FormActions,
+  SearchInput,
+  StatRow,
+  StatTile,
+  ModalShell,
+} from '../ui/kit'
 
 export function fmtDate(ts) {
   if (!ts) return '—'
   return new Date(ts).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-export function Toast({ toast }) {
-  if (!toast) return null
-  return (
-    <div className={`fixed top-4 right-4 z-40 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white ${toast.ok ? 'bg-green-600' : 'bg-red-600'}`}>
-      {toast.msg}
-    </div>
-  )
-}
-
-export function useFlash(setToast) {
-  return function flash(msg, ok = true) {
-    setToast({ msg, ok })
-    setTimeout(() => setToast(null), 3500)
-  }
 }

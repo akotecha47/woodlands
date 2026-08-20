@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Th, Td, Toast } from '../admin/AdminUI'
+import { Field, Sel, SearchInput, SectionHead, TableWrap, Thead } from '../ui/kit'
 import { EmptyRow, TdBold, StockBadge, fetchDepartmentList } from './InventoryUI'
 import { stockLocations } from '../../lib/constants'
+import { useFlash } from '../ui/useFlash'
 
 export default function StockLevelsTab() {
   const [rows,        setRows]        = useState([])
   const [locations,   setLocations]   = useState([])
   const [locFilter,   setLocFilter]   = useState('')
+  // Display-only filter over rows already loaded. U-03: with 559 bar items
+  // and one row per (item, location), a name search is what makes this table
+  // readable. It changes nothing about what is fetched.
+  const [query,       setQuery]       = useState('')
   const [toast,       setToast]       = useState(null)
   const flash = useFlash(setToast)
 
@@ -47,36 +53,55 @@ export default function StockLevelsTab() {
     fetchDepartmentList().then(d => setLocations(stockLocations(d)))
   }, [])
 
-  const visible = locFilter ? rows.filter(r => r.locationKey === locFilter) : rows
+  const q = query.trim().toLowerCase()
+  const visible = rows.filter(r =>
+    (!locFilter || r.locationKey === locFilter) &&
+    (!q || r.name.toLowerCase().includes(q) || (r.sku ?? '').toLowerCase().includes(q)))
 
   return (
-    <div className="p-6">
+    <div className="p-6 space-y-5">
       <Toast toast={toast} />
-      <div className="flex items-center justify-between gap-4 mb-4">
-        <h2 className="text-base font-semibold text-gray-800">Current Stock</h2>
-        <select
-          value={locFilter}
-          onChange={e => setLocFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
-        >
-          <option value="">All Locations</option>
-          {locations.map(name => <option key={name} value={name}>{name}</option>)}
-        </select>
+
+      <SectionHead
+        title="Current stock"
+        subtitle="One row per item per location. The Main Store and each department hold their balances separately."
+        action={
+          <p className="text-xs text-ink-soft tnum">
+            {visible.length} of {rows.length} rows
+          </p>
+        }
+      />
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Search" className="w-full sm:w-72">
+          <SearchInput
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Item name or SKU…"
+            aria-label="Search stock by item name or SKU"
+          />
+        </Field>
+        <Field label="Location" className="w-full sm:w-56">
+          <Sel value={locFilter} onChange={e => setLocFilter(e.target.value)}>
+            <option value="">All locations</option>
+            {locations.map(name => <option key={name} value={name}>{name}</option>)}
+          </Sel>
+        </Field>
       </div>
 
-      <div className="overflow-x-auto">
+      <TableWrap>
         <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <Th>Item Name</Th><Th>SKU</Th><Th>Location</Th><Th>Unit</Th>
-              <Th>Current Stock</Th><Th>Reorder Level</Th><Th>Par</Th><Th>Status</Th>
+          <Thead>
+            <tr>
+              <Th>Item</Th><Th>SKU</Th><Th>Location</Th><Th>Unit</Th>
+              <Th>In stock</Th><Th>Reorder at</Th><Th>Par</Th><Th>Status</Th>
             </tr>
-          </thead>
+          </Thead>
           <tbody>
             {visible.map(item => (
-              <tr key={item.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={item.id} className="border-t border-line hover:bg-gray-50 wl-transition">
                 <TdBold>{item.name}</TdBold>
-                <Td>{item.sku}</Td>
+                <Td><span className="text-ink-soft">{item.sku}</span></Td>
                 <Td>{item.location}</Td>
                 <Td>{item.unit}</Td>
                 <TdBold>{item.quantity}</TdBold>
@@ -84,7 +109,7 @@ export default function StockLevelsTab() {
                 <td className="px-4 py-3 text-sm">
                   {item.par_level == null
                     ? <span className="text-gray-300" title="Not on the end-of-day par cycle">—</span>
-                    : <span className={Number(item.quantity) < Number(item.par_level) ? 'font-medium text-amber-700' : 'text-gray-600'}>
+                    : <span className={Number(item.quantity) < Number(item.par_level) ? 'font-semibold text-amber-700' : 'text-gray-600'}>
                         {item.par_level}
                       </span>}
                 </td>
@@ -96,13 +121,13 @@ export default function StockLevelsTab() {
             {visible.length === 0 && (
               <EmptyRow cols={8} msg={
                 rows.length === 0
-                  ? 'No stock items yet. Add items in Admin → Stock Items.'
-                  : 'No items at this location.'
+                  ? 'No stock items yet. Add them in Admin \u2192 Stock Items.'
+                  : 'Nothing matches this search and location. Clear the filters to see everything.'
               } />
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
     </div>
   )
 }

@@ -1,11 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Th, Td, Toast, useFlash, fieldCls } from '../admin/AdminUI'
+import { Field, Inp, Sel, Txt, Th, Td, Toast } from '../admin/AdminUI'
+import {
+  Badge, Button, FormGrid, FormActions, SectionHead, TableWrap, Thead,
+} from '../ui/kit'
 import { itemLabel, AccessDenied, EmptyRow, TdBold, fetchActiveItems, fetchDepartmentList } from './InventoryUI'
 import { recordConsumption } from '../../lib/stock'
 import { INVENTORY_VIEW_ROLES, MANAGE_ROLES } from '../../lib/roles'
 import { SUB_LOCATIONS } from '../../lib/constants'
+import { useFlash } from '../ui/useFlash'
 
 /**
  * Consumption — the "which rooms used which stock" screen (FUNCTIONAL_SPEC §2.3).
@@ -38,15 +42,12 @@ const ROW_LIMIT = 500
 const balanceKey = (itemId, location, subLocation) =>
   `${itemId}|${location}|${subLocation ?? ''}`
 
+// Source is a provenance label, not a health verdict: both tones are
+// non-alarming. Bar count is `warn`-toned only because it is the derived one
+// — nobody typed it in — and that is worth noticing.
 function SourceBadge({ source }) {
   const bar = source === 'bar_count'
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${
-      bar ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-    }`}>
-      {bar ? 'Bar count' : 'Draw'}
-    </span>
-  )
+  return <Badge tone={bar ? 'warn' : 'brand'}>{bar ? 'Bar count' : 'Draw'}</Badge>
 }
 
 export default function ConsumptionTab() {
@@ -208,145 +209,150 @@ export default function ConsumptionTab() {
     <div className="p-6 space-y-8">
       <Toast toast={toast} />
 
-      {/* ── the draw form ───────────────────────────────────────────────── */}
-      <section className="max-w-md">
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Record Consumption</h2>
-        <p className="text-sm text-gray-500 mb-5">
-          Stock drawn and used — what, where and who. Bar consumption is captured
-          by the end-of-day count instead and appears in the ledger below on its own.
-        </p>
+      {/* —— the draw form ———————————————— */}
+      <section>
+        <SectionHead
+          title="Record consumption"
+          subtitle="Stock drawn and used — what, where and who. Bar consumption is captured by the end-of-day count instead, and appears in the ledger below on its own."
+          className="mb-6"
+        />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Field label="Location *">
-            <Sel required value={form.location}
-              onChange={e => setForm(f => ({
-                ...f, location: e.target.value, sub_location: '', stock_item_id: '',
-              }))}>
-              <option value="">Select location…</option>
-              {locations.map(l => <option key={l} value={l}>{l}</option>)}
-            </Sel>
-          </Field>
-
-          {subOptions.length > 0 && (
-            <Field label="Sub-location">
-              <Sel value={form.sub_location}
-                onChange={e => setForm(f => ({ ...f, sub_location: e.target.value, stock_item_id: '' }))}>
-                <option value="">{form.location} (main)</option>
-                {subOptions.map(s => <option key={s} value={s}>{s}</option>)}
+        <form onSubmit={handleSubmit} className="max-w-4xl">
+          <FormGrid>
+            <Field label="Location *">
+              <Sel required value={form.location}
+                onChange={e => setForm(f => ({
+                  ...f, location: e.target.value, sub_location: '', stock_item_id: '',
+                }))}>
+                <option value="">Select location…</option>
+                {locations.map(l => <option key={l} value={l}>{l}</option>)}
               </Sel>
             </Field>
-          )}
 
-          <Field label="Item *">
-            <Sel required disabled={!form.location} value={form.stock_item_id}
-              onChange={e => setForm(f => ({ ...f, stock_item_id: e.target.value }))}>
-              <option value="">
-                {form.location ? 'Select item…' : 'Choose a location first'}
-              </option>
-              {itemsHere.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
-            </Sel>
-          </Field>
+            {subOptions.length > 0 ? (
+              <Field label="Sub-location">
+                <Sel value={form.sub_location}
+                  onChange={e => setForm(f => ({ ...f, sub_location: e.target.value, stock_item_id: '' }))}>
+                  <option value="">{form.location} (main)</option>
+                  {subOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                </Sel>
+              </Field>
+            ) : <div className="hidden md:block" aria-hidden="true" />}
 
-          {form.location && itemsHere.length === 0 && (
-            <p className="text-sm text-amber-700">
-              {form.location}{form.sub_location ? ` / ${form.sub_location}` : ''} holds no
-              stock yet. Issue stock to it from the Main Store first.
-            </p>
-          )}
-
-          {available !== undefined && (
-            <p className="text-sm text-gray-500">
-              Available: <span className="font-medium text-gray-800">{available}</span>
-            </p>
-          )}
-
-          <Field label="Quantity used *">
-            <Inp type="number" required min="0" step="any" value={form.quantity}
-              onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
-          </Field>
-
-          <Field label="Room">
-            <Sel value={form.room_id}
-              onChange={e => setForm(f => ({ ...f, room_id: e.target.value }))}>
-              <option value="">No specific room</option>
-              {rooms.map(r => (
-                <option key={r.id} value={r.id}>
-                  {r.room_number}{r.name ? ` — ${r.name}` : ''}
+            <Field
+              label="Item *"
+              span="full"
+              hint={
+                form.location && itemsHere.length === 0
+                  ? `${form.location}${form.sub_location ? ` / ${form.sub_location}` : ''} holds no stock yet — issue stock to it from the Main Store first.`
+                  : available !== undefined
+                    ? `${available} available at this location.`
+                    : undefined
+              }
+            >
+              <Sel required disabled={!form.location} value={form.stock_item_id}
+                onChange={e => setForm(f => ({ ...f, stock_item_id: e.target.value }))}>
+                <option value="">
+                  {form.location ? 'Select item…' : 'Choose a location first'}
                 </option>
-              ))}
-            </Sel>
-          </Field>
+                {itemsHere.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
+              </Sel>
+            </Field>
 
-          <Field label="Used by">
-            <Sel value={form.consumed_by}
-              onChange={e => setForm(f => ({ ...f, consumed_by: e.target.value }))}>
-              <option value="">Not recorded</option>
-              {staffOptions.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.full_name}{s.department ? ` — ${s.department}` : ''}
-                </option>
-              ))}
-            </Sel>
-          </Field>
+            <Field label="Quantity used *">
+              <Inp type="number" required min="0" step="any" value={form.quantity}
+                onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+            </Field>
 
-          <Field label="Reason / notes">
-            <textarea rows={2} className={fieldCls}
-              placeholder="e.g. Guest room restock"
-              value={form.reason}
-              onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
-          </Field>
+            <Field label="Room">
+              <Sel value={form.room_id}
+                onChange={e => setForm(f => ({ ...f, room_id: e.target.value }))}>
+                <option value="">No specific room</option>
+                {rooms.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.room_number}{r.name ? ` — ${r.name}` : ''}
+                  </option>
+                ))}
+              </Sel>
+            </Field>
 
-          <Field label="Recorded by">
-            <Inp disabled value={profile?.full_name ?? '—'} />
-          </Field>
+            <Field label="Used by">
+              <Sel value={form.consumed_by}
+                onChange={e => setForm(f => ({ ...f, consumed_by: e.target.value }))}>
+                <option value="">Not recorded</option>
+                {staffOptions.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name}{s.department ? ` — ${s.department}` : ''}
+                  </option>
+                ))}
+              </Sel>
+            </Field>
 
-          <button type="submit" disabled={busy || !ready}
-            className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
-            {busy ? 'Saving…' : 'Record Consumption'}
-          </button>
+            <Field label="Recorded by" hint="Taken from your sign-in; not editable.">
+              <Inp disabled value={profile?.full_name ?? '—'} />
+            </Field>
+
+            <Field label="Reason / notes" span="full">
+              <Txt rows={2} placeholder="e.g. Guest room restock"
+                value={form.reason}
+                onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+            </Field>
+          </FormGrid>
+
+          <FormActions>
+            <Button type="submit" disabled={busy || !ready}>
+              {busy ? 'Saving…' : 'Record consumption'}
+            </Button>
+          </FormActions>
         </form>
       </section>
 
-      {/* ── the ledger ──────────────────────────────────────────────────── */}
-      <section className="space-y-4">
-        <div className="flex items-baseline justify-between gap-4 flex-wrap">
-          <h2 className="text-base font-semibold text-gray-800">Consumption Ledger</h2>
-          <p className="text-sm text-gray-500">
-            {rows.length} {rows.length === 1 ? 'entry' : 'entries'} · {totalUsed} units used
-            {rows.length === ROW_LIMIT && ' (showing the most recent ' + ROW_LIMIT + ')'}
-          </p>
-        </div>
+      {/* —— the ledger —————————————————— */}
+      <section className="space-y-4 pt-8 border-t border-line">
+        <SectionHead
+          title="Consumption ledger"
+          subtitle={`${rows.length} ${rows.length === 1 ? 'entry' : 'entries'} · ${totalUsed} units used${rows.length === ROW_LIMIT ? ` (showing the most recent ${ROW_LIMIT})` : ''}`}
+        />
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-end gap-3">
           {canManage && (
-            <Sel value={fLocation} onChange={e => setFLocation(e.target.value)}>
-              <option value="">All departments</option>
-              {locations.map(l => <option key={l} value={l}>{l}</option>)}
-            </Sel>
+            <Field label="Department" className="w-44">
+              <Sel value={fLocation} onChange={e => setFLocation(e.target.value)}>
+                <option value="">All departments</option>
+                {locations.map(l => <option key={l} value={l}>{l}</option>)}
+              </Sel>
+            </Field>
           )}
-          <Sel value={fRoom} onChange={e => setFRoom(e.target.value)}>
-            <option value="">All rooms</option>
-            {rooms.map(r => <option key={r.id} value={r.id}>{r.room_number}{r.name ? ` — ${r.name}` : ''}</option>)}
-          </Sel>
-          <Sel value={fItem} onChange={e => setFItem(e.target.value)}>
-            <option value="">All items</option>
-            {items.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
-          </Sel>
-          <Sel value={fStaff} onChange={e => setFStaff(e.target.value)}>
-            <option value="">All staff</option>
-            {staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-          </Sel>
-          <Inp type="date" value={fFrom} onChange={e => setFFrom(e.target.value)} />
-          <Inp type="date" value={fTo}   onChange={e => setFTo(e.target.value)} />
-          <button type="button" onClick={clearFilters}
-            className="px-3 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">
-            Clear
-          </button>
+          <Field label="Room" className="w-44">
+            <Sel value={fRoom} onChange={e => setFRoom(e.target.value)}>
+              <option value="">All rooms</option>
+              {rooms.map(r => <option key={r.id} value={r.id}>{r.room_number}{r.name ? ` — ${r.name}` : ''}</option>)}
+            </Sel>
+          </Field>
+          <Field label="Item" className="w-52">
+            <Sel value={fItem} onChange={e => setFItem(e.target.value)}>
+              <option value="">All items</option>
+              {items.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
+            </Sel>
+          </Field>
+          <Field label="Used by" className="w-44">
+            <Sel value={fStaff} onChange={e => setFStaff(e.target.value)}>
+              <option value="">All staff</option>
+              {staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </Sel>
+          </Field>
+          <Field label="From" className="w-40">
+            <Inp type="date" value={fFrom} onChange={e => setFFrom(e.target.value)} />
+          </Field>
+          <Field label="To" className="w-40">
+            <Inp type="date" value={fTo} onChange={e => setFTo(e.target.value)} />
+          </Field>
+          <Button variant="secondary" onClick={clearFilters}>Clear</Button>
         </div>
 
-        <div className="overflow-x-auto border border-gray-200 rounded-xl">
+        <TableWrap>
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <Thead>
               <tr>
                 <Th>Date</Th>
                 <Th>Source</Th>
@@ -357,14 +363,14 @@ export default function ConsumptionTab() {
                 <Th>Qty</Th>
                 <Th>Reason</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+            </Thead>
+            <tbody className="divide-y divide-line">
               {loading && <EmptyRow cols={8} msg="Loading…" />}
               {!loading && rows.length === 0 && (
-                <EmptyRow cols={8} msg="No consumption recorded for these filters" />
+                <EmptyRow cols={8} msg="No consumption recorded for these filters. Clear them, or record a draw above." />
               )}
               {!loading && rows.map(r => (
-                <tr key={`${r.source}-${r.source_id}`} className="hover:bg-gray-50">
+                <tr key={`${r.source}-${r.source_id}`} className="hover:bg-gray-50 wl-transition">
                   <Td>{r.consumed_on}</Td>
                   <Td><SourceBadge source={r.source} /></Td>
                   <TdBold>{r.item_name}</TdBold>
@@ -372,7 +378,7 @@ export default function ConsumptionTab() {
                   <Td>{r.room_number ? `${r.room_number}${r.room_name ? ` — ${r.room_name}` : ''}` : '—'}</Td>
                   <Td>{r.consumed_by_name ?? '—'}</Td>
                   <Td>
-                    <span className="font-mono text-sm font-medium text-red-600">
+                    <span className="text-sm font-semibold text-alert tnum">
                       {Number(r.quantity)} {r.item_unit}
                     </span>
                   </Td>
@@ -381,7 +387,7 @@ export default function ConsumptionTab() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </section>
     </div>
   )

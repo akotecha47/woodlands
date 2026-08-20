@@ -181,7 +181,7 @@ export default function CheckIn() {
           <p className="text-sm text-gray-500 mt-1">Stall {holder?.stall_number}</p>
         </div>
 
-        <div className="border-t border-gray-100 pt-6 space-y-4">
+        <div className="border-t border-line pt-6 space-y-4">
 
           {/* No market today */}
           {phase === 'no_market' && (
@@ -199,7 +199,7 @@ export default function CheckIn() {
               <button
                 onClick={handleCheckIn}
                 disabled={busy}
-                className="w-full bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold py-4 rounded-xl text-lg transition-colors disabled:opacity-60"
+                className="w-full bg-teal hover:bg-teal-deep text-white font-semibold py-4 rounded-xl text-lg wl-transition disabled:opacity-60"
               >
                 {busy ? 'Checking in…' : 'Check In'}
               </button>
@@ -221,7 +221,7 @@ export default function CheckIn() {
               <button
                 onClick={handleCheckOut}
                 disabled={busy}
-                className="w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-4 rounded-xl text-lg transition-colors disabled:opacity-60"
+                className="w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-4 rounded-xl text-lg wl-transition disabled:opacity-60"
               >
                 {busy ? 'Checking out…' : 'Check Out'}
               </button>

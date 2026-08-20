@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Eye, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast } from '../admin/AdminUI'
 import { MANAGE_ROLES } from '../../lib/roles'
 import {
   EVENT_TYPES, VENUES,   // EVENT_STATUSES dropped with the Edit modal's Status control (C-10/D-4)
@@ -11,6 +11,8 @@ import {
   useRevenueReading, RevenueReadingPicker,
 } from './EventsUI'
 import { computePortfolioRevenue, REVENUE_READINGS } from '../../lib/revenue'
+import { fieldCls } from '../ui/kit.constants'
+import { useFlash } from '../ui/useFlash'
 
 function parseEventDate(val) {
   if (!val) return null
@@ -39,7 +41,7 @@ function rowHighlight(ev) {
   const depositAlert = ev.status === 'confirmed' && !ev.deposit_paid
   return soonAlert || depositAlert
     ? 'bg-amber-50 border-b border-amber-100 hover:bg-amber-100'
-    : 'border-b border-gray-100 hover:bg-gray-50'
+    : 'border-b border-line hover:bg-gray-50'
 }
 
 function applySort(events, sortBy) {
@@ -184,6 +186,10 @@ export default function EventsListTab({ onView }) {
   if (depositFilter === 'unpaid') displayed = displayed.filter(e => !e.deposit_paid)
   displayed = applySort(displayed, sortBy)
 
+  // Whether the empty table means "nothing here" or "nothing matches" — the
+  // two need different copy, and the difference is the filters, not the data.
+  const hasFilter = statusFilter !== 'all' || depositFilter !== 'all'
+
   // ── Edit handlers ───────────────────────────────────────────────
   function openEdit(ev) {
     setEditForm({
@@ -265,7 +271,7 @@ export default function EventsListTab({ onView }) {
       <Toast toast={toast} />
 
       {/* Summary strip */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 border-b border-gray-200">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 border-b border-line">
         <div className="bg-gray-50 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">Events This Month</p>
           <p className="text-2xl font-bold text-gray-900">{totalThisMonth}</p>
@@ -300,12 +306,12 @@ export default function EventsListTab({ onView }) {
       </div>
 
       {/* Status filter tabs */}
-      <div className="flex gap-0 overflow-x-auto border-b border-gray-200 px-4 pt-3">
+      <div className="flex gap-0 overflow-x-auto border-b border-line px-4 pt-3">
         {STATUS_FILTERS.map(f => (
           <button key={f.value} onClick={() => setStatusFilter(f.value)}
-            className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+            className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 wl-transition ${
               statusFilter === f.value
-                ? 'border-brand-teal text-brand-teal'
+                ? 'border-teal text-teal'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}>
             {f.label}
@@ -314,28 +320,30 @@ export default function EventsListTab({ onView }) {
       </div>
 
       {/* Filter + sort controls */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 flex-wrap">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-line flex-wrap">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 whitespace-nowrap">Deposit</span>
-          <select
+          <Sel
             value={depositFilter}
             onChange={e => setDepositFilter(e.target.value)}
-            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-teal">
+            aria-label="Filter by deposit status"
+            wrapClassName="w-32">
             <option value="all">All</option>
             <option value="paid">Paid</option>
             <option value="unpaid">Unpaid</option>
-          </select>
+          </Sel>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 whitespace-nowrap">Sort by</span>
-          <select
+          <Sel
             value={sortBy}
             onChange={e => setSortBy(e.target.value)}
-            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-teal">
+            aria-label="Sort events by"
+            wrapClassName="w-40">
             <option value="date">Date</option>
             <option value="deposit">Deposit Status</option>
             <option value="guests">Guest Count</option>
-          </select>
+          </Sel>
         </div>
         <span className="text-xs text-gray-400 ml-auto">
           {displayed.length} event{displayed.length !== 1 ? 's' : ''}
@@ -343,10 +351,10 @@ export default function EventsListTab({ onView }) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50 border-b border-line">
               <Th>Event Name</Th>
               <Th>Type</Th>
               <Th>Date</Th>
@@ -367,14 +375,14 @@ export default function EventsListTab({ onView }) {
               const typeName = EVENT_TYPES.find(t => t.value === ev.event_type)?.label ?? ev.event_type
               return (
                 <tr key={ev.id} className={rowHighlight(ev)}>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{ev.name}</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-navy">{ev.name}</td>
                   <Td>{typeName}</Td>
                   <Td>{fmtDate(ev.event_date)}</Td>
                   <Td>{time}</Td>
                   <Td>{ev.guest_count ?? '—'}</Td>
                   <Td>{ev.venue_area ?? '—'}</Td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
                       ev.deposit_paid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                     }`}>
                       {ev.deposit_paid ? 'Paid' : 'Unpaid'}
@@ -407,7 +415,14 @@ export default function EventsListTab({ onView }) {
                 </tr>
               )
             })}
-            {displayed.length === 0 && !loading && <EmptyRow cols={10} />}
+            {displayed.length === 0 && !loading && (
+              <EmptyRow
+                cols={10}
+                msg={hasFilter
+                  ? 'No events match these filters. Clear them to see the full list.'
+                  : 'No events yet. Raise the first enquiry under Create Event and it will appear here.'}
+              />
+            )}
           </tbody>
         </table>
       </div>
@@ -423,7 +438,7 @@ export default function EventsListTab({ onView }) {
               <button onClick={() => setEditEvent(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
             </div>
             <form onSubmit={handleEdit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Event Name *">
                   <Inp required value={editForm.name}
                     onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
@@ -435,7 +450,7 @@ export default function EventsListTab({ onView }) {
                   </Sel>
                 </Field>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
                 <Field label="Event Date *">
                   <Inp type="date" required value={editForm.event_date}
                     onChange={e => setEditForm(f => ({ ...f, event_date: e.target.value }))} />
@@ -449,7 +464,7 @@ export default function EventsListTab({ onView }) {
                     onChange={e => setEditForm(f => ({ ...f, end_time: e.target.value }))} />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Guest Count">
                   <Inp type="number" min="0" value={editForm.guest_count}
                     onChange={e => setEditForm(f => ({ ...f, guest_count: e.target.value }))} />
@@ -462,7 +477,7 @@ export default function EventsListTab({ onView }) {
                   </Sel>
                 </Field>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
                 <Field label="Organiser Name">
                   <Inp value={editForm.organiser_name}
                     onChange={e => setEditForm(f => ({ ...f, organiser_name: e.target.value }))} />
@@ -499,7 +514,7 @@ export default function EventsListTab({ onView }) {
                   Cancel
                 </button>
                 <button type="submit" disabled={editBusy}
-                  className="px-4 py-2 text-sm font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg disabled:opacity-60">
+                  className="px-4 py-2 text-sm font-medium bg-teal hover:bg-teal-deep text-white rounded-lg disabled:opacity-60">
                   {editBusy ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>

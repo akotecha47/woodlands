@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast } from '../admin/AdminUI'
+import {
+  Badge, Button, EmptyState, EmptyRow, StatRow, StatTile, TableWrap, Thead,
+} from '../ui/kit'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
 import { fmtDate, fmtMWK, defaultMarketDate, FM_PAY_METHODS, todayStr, isMarketDay, getMarketDayForMonth } from './FarmersMarketUI'
+import { useFlash } from '../ui/useFlash'
 
 const VISIT_FEE = 10000
 
@@ -245,7 +249,7 @@ export default function MarketDayTab() {
   const expected       = checkedInCount * VISIT_FEE
   const outstanding    = expected - collected
   const unaddedHolders = holders.filter(h => !visitMap[h.id])
-  const colSpan        = 6 + (canManage ? 1 : 0)
+  const colSpan        = 5 + (canManage ? 1 : 0)
 
   const sortedHolders = checkedInCount > 0
     ? [...holders].sort((a, b) => {
@@ -262,44 +266,32 @@ export default function MarketDayTab() {
     <div className="p-6">
       <Toast toast={toast} />
 
-      {/* Header row */}
-      <div className="flex items-center gap-4 mb-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Market Date</label>
-          <input
-            type="date"
-            value={marketDate}
-            onChange={e => setMarketDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
-          />
+      {/* Header row. The "Live" dot is a real realtime subscription, not
+          decoration — it reports whether the channel is connected. */}
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Market date" className="w-48">
+            <Inp type="date" value={marketDate} onChange={e => setMarketDate(e.target.value)} />
+          </Field>
           {validMarketDay && isToday ? (
-            <div className="flex items-center gap-1.5 ml-1">
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${live ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
-              <span className={`text-xs font-medium ${live ? 'text-green-600' : 'text-gray-400'}`}>
+            <div className="flex items-center gap-1.5 pb-2.5">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${live ? 'bg-ok animate-pulse' : 'bg-gray-300'}`} />
+              <span className={`text-xs font-semibold ${live ? 'text-green-700' : 'text-gray-400'}`}>
                 {live ? 'Live' : 'Connecting…'}
               </span>
             </div>
           ) : validMarketDay ? (
-            <div className="flex items-center gap-1.5 ml-1">
-              <span className="w-2 h-2 rounded-full flex-shrink-0 bg-blue-400" />
-              <span className="text-xs font-medium text-blue-600">Scheduled</span>
-            </div>
+            <div className="pb-2.5"><Badge tone="brand">Scheduled</Badge></div>
           ) : null}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+
+        <div className="flex items-center gap-3 pb-0.5">
+          <span className="text-sm font-semibold text-navy tnum">
+            {checkedInCount} / {holders.length} checked in
+          </span>
           {canManage && !isDecemberDate && (
-            <button
-              onClick={() => setAddModal(true)}
-              className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
-            >
-              + Add Business
-            </button>
+            <Button onClick={() => setAddModal(true)}>Add business</Button>
           )}
-          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
-            <span className="text-sm font-semibold text-green-700">
-              {checkedInCount} / {holders.length} checked in
-            </span>
-          </div>
         </div>
       </div>
 
@@ -326,31 +318,23 @@ export default function MarketDayTab() {
             onChange={e => handleConditionsChange(e.target.value)}
             disabled={!canManage}
             placeholder={canManage ? 'Describe conditions for this market day…' : 'No conditions recorded'}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
+            className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
           />
         </div>
       )}
 
-      {/* Fee reconciliation strip */}
+      {/* Fee reconciliation — the consistent stat treatment. */}
       {checkedInCount > 0 && (
-        <div className="flex gap-3 mb-5 flex-wrap">
-          <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 flex-1 min-w-[120px]">
-            <p className="text-xs text-gray-500 mb-0.5">Expected</p>
-            <p className="text-sm font-semibold text-gray-900">{fmtMWK(expected)}</p>
-          </div>
-          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 flex-1 min-w-[120px]">
-            <p className="text-xs text-green-700 mb-0.5">Collected</p>
-            <p className="text-sm font-semibold text-green-800">{fmtMWK(collected)}</p>
-          </div>
-          <div className={`border rounded-lg px-4 py-2.5 flex-1 min-w-[120px] ${
-            outstanding > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
-          }`}>
-            <p className={`text-xs mb-0.5 ${outstanding > 0 ? 'text-red-700' : 'text-gray-500'}`}>Outstanding</p>
-            <p className={`text-sm font-semibold ${outstanding > 0 ? 'text-red-800' : 'text-gray-900'}`}>
-              {fmtMWK(outstanding)}
-            </p>
-          </div>
-        </div>
+        <StatRow cols={3} className="mb-5">
+          <StatTile label="Expected"    value={fmtMWK(expected)}  foot="Visit fee × businesses checked in" />
+          <StatTile label="Collected"   value={fmtMWK(collected)} tone="ok" />
+          <StatTile
+            label="Outstanding"
+            value={fmtMWK(outstanding)}
+            tone={outstanding > 0 ? 'alert' : 'neutral'}
+            foot={outstanding > 0 ? 'Fees still to log' : 'All fees logged'}
+          />
+        </StatRow>
       )}
 
       {/* Non-valid, non-December amber note */}
@@ -361,29 +345,35 @@ export default function MarketDayTab() {
       )}
 
       {/* Holders table or December empty state */}
+      {/* The "Type" column was `stall_type`, which is 'Other' on all 311 live
+          rows (AUDIT_3 §7) — a column that said the same word on every line of a
+          check-in sheet. The real classification is the 3-level taxonomy, shown
+          on the Businesses tab where it belongs; on market day what matters is
+          the stall, the name and whether they have paid. Dropped rather than
+          re-pointed: this screen does not load the taxonomy and Block 2 adds no
+          queries (U-10). */}
       {isDecemberDate ? (
-        <div className="rounded-xl border border-gray-200 px-6 py-12 text-center">
-          <p className="text-sm font-medium text-gray-700">No market in December.</p>
-          {nextMarketDay && (
-            <p className="mt-1 text-xs text-gray-500">
-              Next market day: <span className="font-medium">{fmtDate(nextMarketDay)}</span>
-            </p>
-          )}
+        <div className="border border-line rounded-xl bg-white">
+          <EmptyState
+            title="No market in December"
+            body={nextMarketDay
+              ? `The market runs on the last Saturday of every month except December. Next market day: ${fmtDate(nextMarketDay)}.`
+              : 'The market runs on the last Saturday of every month except December.'}
+          />
         </div>
       ) : (
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+      <TableWrap>
         <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <Th>Stall No</Th>
+          <Thead>
+            <tr>
+              <Th>Stall</Th>
               <Th>Name</Th>
               <Th>Business</Th>
-              <Th>Type</Th>
-              <Th>Check In</Th>
-              <Th>Log Fee</Th>
+              <Th>Check in</Th>
+              <Th>Log fee</Th>
               {canManage && <Th>Remove</Th>}
             </tr>
-          </thead>
+          </Thead>
           <tbody>
             {sortedHolders.map(h => {
               const visit     = visitMap[h.id]
@@ -391,20 +381,19 @@ export default function MarketDayTab() {
               const feePaid   = visit?.fee_paid ?? false
               const arrTime   = fmtTime(visit?.created_at)
               return (
-                <tr key={h.id} className={`border-b border-gray-100 transition-colors ${
+                <tr key={h.id} className={`border-b border-line wl-transition ${
                   checkedIn ? 'bg-green-50/40' : 'hover:bg-gray-50'
                 }`}>
-                  <Td>{h.stall_number}</Td>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{h.full_name}</td>
+                  <Td><span className="font-semibold text-navy">{h.stall_number}</span></Td>
+                  <td className="px-4 py-3 text-sm font-semibold text-navy">{h.full_name}</td>
                   <Td>{h.business_name}</Td>
-                  <Td>{h.stall_type}</Td>
                   <td className="px-4 py-3">
                     {canCheckIn ? (
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => handleCheckIn(h)}
                           disabled={checkedIn}
-                          className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                          className={`text-xs font-medium px-3 py-1.5 rounded-lg border wl-transition ${
                             checkedIn
                               ? 'bg-green-100 text-green-700 border-green-200 cursor-default'
                               : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
@@ -429,18 +418,18 @@ export default function MarketDayTab() {
                   </td>
                   <td className="px-4 py-3">
                     {feePaid ? (
-                      <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-green-100 text-green-700">
                         ✓ Paid
                       </span>
                     ) : checkedIn && canManage ? (
                       <button
                         onClick={() => { setFeeModal({ holder: h, visitId: visit.id }); setFeeMethod('cash'); setFeeAmount(String(VISIT_FEE)) }}
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 wl-transition"
                       >
                         Log Fee
                       </button>
                     ) : (
-                      <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-400">—</span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-gray-100 text-gray-400">—</span>
                     )}
                   </td>
                   {canManage && (
@@ -448,7 +437,7 @@ export default function MarketDayTab() {
                       {checkedIn && (
                         <button
                           onClick={() => setRemoveConfirm({ holder: h, visitId: visit.id })}
-                          className="text-gray-300 hover:text-red-500 transition-colors font-bold leading-none"
+                          className="text-gray-300 hover:text-red-500 wl-transition font-bold leading-none"
                           title={`Remove ${h.full_name} from this market day`}
                         >
                           ✕
@@ -460,13 +449,14 @@ export default function MarketDayTab() {
               )
             })}
             {holders.length === 0 && (
-              <tr>
-                <td colSpan={colSpan} className="px-4 py-8 text-center text-sm text-gray-400">No active holders</td>
-              </tr>
+              <EmptyRow
+                cols={colSpan}
+                msg="No active businesses to check in. Approve a business under Businesses and it will appear on the market-day sheet."
+              />
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
       )}
 
       {/* ── Modals ───────────────────────────────────────────────────────── */}
@@ -482,15 +472,20 @@ export default function MarketDayTab() {
             {unaddedHolders.length === 0 ? (
               <p className="text-sm text-gray-400 py-4 text-center">All active businesses are already on the list.</p>
             ) : (
-              <ul className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
+              <ul className="divide-y divide-line max-h-72 overflow-y-auto">
                 {unaddedHolders.map(h => (
                   <li key={h.id}>
                     <button
                       onClick={() => handleAddFromModal(h)}
-                      className="w-full text-left px-3 py-3 hover:bg-green-50 transition-colors rounded-lg"
+                      className="w-full text-left px-3 py-3 hover:bg-green-50 wl-transition rounded-lg"
                     >
-                      <span className="text-sm font-medium text-gray-900">{h.full_name}</span>
-                      <span className="text-xs text-gray-400 ml-2">Stall {h.stall_number} · {h.stall_type}</span>
+                      <span className="text-sm font-semibold text-navy">{h.full_name}</span>
+                      {/* `stall_type` dropped here for the same reason the Type
+                          column was (see above): it is 'Other' on all 311 live
+                          rows, so it added a word that never varied. The stall
+                          number is the identifier that actually distinguishes
+                          one line from the next. */}
+                      <span className="text-xs text-gray-400 ml-2">Stall {h.stall_number}</span>
                     </button>
                   </li>
                 ))}
@@ -498,7 +493,7 @@ export default function MarketDayTab() {
             )}
             <button
               onClick={() => setAddModal(false)}
-              className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
+              className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm wl-transition"
             >
               Cancel
             </button>
@@ -515,41 +510,30 @@ export default function MarketDayTab() {
               {feeModal.holder.full_name}
               {feeModal.holder.stall_number && ` — Stall ${feeModal.holder.stall_number}`}
             </p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (MWK)</label>
-              <input
+            <Field label="Amount (MWK)" className="mb-4">
+              <Inp
                 type="number"
                 min="0.01"
                 step="any"
                 value={feeAmount}
                 onChange={e => setFeeAmount(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
               />
-            </div>
-            <div className="mb-5">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-              <select
+            </Field>
+            <Field label="Payment Method" className="mb-5">
+              <Sel
                 value={feeMethod}
                 onChange={e => setFeeMethod(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
               >
                 {FM_PAY_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
-            </div>
+              </Sel>
+            </Field>
             <div className="flex gap-3">
-              <button
-                onClick={handleLogFee}
-                disabled={feeBusy}
-                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
-              >
+              <Button onClick={handleLogFee} disabled={feeBusy} className="flex-1">
                 {feeBusy ? 'Saving…' : 'Confirm Payment'}
-              </button>
-              <button
-                onClick={() => setFeeModal(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              </Button>
+              <Button variant="secondary" onClick={() => setFeeModal(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -566,22 +550,16 @@ export default function MarketDayTab() {
               value={visitNote}
               onChange={e => setVisitNote(e.target.value)}
               placeholder="e.g. late arrival, low stock, paid in advance…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none mb-4"
+              className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25 resize-none mb-4"
               autoFocus
             />
             <div className="flex gap-3">
-              <button
-                onClick={handleSaveNote}
-                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              <Button onClick={handleSaveNote} className="flex-1">
                 Save
-              </button>
-              <button
-                onClick={() => setNotesPrompt(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              </Button>
+              <Button variant="secondary" onClick={() => setNotesPrompt(null)} className="flex-1">
                 Skip
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -599,18 +577,12 @@ export default function MarketDayTab() {
               Any visit fee payment logged for this visit will also be deleted.
             </p>
             <div className="flex gap-3">
-              <button
-                onClick={handleRemove}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              <Button variant="danger" onClick={handleRemove} className="flex-1">
                 Remove
-              </button>
-              <button
-                onClick={() => setRemoveConfirm(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              </Button>
+              <Button variant="secondary" onClick={() => setRemoveConfirm(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>

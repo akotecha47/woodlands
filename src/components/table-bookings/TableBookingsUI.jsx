@@ -1,12 +1,16 @@
+import { Badge } from '../ui/kit'
+
 // Role gates (TB_MANAGE_ROLES etc.) live in src/lib/roles.js, not here.
 
+// Tones, not class strings. Confirmed is `brand` (teal) rather than a colour
+// of its own: it is an active state, not a health verdict.
 export const STATUS_CFG = {
-  pending:   { label: 'Pending',   badge: 'bg-yellow-100 text-yellow-700' },
-  confirmed: { label: 'Confirmed', badge: 'bg-blue-100 text-blue-700'    },
-  seated:    { label: 'Seated',    badge: 'bg-green-100 text-green-700'  },
-  completed: { label: 'Completed', badge: 'bg-gray-100 text-gray-600'    },
-  cancelled: { label: 'Cancelled', badge: 'bg-red-100 text-red-700'      },
-  no_show:   { label: 'No Show',   badge: 'bg-amber-100 text-amber-700'  },
+  pending:   { label: 'Pending',   tone: 'warn'    },
+  confirmed: { label: 'Confirmed', tone: 'brand'   },
+  seated:    { label: 'Seated',    tone: 'ok'      },
+  completed: { label: 'Completed', tone: 'neutral' },
+  cancelled: { label: 'Cancelled', tone: 'alert'   },
+  no_show:   { label: 'No Show',   tone: 'warn'    },
 }
 
 export const BOOKING_STATUSES = Object.keys(STATUS_CFG)
@@ -61,19 +65,7 @@ export function isPotentialNoShow(booking) {
 
 export function StatusBadge({ status }) {
   const cfg = STATUS_CFG[status]
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cfg?.badge ?? 'bg-gray-100 text-gray-500'}`}>
-      {cfg?.label ?? status}
-    </span>
-  )
+  return <Badge tone={cfg?.tone ?? 'neutral'}>{cfg?.label ?? status}</Badge>
 }
 
-export function AccessDenied() {
-  return (
-    <div className="p-6">
-      <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-        Access denied. You don't have permission to use this feature.
-      </div>
-    </div>
-  )
-}
+export { AccessDenied } from '../ui/kit'

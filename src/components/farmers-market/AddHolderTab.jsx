@@ -3,9 +3,11 @@ import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Txt, Toast } from '../admin/AdminUI'
+import { Button, FormGrid, FormActions, SectionHead } from '../ui/kit'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
 import { STALL_TYPES, todayStr, AccessDenied, validateStall } from './FarmersMarketUI'
+import { useFlash } from '../ui/useFlash'
 
 const BLANK = {
   full_name: '', business_name: '', stall_number: '',
@@ -81,22 +83,25 @@ export default function AddHolderTab({ onCreated }) {
   }
 
   return (
-    <div className="p-6 max-w-xl">
+    <div className="p-6">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800 mb-5">Add Business</h2>
+      <SectionHead
+        title="Add business"
+        subtitle="Registers a stallholder as Pending Review. The application fee is logged separately under Payments."
+        className="mb-6"
+      />
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Full Name *">
+      <form onSubmit={handleSubmit} className="max-w-4xl">
+        <FormGrid>
+          <Field label="Full name *">
             <Inp required placeholder="Full name" value={form.full_name} onChange={f('full_name')} />
           </Field>
-          <Field label="Business Name">
+
+          <Field label="Business name">
             <Inp placeholder="Trading name" value={form.business_name} onChange={f('business_name')} />
           </Field>
-        </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Stall Number *">
+          <Field label="Stall number *" error={stallError} hint="Letter prefix then three digits — e.g. A001, A347.">
             <Inp
               required
               placeholder="e.g. A001, A347"
@@ -104,46 +109,48 @@ export default function AddHolderTab({ onCreated }) {
               onChange={e => { setStallError(''); setForm(p => ({ ...p, stall_number: e.target.value })) }}
               onBlur={() => setForm(p => ({ ...p, stall_number: p.stall_number.toUpperCase() }))}
             />
-            {stallError && <p className="text-xs text-red-600 mt-1">{stallError}</p>}
           </Field>
-          <Field label="Stall Type *">
+
+          <Field
+            label="Stall type *"
+            hint="The broad category. What they are approved to SELL is set on the business record, through the product picker."
+          >
             <Sel required value={form.stall_type} onChange={f('stall_type')}>
               {STALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </Sel>
           </Field>
-        </div>
 
-        <Field label="Phone *">
-          <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
-            <PhoneInput
-              international
-              defaultCountry="MW"
-              value={form.phone}
-              onChange={val => setForm(p => ({ ...p, phone: val ?? '' }))}
-              inputClassName="flex-1 py-2 px-1 text-sm outline-none border-none bg-transparent min-w-0"
-            />
-          </div>
-        </Field>
+          <Field label="Phone *">
+            <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white wl-transition focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/25">
+              <PhoneInput
+                international
+                defaultCountry="MW"
+                value={form.phone}
+                onChange={val => setForm(p => ({ ...p, phone: val ?? '' }))}
+                inputClassName="flex-1 py-2 px-1 text-sm outline-none border-none bg-transparent min-w-0"
+              />
+            </div>
+          </Field>
 
-        <Field label="Email">
-          <Inp type="email" placeholder="Email address (optional)" value={form.email} onChange={f('email')} />
-        </Field>
+          <Field label="Email">
+            <Inp type="email" placeholder="Email address (optional)" value={form.email} onChange={f('email')} />
+          </Field>
 
-        <Field label="Notes">
-          <textarea rows={3} className={`${fieldCls} resize-none`}
-            placeholder="Any notes about this business…"
-            value={form.notes} onChange={f('notes')} />
-        </Field>
+          <Field label="Notes" span="full">
+            <Txt rows={3} placeholder="Anything worth recording about this business…"
+              value={form.notes} onChange={f('notes')} />
+          </Field>
+        </FormGrid>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-xs text-blue-700">
-          Business will be created with status <strong>Pending Review</strong> until approved by a manager.
-          Application fee of <strong>MWK 10,000</strong> must be logged separately in the Payments tab.
-        </div>
-
-        <button type="submit" disabled={busy}
-          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
-          {busy ? 'Adding…' : 'Add Business'}
-        </button>
+        <FormActions>
+          <Button type="submit" disabled={busy}>
+            {busy ? 'Adding…' : 'Add business'}
+          </Button>
+          <p className="text-xs text-ink-soft">
+            Created as <strong className="font-semibold text-navy">Pending Review</strong> until a
+            manager approves it. Application fee: MWK 10,000, logged under Payments.
+          </p>
+        </FormActions>
       </form>
     </div>
   )

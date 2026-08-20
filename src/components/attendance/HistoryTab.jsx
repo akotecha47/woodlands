@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Th, Td, Toast, Sel } from '../admin/AdminUI'
 import { AT_MANAGE_ROLES } from '../../lib/roles'
 import {
   STATUS_CFG, ALL_STATUSES,
@@ -9,6 +9,7 @@ import {
   breakMins, netMins, getShiftForDept, minsLateCalc,
   AccessDenied, StatusBadge,
 } from './AttendanceUI'
+import { useFlash } from '../ui/useFlash'
 
 function offsetDate(n) {
   const d = new Date()
@@ -130,37 +131,37 @@ export default function HistoryTab() {
       <div className="flex flex-wrap gap-3 mb-5 items-end">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Staff</label>
-          <select value={filterStaff} onChange={e => setFilterStaff(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal w-44">
+          <Sel value={filterStaff} onChange={e => setFilterStaff(e.target.value)}
+            aria-label="Filter by staff member" wrapClassName="w-44">
             <option value="">All staff</option>
             {staffList.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-          </select>
+          </Sel>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-          <select value={filterDept} onChange={e => setFilterDept(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal">
+          <Sel value={filterDept} onChange={e => setFilterDept(e.target.value)}
+            aria-label="Filter by department" wrapClassName="w-44">
             <option value="">All departments</option>
             {allDepts.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
+          </Sel>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal">
+          <Sel value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            aria-label="Filter by status" wrapClassName="w-40">
             <option value="">All statuses</option>
             {ALL_STATUSES.map(s => <option key={s} value={s}>{STATUS_CFG[s].label}</option>)}
-          </select>
+          </Sel>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
           <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
+            className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
           <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
+            className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25" />
         </div>
         {(filterStaff || filterDept || filterStatus) && (
           <button
@@ -178,9 +179,9 @@ export default function HistoryTab() {
       <div className="flex items-center gap-3 mb-5">
         <button
           onClick={() => setWeeklyView(v => !v)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border wl-transition ${
             weeklyView
-              ? 'bg-brand-teal text-white border-brand-teal'
+              ? 'bg-teal text-white border-teal'
               : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
           }`}
         >
@@ -192,15 +193,15 @@ export default function HistoryTab() {
       </div>
 
       {records.length === 0 && (
-        <p className="text-sm text-gray-400 py-8 text-center">No records found</p>
+        <p className="text-sm text-ink-soft py-10 text-center">No attendance recorded for this range. Widen the dates, or clear the filters.</p>
       )}
 
       {/* ── Weekly Summary view ─────────────────────────────────────────────── */}
       {weeklyView && records.length > 0 && (
-        <div className="overflow-x-auto border border-gray-200 rounded-xl">
+        <div className="wl-scroll-x border border-line rounded-xl bg-white">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 border-b border-line">
                 <Th>Staff Name</Th>
                 <Th>Department</Th>
                 <Th>Week</Th>
@@ -220,8 +221,8 @@ export default function HistoryTab() {
                 const totalMins = wkRecs.map(r => netMins(r) ?? 0).reduce((s, v) => s + v, 0)
                 const avgIn   = avgTime(wkRecs.map(r => r.clock_in))
                 return (
-                  <tr key={`${staff_id}::${wk}`} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{user?.full_name ?? '—'}</td>
+                  <tr key={`${staff_id}::${wk}`} className="border-b border-line last:border-0 hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-semibold text-navy">{user?.full_name ?? '—'}</td>
                     <Td>{user?.department ?? '—'}</Td>
                     <Td>{weekLabel(wk)}</Td>
                     <td className="px-4 py-3 text-sm text-green-700 font-medium">{present}</td>
@@ -250,10 +251,10 @@ export default function HistoryTab() {
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
                   Week of {fmtDate(wkMonday)} – {fmtDate(wkEnd.toISOString().slice(0, 10))}
                 </p>
-                <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                <div className="wl-scroll-x border border-line rounded-xl bg-white">
                   <table className="w-full">
                     <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
+                      <tr className="bg-gray-50 border-b border-line">
                         <Th>Date</Th>
                         <Th>Staff Name</Th>
                         <Th>Department</Th>
@@ -279,9 +280,9 @@ export default function HistoryTab() {
                         const net        = netMins(r)
                         const late       = r.status === 'late' ? minsLateCalc(r.clock_in, shift) : null
                         return (
-                          <tr key={r.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                          <tr key={r.id} className="border-b border-line last:border-0 hover:bg-gray-50">
                             <Td>{fmtDate(r.shift_date)}</Td>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{user?.full_name ?? '—'}</td>
+                            <td className="px-4 py-3 text-sm font-semibold text-navy">{user?.full_name ?? '—'}</td>
                             <Td>{user?.department ?? '—'}</Td>
                             <Td>{shiftLabel}</Td>
                             <Td>{fmtTime(r.clock_in)}</Td>
@@ -312,7 +313,7 @@ export default function HistoryTab() {
                         )
                       })}
 
-                      <tr className="bg-gray-50 border-t border-gray-200">
+                      <tr className="bg-gray-50 border-t border-line">
                         <td colSpan={7} className="px-4 py-2 text-xs font-semibold text-gray-500">
                           Week total — {wkRecords.length} record{wkRecords.length !== 1 ? 's' : ''}
                         </td>

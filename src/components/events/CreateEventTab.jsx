@@ -4,9 +4,12 @@ import 'react-phone-number-input/style.css'
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Toast } from '../admin/AdminUI'
+import { SectionHead, FormGrid } from '../ui/kit'
 import { EVENT_TYPES, VENUES, todayStr, AccessDenied, SERVICE_STYLES, CONFERENCE_SETUPS } from './EventsUI'
 import { MANAGE_ROLES } from '../../lib/roles'
+import { fieldCls } from '../ui/kit.constants'
+import { useFlash } from '../ui/useFlash'
 
 const BLANK = {
   name: '', event_type: 'wedding', event_date: '', start_time: '', end_time: '',
@@ -108,12 +111,16 @@ export default function CreateEventTab({ onCreated }) {
   }
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800 mb-5">Create New Event</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <SectionHead
+        title="Create event"
+        subtitle="Creates the event as an Enquiry. Stock is only allocated \u2014 and only deducted \u2014 when it is confirmed from the event's own screen."
+        className="mb-6"
+      />
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-4xl">
 
-        <div className="grid grid-cols-2 gap-4">
+        <FormGrid>
           <Field label="Event Name *">
             <Inp required placeholder="Event name" value={form.name} onChange={f('name')} />
           </Field>
@@ -122,9 +129,9 @@ export default function CreateEventTab({ onCreated }) {
               {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </Sel>
           </Field>
-        </div>
+        </FormGrid>
 
-        <div className="grid grid-cols-3 gap-4">
+        <FormGrid cols={3}>
           <Field label="Event Date *">
             <Inp type="date" required value={form.event_date} onChange={f('event_date')} />
           </Field>
@@ -134,9 +141,9 @@ export default function CreateEventTab({ onCreated }) {
           <Field label="End Time">
             <Inp type="time" value={form.end_time} onChange={f('end_time')} />
           </Field>
-        </div>
+        </FormGrid>
 
-        <div className="grid grid-cols-2 gap-4">
+        <FormGrid>
           <Field label="Guest Count">
             <Inp type="number" min="0" placeholder="Number of guests"
               value={form.guest_count} onChange={f('guest_count')} />
@@ -147,15 +154,15 @@ export default function CreateEventTab({ onCreated }) {
               {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
             </Sel>
           </Field>
-        </div>
+        </FormGrid>
 
-        <div className="grid grid-cols-3 gap-4">
+        <FormGrid cols={3}>
           <Field label="Organiser Name">
             <Inp placeholder="Full name" value={form.organiser_name} onChange={f('organiser_name')} />
           </Field>
           <Field label="Organiser Contact">
             {/* Phone input wrapper styled to match fieldCls */}
-            <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+            <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-teal/25 focus-within:border-teal">
               <PhoneInput
                 international
                 defaultCountry="MW"
@@ -168,7 +175,7 @@ export default function CreateEventTab({ onCreated }) {
           <Field label="Organiser Email">
             <Inp type="email" placeholder="Email address" value={form.organiser_email} onChange={f('organiser_email')} />
           </Field>
-        </div>
+        </FormGrid>
 
         <Field label="Special Requirements">
           <textarea rows={4} className={`${fieldCls} resize-none`}
@@ -187,7 +194,7 @@ export default function CreateEventTab({ onCreated }) {
           <button
             type="button"
             onClick={() => setSetupOpen(o => !o)}
-            className="w-full flex items-center gap-2 bg-gray-50 px-4 py-2.5 text-left hover:bg-gray-100 transition-colors"
+            className="w-full flex items-center gap-2 bg-gray-50 px-4 py-2.5 text-left hover:bg-gray-100 wl-transition"
           >
             {setupOpen
               ? <ChevronDown  className="w-4 h-4 text-gray-400 shrink-0" />
@@ -200,7 +207,7 @@ export default function CreateEventTab({ onCreated }) {
           {setupOpen && (
             <div className="p-4 space-y-4">
 
-              <div className="grid grid-cols-2 gap-3">
+              <FormGrid>
                 <Field label="Service Style">
                   <Sel value={setupForm.service_style} onChange={fs('service_style')}>
                     <option value="">Select…</option>
@@ -212,7 +219,7 @@ export default function CreateEventTab({ onCreated }) {
                     <Inp placeholder="Specify style" value={setupForm.service_style_other} onChange={fs('service_style_other')} />
                   </Field>
                 )}
-              </div>
+              </FormGrid>
 
               <Field label="Drinks Menu">
                 <textarea rows={2} className={`${fieldCls} resize-none`}
@@ -232,7 +239,7 @@ export default function CreateEventTab({ onCreated }) {
                   value={setupForm.furniture_layout} onChange={fs('furniture_layout')} />
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
+              <FormGrid>
                 <Field label="Conference Setup">
                   <Sel value={setupForm.conference_setup} onChange={fs('conference_setup')}>
                     {CONFERENCE_SETUPS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -243,13 +250,13 @@ export default function CreateEventTab({ onCreated }) {
                     <Inp placeholder="Specify setup" value={setupForm.conference_setup_other} onChange={fs('conference_setup_other')} />
                   </Field>
                 )}
-              </div>
+              </FormGrid>
 
-              <div className="grid grid-cols-2 gap-3">
+              <FormGrid>
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={setupForm.stage_required} onChange={fsc('stage_required')}
-                      className="rounded border-gray-300 text-brand-teal focus:ring-brand-teal" />
+                      className="rounded border-gray-300 text-teal focus:ring-teal" />
                     <span className="text-sm font-medium text-gray-700">Stage Required</span>
                   </label>
                   {setupForm.stage_required && (
@@ -259,14 +266,14 @@ export default function CreateEventTab({ onCreated }) {
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={setupForm.cake_cutting_table} onChange={fsc('cake_cutting_table')}
-                      className="rounded border-gray-300 text-brand-teal focus:ring-brand-teal" />
+                      className="rounded border-gray-300 text-teal focus:ring-teal" />
                     <span className="text-sm font-medium text-gray-700">Cake Cutting Table</span>
                   </label>
                   {setupForm.cake_cutting_table && (
                     <Inp placeholder="Position, timing" value={setupForm.cake_cutting_notes} onChange={fs('cake_cutting_notes')} />
                   )}
                 </div>
-              </div>
+              </FormGrid>
 
               <Field label="Other Setup Details">
                 <textarea rows={3} className={`${fieldCls} resize-none`}
@@ -283,7 +290,7 @@ export default function CreateEventTab({ onCreated }) {
         </div>
 
         <button type="submit" disabled={busy}
-          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+          className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
           {busy ? 'Creating…' : 'Create Event'}
         </button>
       </form>

@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Sel, Th, Td, Toast } from '../admin/AdminUI'
 import { EmptyRow, TdBold, todayStr } from './InventoryUI'
 import { postBarCount } from '../../lib/stock'
 import { MANAGE_ROLES } from '../../lib/roles'
+import { useFlash } from '../ui/useFlash'
 
 /**
  * End-of-day bar count (FUNCTIONAL_SPEC §3, migration 059).
@@ -180,7 +181,7 @@ export default function BarCountTab() {
       <Toast toast={toast} />
 
       <div>
-        <h2 className="text-base font-semibold text-gray-800 mb-1">End-of-Day Bar Count</h2>
+        <h2 className="text-[15px] font-bold text-navy mb-1">End-of-Day Bar Count</h2>
         <p className="text-sm text-gray-500 mb-4">
           Count the shelf, then post. Posting sets the bar's stock to what you counted
           and raises a refill requisition for everything below par.
@@ -200,12 +201,12 @@ export default function BarCountTab() {
           </Field>
           <Field label="Business date">
             <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
+              className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25" />
           </Field>
           <button
             onClick={handlePost}
             disabled={busy || !location || rows.length === 0}
-            className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+            className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
             {busy ? 'Posting…' : 'Post Count'}
           </button>
         </div>
@@ -227,11 +228,11 @@ export default function BarCountTab() {
       </div>
 
       {/* ── the count sheet ─────────────────────────────────────── */}
-      <div className="border-t border-gray-100 pt-6">
-        <div className="overflow-x-auto">
+      <div className="border-t border-line pt-6">
+        <div className="wl-scroll-x border border-line rounded-xl bg-white">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 border-b border-line">
                 <Th>Item</Th><Th>SKU</Th><Th>Unit</Th>
                 <Th>System</Th><Th>Par</Th><Th>Counted</Th><Th>Shortfall</Th>
               </tr>
@@ -242,7 +243,7 @@ export default function BarCountTab() {
                 const counted = c === '' || c == null || Number.isNaN(Number(c)) ? null : Number(c)
                 const shortfall = counted == null ? null : Math.max(r.par_level - counted, 0)
                 return (
-                  <tr key={r.stock_item_id} className={`border-b border-gray-100 last:border-0 ${belowPar(r) ? 'bg-amber-50/60' : 'hover:bg-gray-50'}`}>
+                  <tr key={r.stock_item_id} className={`border-b border-line last:border-0 ${belowPar(r) ? 'bg-amber-50/60' : 'hover:bg-gray-50'}`}>
                     <TdBold>{r.name}</TdBold>
                     <Td>{r.sku}</Td>
                     <Td>{r.unit}</Td>
@@ -253,7 +254,7 @@ export default function BarCountTab() {
                         type="number" min="0" step="any"
                         value={c ?? ''}
                         onChange={e => setCounts(s => ({ ...s, [r.stock_item_id]: e.target.value }))}
-                        className="w-24 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
+                        className="w-24 bg-white border border-gray-300 rounded-lg px-2 py-1 text-sm wl-transition focus:border-teal focus:ring-2 focus:ring-teal/25" />
                     </td>
                     <td className="px-4 py-2 text-sm">
                       {shortfall == null ? '—'
@@ -278,22 +279,22 @@ export default function BarCountTab() {
 
       {/* ── recent counts ───────────────────────────────────────── */}
       {recent.length > 0 && (
-        <div className="border-t border-gray-100 pt-6">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">Recent counts</h3>
-          <div className="overflow-x-auto">
+        <div className="border-t border-line pt-6">
+          <h3 className="text-sm font-bold text-navy mb-3">Recent counts</h3>
+          <div className="wl-scroll-x border border-line rounded-xl bg-white">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
+                <tr className="bg-gray-50 border-b border-line">
                   <Th>Date</Th><Th>Bar</Th><Th>Status</Th><Th>Posted</Th>
                 </tr>
               </thead>
               <tbody>
                 {recent.map(s => (
-                  <tr key={s.id} className="border-b border-gray-100 last:border-0">
+                  <tr key={s.id} className="border-b border-line last:border-0">
                     <TdBold>{s.business_date}</TdBold>
                     <Td>{s.location}</Td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium capitalize ${
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold capitalize ${
                         s.status === 'posted' ? 'bg-green-100 text-green-700'
                         : s.status === 'draft' ? 'bg-yellow-100 text-yellow-700'
                         : 'bg-gray-100 text-gray-600'

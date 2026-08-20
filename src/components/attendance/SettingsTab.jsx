@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Toast, useFlash } from '../admin/AdminUI'
+import { Toast, Sel, EmptyRow } from '../admin/AdminUI'
 import { AT_MANAGE_ROLES } from '../../lib/roles'
 import { fmtTime, AccessDenied } from './AttendanceUI'
+import { useFlash } from '../ui/useFlash'
 
 const BLANK_ROW = {
   department: '', shift_name: '', shift_start: '08:30', shift_end: '16:30',
@@ -104,7 +105,7 @@ export default function SettingsTab() {
   }
 
   const cellCls = 'px-2 py-2 text-sm text-gray-700'
-  const inputCls = 'w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal'
+  const inputCls = 'w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-teal'
 
   function EditRow({ data, onChange, onSave, onCancel }) {
     return (
@@ -116,15 +117,16 @@ export default function SettingsTab() {
         <td className="px-2 py-2"><input type="number" min="0" value={data.late_threshold} onChange={e => onChange('late_threshold', e.target.value)} className={inputCls} /></td>
         <td className="px-2 py-2"><input type="number" min="1" max="7" value={data.days_per_week} onChange={e => onChange('days_per_week', e.target.value)} className={inputCls} /></td>
         <td className="px-2 py-2">
-          <select value={data.shift_type} onChange={e => onChange('shift_type', e.target.value)} className={inputCls}>
+          <Sel value={data.shift_type} onChange={e => onChange('shift_type', e.target.value)}
+            aria-label="Shift type" className="px-2 py-1">
             <option value="standard">Standard</option>
             <option value="rotating">Rotating</option>
-          </select>
+          </Sel>
         </td>
         <td className="px-2 py-2">
           <div className="flex gap-1.5">
-            <button onClick={onSave} disabled={busy} className="text-xs font-medium px-2 py-1 bg-brand-teal hover:bg-brand-teal-dark text-white rounded transition-colors disabled:opacity-60">Save</button>
-            <button onClick={onCancel} className="text-xs font-medium px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded transition-colors">Cancel</button>
+            <button onClick={onSave} disabled={busy} className="text-xs font-medium px-2 py-1 bg-teal hover:bg-teal-deep text-white rounded wl-transition disabled:opacity-60">Save</button>
+            <button onClick={onCancel} className="text-xs font-medium px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded wl-transition">Cancel</button>
           </div>
         </td>
       </tr>
@@ -135,19 +137,19 @@ export default function SettingsTab() {
     <div className="p-6">
       <Toast toast={toast} />
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-gray-800">Shift Settings</h2>
+        <h2 className="text-[15px] font-bold text-navy">Shift Settings</h2>
         {!adding && (
           <button onClick={() => setAdding(true)}
-            className="text-sm font-medium px-3 py-1.5 bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
+            className="text-sm font-medium px-3 py-1.5 bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition">
             + Add Shift
           </button>
         )}
       </div>
 
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50 border-b border-line">
               {['Department', 'Shift Name', 'Start', 'End', 'Late Threshold (min)', 'Days/Week', 'Type', 'Actions'].map(h => (
                 <th key={h} className="text-left px-2 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
@@ -164,7 +166,7 @@ export default function SettingsTab() {
                   onCancel={() => setEditId(null)}
                 />
               ) : (
-                <tr key={row.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                <tr key={row.id} className="border-b border-line last:border-0 hover:bg-gray-50">
                   <td className={cellCls}>{row.department}</td>
                   <td className={cellCls}>{row.shift_name}</td>
                   <td className={cellCls + ' font-mono'}>{fmtTime(row.shift_start)}</td>
@@ -179,11 +181,11 @@ export default function SettingsTab() {
                   <td className="px-2 py-2">
                     <div className="flex gap-1.5">
                       <button onClick={() => startEdit(row)}
-                        className="text-xs font-medium px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors">
+                        className="text-xs font-medium px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded wl-transition">
                         Edit
                       </button>
                       <button onClick={() => deleteShift(row.id)}
-                        className="text-xs font-medium px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded transition-colors">
+                        className="text-xs font-medium px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded wl-transition">
                         Delete
                       </button>
                     </div>
@@ -202,7 +204,10 @@ export default function SettingsTab() {
             )}
 
             {shifts.length === 0 && !adding && (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">No shift settings</td></tr>
+              <EmptyRow
+                cols={8}
+                msg="No shift windows set. Add one per department — Today and History judge lateness against these times, and without them every arrival reads as on time."
+              />
             )}
           </tbody>
         </table>

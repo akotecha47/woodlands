@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Th, Td, fmtDate, Toast, useFlash, Field, Inp, fieldCls } from './AdminUI'
+import { Th, Td, fmtDate, Toast, Field, Inp, Sel, EmptyRow, Button } from './AdminUI'
 import { OWNER_ONLY_ROLES } from '../../lib/roles'
+import { fieldCls } from '../ui/kit.constants'
+import { useFlash } from '../ui/useFlash'
 
 const BLANK = {
   full_name:       '',
@@ -140,13 +142,13 @@ export default function StaffTab() {
 
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-base font-semibold text-gray-800 mr-auto">
+        <h2 className="text-[15px] font-bold text-navy mr-auto">
           Staff ({staff.length})
         </h2>
         {isOwner && (
           <button
             onClick={openAdd}
-            className="px-3 py-1.5 bg-brand-teal hover:bg-brand-teal-dark text-white text-xs font-medium rounded-lg transition-colors"
+            className="px-3 py-1.5 bg-teal hover:bg-teal-deep text-white text-xs font-medium rounded-lg wl-transition"
           >
             + Add Staff
           </button>
@@ -155,20 +157,21 @@ export default function StaffTab() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
-        <select
+        <Sel
           value={deptFilter}
           onChange={e => setDeptFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
+          aria-label="Filter by department"
+          wrapClassName="w-48"
         >
           <option value="">All departments</option>
           {allDepts.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+        </Sel>
         <input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search name or emp no…"
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal w-52"
+          className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25 w-52"
         />
         {(deptFilter || search) && (
           <button
@@ -184,10 +187,10 @@ export default function StaffTab() {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50 border-b border-line">
               <Th>Emp No</Th>
               <Th>Full Name</Th>
               <Th>Department</Th>
@@ -205,9 +208,9 @@ export default function StaffTab() {
                 ? `${s.shift_start.slice(0, 5)} – ${s.shift_end.slice(0, 5)}`
                 : null
               return (
-                <tr key={s.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                <tr key={s.id} className="border-b border-line last:border-0 hover:bg-gray-50">
                   <Td>{s.employee_number}</Td>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                  <td className="px-4 py-3 text-sm font-semibold text-navy">
                     {s.full_name ?? '—'}
                   </td>
                   <Td>{s.department}</Td>
@@ -215,7 +218,7 @@ export default function StaffTab() {
                   <Td>{shiftLabel}</Td>
                   <Td>{fmtDate(s.hire_date)}</Td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
                       s.is_active !== false
                         ? 'bg-green-100 text-green-700'
                         : 'bg-red-100 text-red-600'
@@ -228,17 +231,17 @@ export default function StaffTab() {
                       <div className="flex gap-1.5">
                         <button
                           onClick={() => openEdit(s)}
-                          className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                          className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 wl-transition"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => s.is_active !== false ? setConfirmDeact(s) : handleReactivate(s)}
                           disabled={busy}
-                          className={`px-3 py-1 text-xs font-medium rounded-lg disabled:opacity-60 transition-colors ${
+                          className={`px-3 py-1 text-xs font-medium rounded-lg disabled:opacity-60 wl-transition ${
                             s.is_active !== false
                               ? 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'
-                              : 'bg-brand-teal/5 hover:bg-brand-teal/10 text-brand-teal border border-brand-teal/20'
+                              : 'bg-teal/5 hover:bg-teal/10 text-teal border border-teal/20'
                           }`}
                         >
                           {busy ? '…' : s.is_active !== false ? 'Deactivate' : 'Reactivate'}
@@ -250,11 +253,10 @@ export default function StaffTab() {
               )
             })}
             {filtered.length === 0 && (
-              <tr>
-                <td colSpan={isOwner ? 8 : 7} className="px-4 py-8 text-center text-sm text-gray-400">
-                  No staff records found
-                </td>
-              </tr>
+              <EmptyRow
+                cols={isOwner ? 8 : 7}
+                msg="No staff match this filter. Clear it, or add someone with + Add Staff — this roster is what the Attendance screens work from."
+              />
             )}
           </tbody>
         </table>
@@ -270,18 +272,12 @@ export default function StaffTab() {
               They will be hidden from attendance and scheduling views.
             </p>
             <div className="flex gap-3">
-              <button
-                onClick={() => handleDeactivate(confirmDeact)}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              <Button variant="danger" onClick={() => handleDeactivate(confirmDeact)} className="flex-1">
                 Deactivate
-              </button>
-              <button
-                onClick={() => setConfirmDeact(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmDeact(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -327,7 +323,7 @@ export default function StaffTab() {
                   placeholder="e.g. Continental Chef"
                 />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Shift Start">
                   <input
                     type="time"
@@ -367,19 +363,12 @@ export default function StaffTab() {
             </div>
 
             <div className="flex gap-3 pt-1">
-              <button
-                onClick={handleSave}
-                disabled={!!busyId}
-                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
-              >
+              <Button onClick={handleSave} disabled={!!busyId} className="flex-1">
                 {busyId ? 'Saving…' : isAdding ? 'Add Staff' : 'Save'}
-              </button>
-              <button
-                onClick={() => setEditRec(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              </Button>
+              <Button variant="secondary" onClick={() => setEditRec(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>

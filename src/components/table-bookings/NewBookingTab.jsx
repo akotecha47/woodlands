@@ -3,9 +3,12 @@ import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Toast } from '../admin/AdminUI'
+import { SectionHead, FormGrid } from '../ui/kit'
 import { TB_MANAGE_ROLES } from '../../lib/roles'
 import { todayStr, fmtTime, AccessDenied } from './TableBookingsUI'
+import { fieldCls } from '../ui/kit.constants'
+import { useFlash } from '../ui/useFlash'
 
 const BLANK = {
   guest_name: '', guest_phone: '', guest_email: '',
@@ -107,21 +110,25 @@ export default function NewBookingTab() {
   }
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800 mb-5">New Booking</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+      <SectionHead
+        title="New booking"
+        subtitle="Takes a reservation for the restaurant. It is created as Pending and confirmed from the Today tab."
+        className="mb-6"
+      />
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-4xl">
+        <FormGrid>
           <Field label="Guest Name *">
             <Inp required placeholder="Full name" value={form.guest_name} onChange={f('guest_name')} />
           </Field>
           <Field label="Email">
             <Inp type="email" placeholder="Optional" value={form.guest_email} onChange={f('guest_email')} />
           </Field>
-        </div>
+        </FormGrid>
 
         <Field label="Phone *">
-          <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+          <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-teal/25 focus-within:border-teal">
             <PhoneInput
               international defaultCountry="MW"
               value={form.guest_phone}
@@ -131,7 +138,7 @@ export default function NewBookingTab() {
           </div>
         </Field>
 
-        <div className="grid grid-cols-3 gap-4">
+        <FormGrid cols={3}>
           <Field label="Date *">
             <Inp type="date" required value={form.booking_date} onChange={f('booking_date')} />
           </Field>
@@ -141,7 +148,7 @@ export default function NewBookingTab() {
           <Field label="Party Size *">
             <Inp type="number" required min="1" value={form.party_size} onChange={f('party_size')} />
           </Field>
-        </div>
+        </FormGrid>
 
         <Field label="Table">
           <Sel value={form.table_id} onChange={e => setForm(p => ({ ...p, table_id: e.target.value }))}>
@@ -171,12 +178,8 @@ export default function NewBookingTab() {
             value={form.notes} onChange={f('notes')} />
         </Field>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-xs text-blue-700">
-          Booking will be created as <strong>Pending</strong>. Confirm it from the Today tab.
-        </div>
-
         <button type="submit" disabled={busy}
-          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+          className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
           {busy ? 'Creating…' : 'Create Booking'}
         </button>
       </form>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Toast, useFlash } from './AdminUI'
+import { Toast } from './AdminUI'
+import { Button, Inp, SectionHead, EmptyState } from '../ui/kit'
+import { useFlash } from '../ui/useFlash'
 
 export default function DepartmentsTab() {
   const [departments, setDepartments] = useState([])
@@ -55,51 +57,56 @@ export default function DepartmentsTab() {
   useEffect(() => { fetchDepartments() }, [])
 
   return (
-    <div className="p-6 space-y-5 max-w-lg">
+    <div className="p-6 space-y-6">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800">Departments</h2>
+      <SectionHead
+        title="Departments"
+        subtitle="Department names are stored as plain text everywhere they are used, so a rename here does not ripple. Rename with care."
+      />
 
-      <form onSubmit={addDepartment} className="flex gap-2">
-        <input
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
+      <form onSubmit={addDepartment} className="flex gap-3 max-w-xl">
+        <Inp
           placeholder="New department name"
+          aria-label="New department name"
           value={deptInput}
           onChange={e => setDeptInput(e.target.value)}
         />
-        <button
-          type="submit"
-          disabled={deptBusy || !deptInput.trim()}
-          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60 whitespace-nowrap">
-          Add
-        </button>
+        <Button type="submit" disabled={deptBusy || !deptInput.trim()}>Add</Button>
       </form>
 
-      <ul className="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden">
+      <ul className="divide-y divide-line border border-line rounded-xl overflow-hidden max-w-xl bg-white">
         {departments.map(d => (
-          <li key={d.id} className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50">
+          <li key={d.id} className="flex items-center gap-2 px-4 py-3 hover:bg-gray-50 wl-transition">
             {editingDept?.id === d.id ? (
               <>
-                <input
-                  className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                <Inp
                   value={editingDept.name}
+                  aria-label={`Rename ${d.name}`}
                   onChange={e => setEditingDept(ed => ({ ...ed, name: e.target.value }))}
                   onKeyDown={e => { if (e.key === 'Enter') saveDeptRename(); if (e.key === 'Escape') setEditingDept(null) }}
                   autoFocus
                 />
-                <button onClick={saveDeptRename} className="px-3 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">Save</button>
-                <button onClick={() => setEditingDept(null)} className="px-3 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">Cancel</button>
+                <Button size="sm" onClick={saveDeptRename}>Save</Button>
+                <Button size="sm" variant="secondary" onClick={() => setEditingDept(null)}>Cancel</Button>
               </>
             ) : (
               <>
-                <span className="flex-1 text-sm text-gray-800">{d.name}</span>
-                <button onClick={() => setEditingDept({ id: d.id, name: d.name })} className="px-3 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">Edit</button>
-                <button onClick={() => deleteDepartment(d)} className="px-3 py-1 text-xs font-medium bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-colors">Delete</button>
+                <span className="flex-1 text-sm font-semibold text-navy">{d.name}</span>
+                <Button size="sm" variant="secondary" onClick={() => setEditingDept({ id: d.id, name: d.name })}>
+                  Edit
+                </Button>
+                <Button size="sm" variant="danger" onClick={() => deleteDepartment(d)}>Delete</Button>
               </>
             )}
           </li>
         ))}
         {departments.length === 0 && (
-          <li className="px-4 py-8 text-center text-sm text-gray-400">No departments yet</li>
+          <li>
+            <EmptyState
+              title="No departments yet"
+              body="Add the first one above. Departments drive stock locations, shift settings and Department Head scoping."
+            />
+          </li>
         )}
       </ul>
     </div>

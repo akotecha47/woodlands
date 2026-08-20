@@ -1,3 +1,5 @@
+import { Badge } from '../ui/kit'
+
 // ── constants ──────────────────────────────────────────────────────────────────
 // Role gates (AT_MANAGE_ROLES etc.) live in src/lib/roles.js, not here.
 
@@ -5,12 +7,15 @@ export const LODGE_LAT = -13.9623
 export const LODGE_LNG =  33.7852
 export const RADIUS_M  =  100
 
+// Badge colour is a kit TONE now, not a class string: green/amber/red carry
+// status and nothing else, and the three tones are defined once in the kit.
+// `badge` is kept alongside `tone` because a couple of screens read it direct.
 export const STATUS_CFG = {
-  present:     { label: 'Present',       badge: 'bg-green-100 text-green-700'  },
-  late:        { label: 'Late',          badge: 'bg-amber-100 text-amber-700'  },
-  absent:      { label: 'Absent',        badge: 'bg-red-100 text-red-700'      },
-  unverified:  { label: 'Unverified',    badge: 'bg-gray-100 text-gray-500'    },
-  not_arrived: { label: 'Not Arrived',   badge: 'bg-gray-100 text-gray-400'    },
+  present:     { label: 'Present',     tone: 'ok',      badge: 'bg-green-100 text-green-700' },
+  late:        { label: 'Late',        tone: 'warn',    badge: 'bg-amber-100 text-amber-700' },
+  absent:      { label: 'Absent',      tone: 'alert',   badge: 'bg-red-100 text-red-700'     },
+  unverified:  { label: 'Unverified',  tone: 'neutral', badge: 'bg-gray-100 text-gray-500'   },
+  not_arrived: { label: 'Not Arrived', tone: 'quiet',   badge: 'bg-gray-100 text-gray-400'   },
 }
 
 export const ALL_STATUSES = ['present', 'late', 'absent', 'unverified']
@@ -159,19 +164,7 @@ export function StatusBadge({ status, minsLate }) {
   const cfg = STATUS_CFG[status]
   const label = cfg?.label ?? status ?? '—'
   const suffix = status === 'late' && minsLate ? ` · ${fmtLate(minsLate)}` : ''
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cfg?.badge ?? 'bg-gray-100 text-gray-400'}`}>
-      {label}{suffix}
-    </span>
-  )
+  return <Badge tone={cfg?.tone ?? 'quiet'}>{label}{suffix}</Badge>
 }
 
-export function AccessDenied() {
-  return (
-    <div className="p-6">
-      <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-        Access denied. You don't have permission to view this section.
-      </div>
-    </div>
-  )
-}
+export { AccessDenied } from '../ui/kit'

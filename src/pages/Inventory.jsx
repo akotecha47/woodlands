@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { PageHeader, Tabs, Card } from '../components/ui/kit'
 import { MANAGE_ROLES, INVENTORY_VIEW_ROLES } from '../lib/roles'
 import StockLevelsTab  from '../components/inventory/StockLevelsTab'
 import LogDeliveryTab  from '../components/inventory/LogDeliveryTab'
@@ -64,23 +65,23 @@ export default function Inventory() {
   const active = visibleTabs.find(t => t.id === tab) ?? visibleTabs[0] ?? null
 
   return (
-    <div className="space-y-5">
-      <h1 className="font-brand text-2xl font-semibold text-gray-900">Inventory</h1>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Stock control"
+        title="Inventory"
+        subtitle="The main store and every department sub-store: what is held, what moved, and what was used."
+      />
 
-      <div className="flex gap-1 overflow-x-auto bg-gray-100 p-1 rounded-xl w-fit max-w-full">
-        {visibleTabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              active?.id === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        tabs={visibleTabs}
+        value={active?.id}
+        onChange={setTab}
+        ariaLabel="Inventory sections"
+      />
 
-      <div className="bg-white border border-gray-200 rounded-xl">
+      <Card className="overflow-hidden">
         {active ? <active.Component /> : null}
-      </div>
+      </Card>
     </div>
   )
 }

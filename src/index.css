@@ -1,24 +1,260 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   INTER — SELF-HOSTED. No CDN, no network dependency.
+   ───────────────────────────────────────────────────────────────────────────
+   This replaced the fonts.googleapis.com <link> in index.html. The system is
+   demoed in Lilongwe; a CDN font request is a live dependency that can render
+   the wrong typeface mid-walkthrough, and `display:swap` makes that visible as
+   a flash rather than a silent fallback.
+
+   Google serves Inter v20 as a VARIABLE font — one file per subset covering
+   the whole 100–900 weight axis — so the five weights the app uses (400 body,
+   500 medium, 600 semibold, 700 bold, 800 extrabold) are two files, not ten.
+   The `font-weight: 100 900` range is what makes one file answer all five.
+
+   Subsets: latin covers the app's text plus the punctuation it leans on
+   (— · … and U+2000-206F generally); latin-ext carries the currency block
+   (U+20A0-20AB). The --font-sans fallback stack below still stands if a face
+   fails to decode.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   WOODLANDS DESIGN TOKENS — Block 2 "The Look", 20 August 2026
+   ───────────────────────────────────────────────────────────────────────────
+   These are the LOCKED tokens from the approved mockup. Every colour, radius
+   and shadow in the app derives from here. Do not add a colour that is not in
+   this block.
+
+   COLOUR RULE: green / amber / red carry STATUS and nothing else. Teal is
+   active/brand. Everything structural is navy / ink / grey. If a colour is not
+   carrying meaning, it is grey.
+
+   Tailwind v4 note: redefining --color-gray-*, --color-green-*, --color-amber-*,
+   --color-red-*, --color-blue-* here OVERRIDES Tailwind's own scales, so the
+   several hundred existing `text-gray-500` / `bg-green-100` utilities across
+   the app snap onto the locked palette without every file being rewritten.
+   That is deliberate: one definition, whole-app reach.
+   ═════════════════════════════════════════════════════════════════════════ */
+
 @theme {
-  /* ── Brand palette ──────────────────────────────────────────────────────────
-     Only brand-* keys are added here. Tailwind's default colour scales
-     (green, amber, red, etc.) are untouched — they continue to serve
-     success / warning / danger semantics across the app.                       */
-  --color-brand-teal:       #1988A3;
-  --color-brand-teal-dark:  #13708A;
-  --color-brand-teal-tint:  #E6F2F5;
-  --color-brand-navy:       #06476B;
-  --color-brand-navy-tint:  #E6EEF3;
+  /* ── Raw tokens ─────────────────────────────────────────────────────────── */
+  --color-teal:        #1e87a1;   /* the logo's own teal — primary accent    */
+  --color-teal-deep:   #166374;
+  --color-teal-tint:   #E8F3F6;
+  --color-navy:        #123A4B;   /* sidebar, headings, hero numbers          */
+  --color-navy-900:    #0C2A37;
+  --color-navy-tint:   #E7EDF0;
+  --color-ink:         #16232B;   /* body text                                */
+  --color-ink-soft:    #5A6B73;   /* secondary text, labels                   */
+  --color-line:        #E4E9EB;   /* hairlines                                */
+  --color-paper:       #F7F9FA;   /* app background                           */
+  --color-card:        #FFFFFF;
 
-  /* ── Border radius ──────────────────────────────────────────────────────────
-     Overrides Tailwind v4 defaults: lg 8px → 10px, xl 12px → 14px.
-     Components using rounded-lg / rounded-xl will reflect the new values;
-     all other sizes (sm, md, 2xl, full) stay at their Tailwind defaults.      */
-  --radius-lg: 10px;
-  --radius-xl: 14px;
+  --color-ok:          #2E9E6B;
+  --color-ok-bg:       #E8F5EE;
+  --color-warn:        #C6820E;
+  --color-warn-bg:     #FBF3E0;
+  --color-alert:       #C6483C;
+  --color-alert-bg:    #FBEBE9;
 
-  /* ── Typography ─────────────────────────────────────────────────────────────
-     font-brand utility class — available but not applied until later passes.  */
-  --font-brand: 'Cherla', system-ui, sans-serif;
+  /* ── Structural greys ───────────────────────────────────────────────────
+     Overrides Tailwind's default gray scale. Anchored on the locked tokens:
+     50 = paper, 200 = line, 500 = ink-soft, 900 = navy.                     */
+  --color-gray-50:   #F7F9FA;
+  --color-gray-100:  #EFF3F4;
+  --color-gray-200:  #E4E9EB;
+  --color-gray-300:  #CFD8DC;
+  --color-gray-400:  #8C9AA1;
+  --color-gray-500:  #5A6B73;
+  --color-gray-600:  #46565E;
+  --color-gray-700:  #33444C;
+  --color-gray-800:  #22333B;
+  --color-gray-900:  #123A4B;
+
+  /* Slate/stone/zinc are used in a handful of places (forfeited badges,
+     modal chrome). Pin them to the same greys so nothing drifts warm. */
+  --color-slate-50:  #F7F9FA;
+  --color-slate-100: #EFF3F4;
+  --color-slate-200: #E4E9EB;
+  --color-slate-700: #33444C;
+  --color-stone-100: #EFF3F4;
+  --color-stone-200: #E4E9EB;
+  --color-stone-300: #CFD8DC;
+  --color-stone-600: #46565E;
+  --color-stone-700: #33444C;
+  --color-stone-800: #22333B;
+
+  /* ── Status scales ──────────────────────────────────────────────────────
+     Only three status hues exist. Each gets a tint (badge/panel background),
+     a mid and a solid. Every green/amber/red utility in the app resolves
+     into one of these, so a status reads the same on every screen.          */
+  --color-green-50:  #E8F5EE;
+  --color-green-100: #E8F5EE;
+  --color-green-200: #C4E5D4;
+  --color-green-500: #2E9E6B;
+  --color-green-600: #2E9E6B;
+  --color-green-700: #227851;
+  --color-green-800: #1B6041;
+
+  --color-amber-50:  #FBF3E0;
+  --color-amber-100: #FBF3E0;
+  --color-amber-200: #EFDCAE;
+  --color-amber-500: #C6820E;
+  --color-amber-600: #C6820E;
+  --color-amber-700: #9A650B;
+  --color-amber-800: #7A5009;
+
+  --color-yellow-50:  #FBF3E0;
+  --color-yellow-100: #FBF3E0;
+  --color-yellow-700: #9A650B;
+
+  --color-red-50:   #FBEBE9;
+  --color-red-100:  #FBEBE9;
+  --color-red-200:  #F3CFCA;
+  --color-red-300:  #E9B3AC;
+  --color-red-500:  #C6483C;
+  --color-red-600:  #C6483C;
+  --color-red-700:  #A63A30;
+  --color-red-800:  #8A3028;
+
+  /* Blue is not a Woodlands colour. Everything reaching for it — links,
+     "Confirmed" badges, the holder-name buttons — meant "brand/active",
+     which is teal. */
+  --color-blue-50:  #E8F3F6;
+  --color-blue-100: #E8F3F6;
+  --color-blue-200: #C3DFE7;
+  --color-blue-500: #1e87a1;
+  --color-blue-600: #1e87a1;
+  --color-blue-700: #166374;
+  --color-blue-800: #12505E;
+
+  /* ── Radii ──────────────────────────────────────────────────────────────
+     One rhythm: buttons + inputs 10px · cards 16px · stat band 18px.        */
+  --radius-lg:  10px;
+  --radius-xl:  16px;
+  --radius-2xl: 18px;
+
+  /* ── Typography ─────────────────────────────────────────────────────────
+     Inter, self-hosted at the top of this file, with a full system fallback
+     stack so a face that fails to decode degrades rather than breaks. The old
+     `font-brand` / 'Cherla' alias is gone: Cherla was never loaded by
+     anything, so every heading carrying it was already falling back to
+     system-ui.                                                              */
+  --font-sans:  'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* ── Shadows ────────────────────────────────────────────────────────────── */
+  --shadow-card:  0 1px 2px rgba(18, 58, 75, .04), 0 8px 24px -12px rgba(18, 58, 75, .12);
+  --shadow-lift:  0 1px 2px rgba(18, 58, 75, .05), 0 14px 30px -14px rgba(18, 58, 75, .20);
+  --shadow-glow:  0 6px 18px -8px rgba(30, 135, 161, .55);
+  --shadow-sm:    0 1px 2px rgba(18, 58, 75, .05);
+  --shadow-md:    0 1px 2px rgba(18, 58, 75, .04), 0 8px 24px -12px rgba(18, 58, 75, .12);
+  --shadow-lg:    0 1px 2px rgba(18, 58, 75, .04), 0 12px 28px -12px rgba(18, 58, 75, .16);
+  --shadow-xl:    0 2px 4px rgba(18, 58, 75, .05), 0 20px 44px -18px rgba(18, 58, 75, .22);
+  --shadow-2xl:   0 2px 6px rgba(18, 58, 75, .06), 0 28px 60px -22px rgba(18, 58, 75, .26);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE
+   ═════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Figures are tabular everywhere. A column of numbers that jitters as it
+     updates is the single loudest "assembled, not designed" tell. */
+  table, input, td, th, .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.01em;
+  }
+
+  /* QUALITY FLOOR — a visible keyboard focus ring on everything interactive,
+     without painting a ring on mouse clicks. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* The native control's own focus ring is replaced, not doubled. */
+  :where(input, select, textarea):focus {
+    outline: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOTION — felt, not seen.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+@layer utilities {
+  .wl-transition {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 160ms;
+    transition-timing-function: cubic-bezier(.4, 0, .2, 1);
+  }
+
+  /* The dashboard stat card's hover lift + arrow reveal. */
+  .wl-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+  }
+
+  .wl-scroll-x {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .wl-lift:hover {
+    transform: none;
+  }
+}
+
+/* Print: the QR card print path in HoldersTab injects its own @page rules and
+   hides body children. Nothing here may fight it. */
+@media print {
+  body { background: #fff; }
 }

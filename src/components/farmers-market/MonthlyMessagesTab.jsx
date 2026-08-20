@@ -3,7 +3,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { FM_FEES } from '../../lib/constants'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
-import { fmtDate, getMarketDayForMonth, AccessDenied } from './FarmersMarketUI'
+import { getMarketDayForMonth, AccessDenied } from './FarmersMarketUI'
+import { Button, Field, Inp, SearchInput, EmptyState } from '../ui/kit'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DAY_NAMES   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
@@ -28,6 +29,11 @@ export default function MonthlyMessagesTab() {
   const [itemsMap,  setItemsMap]  = useState({})   // holder_id → string[]
   const [visitPaid, setVisitPaid] = useState(new Set()) // holder_ids with visit paid this month
   const [copiedKey, setCopiedKey] = useState(null)
+  // U-09 — the individual messages are generated one per active business, so
+  // on live data that is a three-hundred-card scroll with no way to reach one.
+  // This filters the cards ALREADY generated: the generator, the query behind
+  // it and the message text itself are untouched.
+  const [msgQuery,  setMsgQuery]  = useState('')
 
   // Derived from month selection
   const [selYear, selMonthStr] = monthVal.split('-')
@@ -144,35 +150,36 @@ export default function MonthlyMessagesTab() {
   const groupMsg = buildGroupMessage()
   const groupRows = Math.max(10, groupMsg.split('\n').length + 1)
 
+  const mq = msgQuery.trim().toLowerCase()
+  const visibleHolders = mq
+    ? holders.filter(h => [h.business_name, h.full_name, h.stall_number]
+        .some(v => (v ?? '').toLowerCase().includes(mq)))
+    : holders
+
   // ── render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-6">
       {/* Controls */}
-      <div className="flex items-center gap-4 mb-1 flex-wrap">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Month</label>
-          <input
-            type="month"
-            value={monthVal}
-            onChange={e => setMonthVal(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
-          />
-        </div>
+      <div className="flex flex-wrap items-end gap-4 mb-6">
+        <Field label="Month" className="w-48">
+          <Inp type="month" value={monthVal} onChange={e => setMonthVal(e.target.value)} />
+        </Field>
         {!isDecember && marketDate && (
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-ink-soft pb-2.5 leading-relaxed max-w-sm">
             Generated for the market on{' '}
-            <span className="font-medium">{fmtLongDate(marketDate)}</span>.
-            {' '}Skipped if December.
+            <span className="font-semibold text-navy">{fmtLongDate(marketDate)}</span>.
+            {' '}December has no market, so no messages are produced for it.
           </p>
         )}
       </div>
 
       {isDecember ? (
-        <div className="rounded-xl border border-gray-200 px-6 py-12 text-center mt-4">
-          <p className="text-sm font-medium text-gray-700">
-            No market in December — no messages generated.
-          </p>
+        <div className="border border-line rounded-xl bg-white">
+          <EmptyState
+            title="No market in December"
+            body="The market runs on the last Saturday of every month except December, so there is nothing to send. Pick another month above."
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
@@ -180,13 +187,10 @@ export default function MonthlyMessagesTab() {
           {/* Block A — Group message */}
           <div className="flex flex-col">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-800">Group Message</h3>
-              <button
-                onClick={() => copy(groupMsg, 'group')}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors"
-              >
-                {copiedKey === 'group' ? 'Copied!' : 'Copy to Clipboard'}
-              </button>
+              <h3 className="text-sm font-bold text-navy">Group Message</h3>
+              <Button variant="secondary" size="sm" onClick={() => copy(groupMsg, 'group')}>
+                {copiedKey === 'group' ? 'Copied' : 'Copy to clipboard'}
+              </Button>
             </div>
             <textarea
               readOnly
@@ -198,16 +202,40 @@ export default function MonthlyMessagesTab() {
 
           {/* Block B — Individual messages */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-800 mb-2">Individual Messages</h3>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="text-sm font-bold text-navy">Individual Messages</h3>
+              <p className="text-xs text-ink-soft tnum whitespace-nowrap">
+                {visibleHolders.length} of {holders.length}
+              </p>
+            </div>
+
+            {/* U-09 — find one business without scrolling past three hundred. */}
+            <SearchInput
+              value={msgQuery}
+              onChange={e => setMsgQuery(e.target.value)}
+              placeholder="Business, name or stall number…"
+              aria-label="Search individual messages"
+              className="mb-3"
+            />
+
             <div className="space-y-4 max-h-[72vh] overflow-y-auto pr-1">
               {holders.length === 0 && (
-                <p className="text-sm text-gray-400">No active businesses found.</p>
+                <EmptyState
+                  title="No active businesses"
+                  body="Individual messages are generated for active stallholders. Approve a business under Businesses and it will appear here."
+                />
               )}
-              {holders.map(h => {
+              {holders.length > 0 && visibleHolders.length === 0 && (
+                <EmptyState
+                  title="No business matches that search"
+                  body="Clear the search to see every generated message."
+                />
+              )}
+              {visibleHolders.map(h => {
                 const msg  = buildIndividualMessage(h)
                 const rows = Math.max(8, msg.split('\n').length + 1)
                 return (
-                  <div key={h.id} className="border border-gray-200 rounded-xl p-4">
+                  <div key={h.id} className="border border-line rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div>
                         <span className="text-sm font-semibold text-gray-900">
@@ -215,12 +243,10 @@ export default function MonthlyMessagesTab() {
                         </span>
                         <span className="ml-2 text-xs text-gray-400">Stall {h.stall_number}</span>
                       </div>
-                      <button
-                        onClick={() => copy(msg, h.id)}
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors shrink-0"
-                      >
-                        {copiedKey === h.id ? 'Copied!' : 'Copy'}
-                      </button>
+                      <Button variant="secondary" size="sm" className="shrink-0"
+                        onClick={() => copy(msg, h.id)}>
+                        {copiedKey === h.id ? 'Copied' : 'Copy'}
+                      </Button>
                     </div>
                     <textarea
                       readOnly

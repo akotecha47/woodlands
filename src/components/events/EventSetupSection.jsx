@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Toast } from '../admin/AdminUI'
 import { SERVICE_STYLES, CONFERENCE_SETUPS } from './EventsUI'
+import { fieldCls } from '../ui/kit.constants'
+import { useFlash } from '../ui/useFlash'
 
 const BLANK = {
   service_style:          '',
@@ -113,12 +115,12 @@ export default function EventSetupSection({ eventId, canManage, onRefresh }) {
 
     return (
       <div>
-        <h3 className="text-base font-semibold text-gray-800 mb-4">Setup Details</h3>
+        <h3 className="text-sm font-bold text-navy mb-4">Setup Details</h3>
         {!cfg ? (
           <p className="text-sm text-gray-400">No setup details saved yet.</p>
         ) : (
           <div className="bg-gray-50 rounded-xl p-5 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <ReadField
                 label="Service Style"
                 value={cfg.service_style === 'other' ? `Other — ${cfg.service_style_other || '—'}` : styleLabel}
@@ -131,7 +133,7 @@ export default function EventSetupSection({ eventId, canManage, onRefresh }) {
             <ReadField label="Drinks Menu"      value={cfg.drinks_menu}      />
             <ReadField label="Food Notes"       value={cfg.food_notes}       />
             <ReadField label="Furniture Layout" value={cfg.furniture_layout} />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div className="space-y-2">
                 <ReadField label="Stage Required" value={cfg.stage_required ? 'Yes' : 'No'} />
                 {cfg.stage_required && <ReadField label="Stage Notes" value={cfg.stage_notes} />}
@@ -153,15 +155,15 @@ export default function EventSetupSection({ eventId, canManage, onRefresh }) {
   return (
     <div>
       <Toast toast={toast} />
-      <h3 className="text-base font-semibold text-gray-800 mb-4">Setup Details</h3>
+      <h3 className="text-sm font-bold text-navy mb-4">Setup Details</h3>
       {!cfg && (
         <p className="text-sm text-gray-400 mb-4">No setup details saved yet.</p>
       )}
 
-      <form onSubmit={handleSave} className="border border-gray-200 rounded-xl p-4 space-y-4">
+      <form onSubmit={handleSave} className="border border-line rounded-xl p-4 space-y-4">
 
         {/* Row 1: Service Style */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
           <Field label="Service Style *">
             <Sel required value={form.service_style} onChange={f('service_style')}>
               <option value="">Select…</option>
@@ -213,7 +215,7 @@ export default function EventSetupSection({ eventId, canManage, onRefresh }) {
         </Field>
 
         {/* Row 5: Conference Setup */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
           <Field label="Conference Setup">
             <Sel value={form.conference_setup} onChange={f('conference_setup')}>
               {CONFERENCE_SETUPS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -231,14 +233,14 @@ export default function EventSetupSection({ eventId, canManage, onRefresh }) {
         </div>
 
         {/* Row 6: Stage + Cake */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
           <div className="space-y-2">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.stage_required}
                 onChange={fc('stage_required')}
-                className="rounded border-gray-300 text-brand-teal focus:ring-brand-teal"
+                className="rounded border-gray-300 text-teal focus:ring-teal"
               />
               <span className="text-sm font-medium text-gray-700">Stage Required</span>
             </label>
@@ -256,7 +258,7 @@ export default function EventSetupSection({ eventId, canManage, onRefresh }) {
                 type="checkbox"
                 checked={form.cake_cutting_table}
                 onChange={fc('cake_cutting_table')}
-                className="rounded border-gray-300 text-brand-teal focus:ring-brand-teal"
+                className="rounded border-gray-300 text-teal focus:ring-teal"
               />
               <span className="text-sm font-medium text-gray-700">Cake Cutting Table</span>
             </label>
@@ -282,7 +284,7 @@ export default function EventSetupSection({ eventId, canManage, onRefresh }) {
         </Field>
 
         <button type="submit" disabled={busy}
-          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+          className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
           {busy ? 'Saving…' : cfg ? 'Update Setup Details' : 'Save Setup Details'}
         </button>
 

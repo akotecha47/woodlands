@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { UNITS } from '../../lib/constants'
-import { Field, Inp, Sel, Th, Td, Toast, useFlash } from './AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast, EmptyRow } from './AdminUI'
+import { SectionHead, FormGrid, FormActions, Button } from '../ui/kit'
+import { useFlash } from '../ui/useFlash'
 
 // Keyed on the canonical 11-value department vocabulary (data-ops/003), NOT
 // the pre-003 names. It previously keyed 'Restaurant Bar' and 'Grounds', which
@@ -113,59 +115,62 @@ export default function StockItemsTab() {
   return (
     <div className="p-6 space-y-5">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800">Stock Items</h2>
+      <SectionHead
+        title="Stock items"
+        subtitle="The catalogue every other stock screen reads from. The SKU is generated from the department on save."
+      />
 
-      <form onSubmit={addStockItem} className="grid grid-cols-2 gap-3 max-w-2xl">
-        <Field label="Name *">
-          <Inp
-            required
-            value={stockForm.name}
-            onChange={e => setStockForm(f => ({ ...f, name: e.target.value }))}
-            placeholder="Item name"
-          />
-        </Field>
-        <Field label="Department">
-          <Sel
-            value={stockForm.department}
-            onChange={e => {
-              const dept = e.target.value
-              setStockForm(f => ({ ...f, department: dept, unit: defaultUnit(dept) }))
-            }}>
-            <option value="">— None —</option>
-            {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-          </Sel>
-        </Field>
-        <Field label="Unit *">
-          <Sel
-            required
-            value={stockForm.unit}
-            onChange={e => setStockForm(f => ({ ...f, unit: e.target.value }))}>
-            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-          </Sel>
-        </Field>
-        <Field label="Reorder Level">
-          <Inp
-            type="number"
-            min={0}
-            value={stockForm.reorder_level}
-            onChange={e => setStockForm(f => ({ ...f, reorder_level: e.target.value }))}
-          />
-        </Field>
-        <div className="col-span-2 flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={stockBusy}
-            className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+      <form onSubmit={addStockItem} className="max-w-5xl">
+        <FormGrid cols={3}>
+          <Field label="Name *">
+            <Inp
+              required
+              value={stockForm.name}
+              onChange={e => setStockForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="Item name"
+            />
+          </Field>
+          <Field label="Department">
+            <Sel
+              value={stockForm.department}
+              onChange={e => {
+                const dept = e.target.value
+                setStockForm(f => ({ ...f, department: dept, unit: defaultUnit(dept) }))
+              }}>
+              <option value="">— None —</option>
+              {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+            </Sel>
+          </Field>
+          <Field label="Unit *">
+            <Sel
+              required
+              value={stockForm.unit}
+              onChange={e => setStockForm(f => ({ ...f, unit: e.target.value }))}>
+              {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+            </Sel>
+          </Field>
+          <Field label="Reorder Level">
+            <Inp
+              type="number"
+              min={0}
+              value={stockForm.reorder_level}
+              onChange={e => setStockForm(f => ({ ...f, reorder_level: e.target.value }))}
+            />
+          </Field>
+        </FormGrid>
+
+        <FormActions>
+          <Button type="submit" disabled={stockBusy}>
             {stockBusy ? 'Adding…' : 'Add Item'}
-          </button>
+          </Button>
           <span className="text-xs text-gray-400">SKU auto-generated on save</span>
-        </div>
+        </FormActions>
       </form>
 
-      <div className="overflow-x-auto">
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50 border-b border-line">
               <Th>Name</Th>
               <Th>SKU</Th>
               <Th>Unit</Th>
@@ -180,7 +185,7 @@ export default function StockItemsTab() {
               const editing = editingStock?.id === item.id
               const busy    = busyId === item.id
               return (
-                <tr key={item.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                <tr key={item.id} className="border-b border-line last:border-0 hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm text-gray-900">
                     {editing
                       ? <Inp value={editingStock.name} onChange={e => setEditingStock(s => ({ ...s, name: e.target.value }))} />
@@ -201,7 +206,7 @@ export default function StockItemsTab() {
                       : item.reorder_level}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
                       item.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
                     }`}>
                       {item.is_active ? 'Active' : 'Inactive'}
@@ -213,12 +218,12 @@ export default function StockItemsTab() {
                         <>
                           <button
                             onClick={saveStockEdit}
-                            className="px-3 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
+                            className="px-2.5 py-1.5 text-xs font-semibold bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition">
                             Save
                           </button>
                           <button
                             onClick={() => setEditingStock(null)}
-                            className="px-3 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">
+                            className="px-2.5 py-1.5 text-xs font-semibold bg-white border border-line hover:bg-gray-50 text-gray-700 rounded-lg wl-transition">
                             Cancel
                           </button>
                         </>
@@ -226,16 +231,16 @@ export default function StockItemsTab() {
                         <>
                           <button
                             onClick={() => setEditingStock({ id: item.id, name: item.name, unit: item.unit, reorder_level: item.reorder_level })}
-                            className="px-3 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">
+                            className="px-2.5 py-1.5 text-xs font-semibold bg-white border border-line hover:bg-gray-50 text-gray-700 rounded-lg wl-transition">
                             Edit
                           </button>
                           <button
                             onClick={() => toggleStockActive(item)}
                             disabled={busy}
-                            className={`px-3 py-1 text-xs font-medium rounded-lg disabled:opacity-60 transition-colors ${
+                            className={`px-3 py-1 text-xs font-medium rounded-lg disabled:opacity-60 wl-transition ${
                               item.is_active
                                 ? 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'
-                                : 'bg-brand-teal/5 hover:bg-brand-teal/10 text-brand-teal border border-brand-teal/20'
+                                : 'bg-teal/5 hover:bg-teal/10 text-teal border border-teal/20'
                             }`}>
                             {busy ? '…' : item.is_active ? 'Deactivate' : 'Reactivate'}
                           </button>
@@ -247,9 +252,10 @@ export default function StockItemsTab() {
               )
             })}
             {stockItems.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">No stock items yet</td>
-              </tr>
+              <EmptyRow
+                cols={7}
+                msg="No stock items yet. Add the first one above — this catalogue is what deliveries, requisitions and counts all draw from."
+              />
             )}
           </tbody>
         </table>

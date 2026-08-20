@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import {
   REVENUE_READINGS, REVENUE_READING_KEY, DEFAULT_READING, isReading,
 } from '../../lib/revenue'
+import { Badge } from '../ui/kit'
 
 // ── constants ──────────────────────────────────────────────────
 
@@ -75,12 +76,14 @@ export const EVENT_STATUSES = [
   { value: 'cancelled',   label: 'Cancelled'   },
 ]
 
+// Tones, not class strings — see the kit. Confirmed is `brand` (teal): an
+// active state, not a health verdict.
 export const STATUS_CFG = {
-  enquiry:     { label: 'Enquiry',     badge: 'bg-gray-100 text-gray-600'   },
-  confirmed:   { label: 'Confirmed',   badge: 'bg-blue-100 text-blue-700'   },
-  in_progress: { label: 'In Progress', badge: 'bg-amber-100 text-amber-700' },
-  completed:   { label: 'Completed',   badge: 'bg-green-100 text-green-700' },
-  cancelled:   { label: 'Cancelled',   badge: 'bg-red-100 text-red-700'     },
+  enquiry:     { label: 'Enquiry',     tone: 'neutral' },
+  confirmed:   { label: 'Confirmed',   tone: 'brand'   },
+  in_progress: { label: 'In Progress', tone: 'warn'    },
+  completed:   { label: 'Completed',   tone: 'ok'      },
+  cancelled:   { label: 'Cancelled',   tone: 'alert'   },
 }
 
 export const DEPT_ORDER = ['Kitchen', 'Bar', 'Grounds', 'Front Desk']
@@ -143,30 +146,10 @@ export function fmtMWK(n) {
 
 export function EventStatusBadge({ status }) {
   const cfg = STATUS_CFG[status]
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cfg?.badge ?? 'bg-gray-100 text-gray-600'}`}>
-      {cfg?.label ?? status}
-    </span>
-  )
+  return <Badge tone={cfg?.tone ?? 'neutral'}>{cfg?.label ?? status}</Badge>
 }
 
-export function AccessDenied() {
-  return (
-    <div className="p-6">
-      <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-        Access denied. You don't have permission to use this feature.
-      </div>
-    </div>
-  )
-}
-
-export function EmptyRow({ cols, msg = 'No records found' }) {
-  return (
-    <tr>
-      <td colSpan={cols} className="px-4 py-8 text-center text-sm text-gray-400">{msg}</td>
-    </tr>
-  )
-}
+export { AccessDenied, EmptyRow } from '../ui/kit'
 
 // ── DB helpers ─────────────────────────────────────────────────
 
@@ -231,17 +214,17 @@ export function useRevenueReading() {
 /** The reading picker. One control, used by both surfaces. */
 export function RevenueReadingPicker({ reading, onChange, size = 'md' }) {
   return (
-    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+    <div className="inline-flex rounded-lg border border-line bg-gray-100 p-0.5">
       {REVENUE_READINGS.map(r => (
         <button
           key={r.value}
           type="button"
           title={r.blurb}
           onClick={() => onChange(r.value)}
-          className={`${size === 'sm' ? 'px-2 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'} rounded-md font-medium transition-colors ${
+          className={`${size === 'sm' ? 'px-2 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'} rounded-md font-medium wl-transition ${
             reading === r.value
-              ? 'bg-white text-brand-teal shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-teal shadow-sm'
+              : 'text-ink-soft hover:text-navy'
           }`}>
           {r.label}
         </button>

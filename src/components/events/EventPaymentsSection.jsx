@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { Undo2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast } from '../admin/AdminUI'
 import { PAY_METHODS, PAY_TYPES, payTypeLabel, fmtDate, fmtMWK, todayStr } from './EventsUI'
+import { fieldCls } from '../ui/kit.constants'
+import { useFlash } from '../ui/useFlash'
 
 export default function EventPaymentsSection({ eventId, billTotal, canManage, onRefresh }) {
   const { session } = useAuth()
@@ -145,7 +147,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
   return (
     <div>
       <Toast toast={toast} />
-      <h3 className="text-base font-semibold text-gray-800 mb-4">Payments</h3>
+      <h3 className="text-sm font-bold text-navy mb-4">Payments</h3>
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
@@ -190,10 +192,10 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
 
       {/* Payments table */}
       {payments.length > 0 && (
-        <div className="overflow-x-auto mb-6 border border-gray-200 rounded-xl">
+        <div className="overflow-x-auto mb-6 border border-line rounded-xl">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 border-b border-line">
                 <Th>Date</Th>
                 <Th>Type</Th>
                 <Th>Method</Th>
@@ -217,7 +219,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
                   : null
 
                 return (
-                  <tr key={p.id} className={`border-b border-gray-100 hover:bg-gray-50 ${
+                  <tr key={p.id} className={`border-b border-line hover:bg-gray-50 ${
                     isReversed ? 'bg-gray-50/60 text-gray-400' : ''
                   }`}>
                     <Td>{fmtDate(p.payment_date)}</Td>
@@ -259,7 +261,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
                           <button
                             onClick={() => { setReverseTarget(p); setReverseReason('') }}
                             title="Reverse this payment"
-                            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 transition-colors">
+                            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 wl-transition">
                             <Undo2 size={13} /> Reverse
                           </button>
                         )}
@@ -274,7 +276,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
       )}
 
       {payments.length === 0 && (
-        <p className="text-sm text-gray-400 mb-6">No payments recorded yet.</p>
+        <p className="text-sm text-ink-soft mb-6">No payments recorded yet. Add one below — a mistake is corrected by reversing the entry, never by editing it.</p>
       )}
 
       {/* Reverse confirmation. Deliberately explicit about what is about to
@@ -295,7 +297,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
           </Field>
           <div className="flex gap-2 mt-4">
             <button onClick={handleReverse} disabled={reverseBusy}
-              className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg text-sm wl-transition disabled:opacity-60">
               {reverseBusy ? 'Reversing…' : 'Reverse payment'}
             </button>
             <button onClick={() => { setReverseTarget(null); setReverseReason('') }} disabled={reverseBusy}
@@ -308,10 +310,10 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
 
       {/* Add payment form — owner/manager only */}
       {canManage && (
-        <div className="border border-gray-200 rounded-xl p-5">
+        <div className="border border-line rounded-xl p-5">
           <h4 className="text-sm font-semibold text-gray-700 mb-4">Add Payment</h4>
           <form onSubmit={handleAddPayment} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <Field label="Payment Type *">
                 <Sel required value={form.payment_type} onChange={f('payment_type')}>
                   {PAY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -322,7 +324,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
                   value={form.amount} onChange={f('amount')} />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <Field label="Payment Date *">
                 <Inp type="date" required value={form.payment_date} onChange={f('payment_date')} />
               </Field>
@@ -332,7 +334,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
                 </Sel>
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <Field label="Reference *">
                 <Inp required placeholder="Receipt / transaction ref (required)" value={form.reference} onChange={f('reference')} />
               </Field>
@@ -348,7 +350,7 @@ export default function EventPaymentsSection({ eventId, billTotal, canManage, on
                 value={form.notes} onChange={f('notes')} />
             </Field>
             <button type="submit" disabled={busy}
-              className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
               {busy ? 'Recording…' : 'Record Payment'}
             </button>
           </form>

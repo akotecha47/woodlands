@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Th, Td, Toast, Sel, Button } from '../admin/AdminUI'
 import { AT_MANAGE_ROLES, MANAGE_ROLES } from '../../lib/roles'
 import {
   STATUS_CFG, ALL_STATUSES,
@@ -9,6 +9,7 @@ import {
   breakMins, netMins, getShiftForDept, minsLateCalc,
   AccessDenied, StatusBadge,
 } from './AttendanceUI'
+import { useFlash } from '../ui/useFlash'
 
 const ELEVEN = 11
 
@@ -259,14 +260,14 @@ export default function TodayTab() {
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <h2 className="text-base font-semibold text-gray-800 mr-auto">
+        <h2 className="text-[15px] font-bold text-navy mr-auto">
           {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </h2>
         {afterEleven && MANAGE_ROLES.includes(profile?.role) && (
           <button
             onClick={() => setConfirmAbsent(true)}
             disabled={busy}
-            className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-medium transition-colors disabled:opacity-60"
+            className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-medium wl-transition disabled:opacity-60"
           >
             Mark All Absent
           </button>
@@ -315,14 +316,15 @@ export default function TodayTab() {
 
       {/* Dept filter */}
       <div className="flex items-center gap-3 mb-4">
-        <select
+        <Sel
           value={deptFilter}
           onChange={e => setDeptFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
+          aria-label="Filter by department"
+          wrapClassName="w-48"
         >
           <option value="">All departments</option>
           {allDepts.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+        </Sel>
       </div>
 
       {/* Department groups */}
@@ -330,10 +332,10 @@ export default function TodayTab() {
         {Object.entries(deptGroups).map(([dept, members]) => (
           <div key={dept}>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">{dept}</p>
-            <div className="overflow-x-auto border border-gray-200 rounded-xl">
+            <div className="wl-scroll-x border border-line rounded-xl bg-white">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
+                  <tr className="bg-gray-50 border-b border-line">
                     <Th>Staff Name</Th>
                     <Th>Shift</Th>
                     <Th>Clock In</Th>
@@ -359,10 +361,10 @@ export default function TodayTab() {
                     const hasConsecutive = consecutiveAlert.some(a => a.name === u.full_name)
 
                     return (
-                      <tr key={u.id} className={`border-b border-gray-100 last:border-0 transition-colors ${
+                      <tr key={u.id} className={`border-b border-line last:border-0 wl-transition ${
                         overtime ? 'bg-amber-50/50' : 'hover:bg-gray-50'
                       }`}>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                        <td className="px-4 py-3 text-sm font-semibold text-navy">
                           {hasConsecutive && <span className="mr-1 text-red-500" title="Consecutive absences">●</span>}
                           {u.full_name}
                           {overtime && <span className="ml-1.5 text-xs text-amber-500" title="Overtime">⏱</span>}
@@ -390,13 +392,13 @@ export default function TodayTab() {
                           <div className="flex gap-1.5">
                             <button
                               onClick={() => { setOverrideModal({ user: u, record: rec }); setOverrideVal(effStatus === 'not_arrived' ? 'absent' : effStatus) }}
-                              className="text-xs font-medium px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                              className="text-xs font-medium px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg wl-transition"
                             >
                               Override
                             </button>
                             <button
                               onClick={() => { setNoteModal({ user: u, record: rec }); setNoteVal(rec?.notes ?? '') }}
-                              className="text-xs font-medium px-2 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg transition-colors"
+                              className="text-xs font-medium px-2 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg wl-transition"
                             >
                               Note
                             </button>
@@ -411,7 +413,7 @@ export default function TodayTab() {
           </div>
         ))}
         {shownUsers.length === 0 && (
-          <p className="text-sm text-gray-400 py-6 text-center">No staff records found</p>
+          <p className="text-sm text-ink-soft py-10 text-center">No staff on the roster for this filter. Clear it, or add staff under Admin → Staff.</p>
         )}
       </div>
 
@@ -424,14 +426,12 @@ export default function TodayTab() {
               Mark all staff with no clock-in today as Absent? This cannot be undone.
             </p>
             <div className="flex gap-3">
-              <button onClick={handleMarkAllAbsent} disabled={busy}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              <Button variant="danger" onClick={handleMarkAllAbsent} disabled={busy} className="flex-1">
                 {busy ? 'Marking…' : 'Mark Absent'}
-              </button>
-              <button onClick={() => setConfirmAbsent(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmAbsent(false)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -446,24 +446,23 @@ export default function TodayTab() {
               <button onClick={() => setOverrideModal(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
             </div>
             <p className="text-sm text-gray-600 mb-4">{overrideModal.user.full_name}</p>
-            <select
+            <Sel
               value={overrideVal}
               onChange={e => setOverrideVal(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal mb-4"
+              aria-label="Status to apply"
+              wrapClassName="mb-4"
             >
               {ALL_STATUSES.map(s => (
                 <option key={s} value={s}>{STATUS_CFG[s].label}</option>
               ))}
-            </select>
+            </Sel>
             <div className="flex gap-3">
-              <button onClick={handleOverride} disabled={busy}
-                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              <Button onClick={handleOverride} disabled={busy} className="flex-1">
                 {busy ? 'Saving…' : 'Apply'}
-              </button>
-              <button onClick={() => setOverrideModal(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={() => setOverrideModal(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -483,18 +482,16 @@ export default function TodayTab() {
               value={noteVal}
               onChange={e => setNoteVal(e.target.value)}
               placeholder="Notes for today's attendance record…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none mb-4"
+              className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25 resize-none mb-4"
               autoFocus
             />
             <div className="flex gap-3">
-              <button onClick={handleSaveNote} disabled={busy}
-                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              <Button onClick={handleSaveNote} disabled={busy} className="flex-1">
                 {busy ? 'Saving…' : 'Save Note'}
-              </button>
-              <button onClick={() => setNoteModal(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={() => setNoteModal(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>

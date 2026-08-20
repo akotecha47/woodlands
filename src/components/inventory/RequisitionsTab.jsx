@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Th, Td, Toast, useFlash, fieldCls } from '../admin/AdminUI'
+import { Field, Inp, Sel, Txt, Th, Td, Toast } from '../admin/AdminUI'
+import { Button, FormGrid, FormActions, SectionHead, TableWrap, Thead } from '../ui/kit'
 import { itemLabel, EmptyRow, TdBold, ReqStatusBadge, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
 import { issueStock, fulfilRequisitionBatch } from '../../lib/stock'
 import { MANAGE_ROLES } from '../../lib/roles'
 import { MAIN_STORE } from '../../lib/constants'
+import { useFlash } from '../ui/useFlash'
 
 export default function RequisitionsTab() {
   const { profile, session } = useAuth()
@@ -180,49 +182,61 @@ export default function RequisitionsTab() {
     <div className="p-6 space-y-6">
       <Toast toast={toast} />
 
-      {/* ── Raise form ──────────────────────────────────── */}
-      <div>
-        <h2 className="text-base font-semibold text-gray-800 mb-4">Raise Requisition</h2>
-        <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
-          <Field label="Item *">
-            <Sel required value={form.stock_item_id}
-              onChange={e => setForm(f => ({ ...f, stock_item_id: e.target.value }))}>
-              <option value="">Select item…</option>
-              {items.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
-            </Sel>
-          </Field>
-          <Field label="Department">
-            {profile?.department
-              ? <Inp disabled value={profile.department} />
-              : <Sel value={form.department}
-                  onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
-                  <option value="">Select department…</option>
-                  {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                </Sel>
-            }
-          </Field>
-          <Field label="Quantity *">
-            <input type="number" required min="0.01" step="any"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
-              value={form.quantity}
-              onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
-          </Field>
-          <Field label="Reason">
-            <textarea rows={2} className={fieldCls} placeholder="Why is this needed?"
-              value={form.reason}
-              onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
-          </Field>
-          <button type="submit" disabled={busy}
-            className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
-            {busy ? 'Submitting…' : 'Submit Requisition'}
-          </button>
+      <section>
+        <SectionHead
+          title="Raise requisition"
+          subtitle="Ask the Main Store for stock. Nothing moves until a manager fulfils it — approval alone does not deduct."
+          className="mb-6"
+        />
+        <form onSubmit={handleSubmit} className="max-w-4xl">
+          <FormGrid>
+            <Field label="Item *" span="full">
+              <Sel required value={form.stock_item_id}
+                onChange={e => setForm(f => ({ ...f, stock_item_id: e.target.value }))}>
+                <option value="">Select item…</option>
+                {items.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
+              </Sel>
+            </Field>
+
+            <Field
+              label="Department"
+              hint={profile?.department ? 'Set by your profile.' : undefined}
+            >
+              {profile?.department
+                ? <Inp disabled value={profile.department} />
+                : <Sel value={form.department}
+                    onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
+                    <option value="">Select department…</option>
+                    {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  </Sel>
+              }
+            </Field>
+
+            <Field label="Quantity *">
+              <Inp type="number" required min="0.01" step="any"
+                value={form.quantity}
+                onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+            </Field>
+
+            <Field label="Reason" span="full">
+              <Txt rows={2} placeholder="Why is this needed?"
+                value={form.reason}
+                onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+            </Field>
+          </FormGrid>
+
+          <FormActions>
+            <Button type="submit" disabled={busy}>
+              {busy ? 'Submitting…' : 'Submit requisition'}
+            </Button>
+          </FormActions>
         </form>
-      </div>
+      </section>
 
       {/* ── Par-refill batches (059) ─────────────────────── */}
       {batches.length > 0 && (
-        <div className="border-t border-gray-100 pt-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-1">Bar Refills</h2>
+        <div className="border-t border-line pt-6">
+          <h2 className="text-[15px] font-bold text-navy mb-1">Bar Refills</h2>
           <p className="text-sm text-gray-500 mb-3">
             Pre-filled from an end-of-day count. Approve and fulfil the whole refill in one go.
           </p>
@@ -230,7 +244,7 @@ export default function RequisitionsTab() {
             {batches.map(b => {
               const done = b.pending === 0 && b.approved === 0
               return (
-                <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 border border-gray-200 rounded-xl px-4 py-3">
+                <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 border border-line rounded-xl px-4 py-3">
                   <div className="text-sm">
                     <span className="font-medium text-gray-900">{b.department}</span>
                     <span className="text-gray-500"> · {b.count} item(s) · {b.units} unit(s) · </span>
@@ -248,18 +262,18 @@ export default function RequisitionsTab() {
                     <div className="flex gap-1.5">
                       {b.pending > 0 && (
                         <button onClick={() => handleApproveBatch(b)}
-                          className="px-2.5 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
+                          className="px-2.5 py-1.5 text-xs font-semibold bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition">
                           Approve all ({b.pending})
                         </button>
                       )}
                       {b.approved > 0 && (
                         <button onClick={() => handleFulfilBatch(b)}
-                          className="px-2.5 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
+                          className="px-2.5 py-1.5 text-xs font-semibold bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition">
                           Fulfil all ({b.approved})
                         </button>
                       )}
                       <button onClick={() => handleRejectBatch(b)}
-                        className="px-2.5 py-1 text-xs font-medium bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-colors">
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-alert-bg hover:bg-red-200 text-red-700 border border-red-200 rounded-lg wl-transition">
                         Reject
                       </button>
                     </div>
@@ -272,23 +286,24 @@ export default function RequisitionsTab() {
       )}
 
       {/* ── List ────────────────────────────────────────── */}
-      <div className="border-t border-gray-100 pt-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-3">
-          {isManager ? 'All Requisitions' : 'My Requisitions'}
-        </h2>
-        <div className="overflow-x-auto">
+      <section className="border-t border-line pt-6 space-y-4">
+        <SectionHead
+          title={isManager ? 'All requisitions' : 'My requisitions'}
+          subtitle="Hand-raised requests. Bar par refills are grouped above rather than listed one line at a time."
+        />
+        <TableWrap>
           <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+            <Thead>
+              <tr>
                 <Th>Item</Th><Th>Dept</Th><Th>Qty</Th>
                 {isManager && <Th>Requested By</Th>}
                 <Th>Reason</Th><Th>Date</Th><Th>Status</Th>
                 {isManager && <Th>Actions</Th>}
               </tr>
-            </thead>
+            </Thead>
             <tbody>
               {looseReqs.map(r => (
-                <tr key={r.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                <tr key={r.id} className="border-b border-line last:border-0 hover:bg-gray-50">
                   <TdBold>{itemMap[r.stock_item_id]?.name ?? '—'}</TdBold>
                   <Td>{r.department}</Td>
                   <Td>{r.quantity}</Td>
@@ -301,17 +316,17 @@ export default function RequisitionsTab() {
                       <div className="flex gap-1.5">
                         {r.status === 'pending' && <>
                           <button onClick={() => handleApprove(r)}
-                            className="px-2.5 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
+                            className="px-2.5 py-1.5 text-xs font-semibold bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition">
                             Approve
                           </button>
                           <button onClick={() => handleReject(r)}
-                            className="px-2.5 py-1 text-xs font-medium bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-colors">
+                            className="px-2.5 py-1.5 text-xs font-semibold bg-alert-bg hover:bg-red-200 text-red-700 border border-red-200 rounded-lg wl-transition">
                             Reject
                           </button>
                         </>}
                         {r.status === 'approved' && (
                           <button onClick={() => handleFulfil(r)}
-                            className="px-2.5 py-1 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors">
+                            className="px-2.5 py-1.5 text-xs font-semibold bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition">
                             Fulfil
                           </button>
                         )}
@@ -322,13 +337,15 @@ export default function RequisitionsTab() {
               ))}
               {looseReqs.length === 0 && (
                 <EmptyRow cols={managerCols} msg={
-                  batches.length > 0 ? 'No hand-raised requisitions — see Bar Refills above' : 'No requisitions yet'
+                  batches.length > 0
+                    ? 'No hand-raised requisitions — the bar refills above are handled as batches.'
+                    : 'No requisitions yet. Raise one above and it will appear here for approval.'
                 } />
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+        </TableWrap>
+      </section>
     </div>
   )
 }

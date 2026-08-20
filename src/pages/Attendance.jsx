@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader, Tabs, Card } from '../components/ui/kit'
 import TodayTab    from '../components/attendance/TodayTab'
 import HistoryTab  from '../components/attendance/HistoryTab'
 import SettingsTab from '../components/attendance/SettingsTab'
@@ -22,25 +23,20 @@ export default function Attendance() {
   const [tab, setTab] = useState('today')
 
   return (
-    <div className="space-y-5">
-      <h1 className="font-brand text-2xl font-semibold text-gray-900">Attendance</h1>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="People"
+        title="Attendance"
+        subtitle="Today's roster, the history behind it, and the shift windows the two are judged against."
+      />
 
-      <div className="flex gap-1 overflow-x-auto bg-gray-100 p-1 rounded-xl w-fit max-w-full">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              tab === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={TABS} value={tab} onChange={setTab} ariaLabel="Attendance sections" />
 
-      <div className="bg-white border border-gray-200 rounded-xl">
+      <Card className="overflow-hidden">
         {tab === 'today'    && <TodayTab />}
         {tab === 'history'  && <HistoryTab />}
         {tab === 'settings' && <SettingsTab />}
-      </div>
+      </Card>
     </div>
   )
 }

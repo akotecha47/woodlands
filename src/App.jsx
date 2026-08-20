@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
 import { RequireAuth, GuardedPage } from './components/RouteGuard'
-import Layout from './components/Layout'
+import AppShell from './components/AppShell'
 import Login from './pages/Login'
 import Dashboard     from './pages/Dashboard'
 import Inventory     from './pages/Inventory'
@@ -13,16 +13,16 @@ import Admin         from './pages/Admin'
 import CheckIn       from './pages/CheckIn'
 
 function PlaceholderPage({ title }) {
-  return <h1 className="text-2xl font-semibold text-gray-800">{title}</h1>
+  return <h1 className="text-[27px] font-bold text-navy tracking-[-.02em]">{title}</h1>
 }
 
 function Protected({ children, title }) {
   return (
     <RequireAuth>
       <GuardedPage>
-        <Layout>
+        <AppShell>
           {children ?? <PlaceholderPage title={title} />}
-        </Layout>
+        </AppShell>
       </GuardedPage>
     </RequireAuth>
   )

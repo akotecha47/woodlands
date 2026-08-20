@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { applyStockDelta, allocatableQuantities } from '../../lib/stock'
 import { useAuth } from '../../contexts/AuthContext'
-import { Toast, useFlash } from '../admin/AdminUI'
+import { Toast } from '../admin/AdminUI'
 import { MANAGE_ROLES } from '../../lib/roles'
 import {
   EVENT_TYPES, STATUS_CFG, DEPT_ORDER,
@@ -16,6 +16,7 @@ import EventRevenueSection  from './EventRevenueSection'
 import EventSetupSection    from './EventSetupSection'
 import EventStaffSection    from './EventStaffSection'
 import EventStockSection    from './EventStockSection'
+import { useFlash } from '../ui/useFlash'
 
 export default function EventDetailTab({ eventId, onBack }) {
   const { profile, session } = useAuth()
@@ -271,10 +272,10 @@ export default function EventDetailTab({ eventId, onBack }) {
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 mb-2">
             <ChevronLeft size={14} /> Back to Events
           </button>
-          <h2 className="font-brand text-xl font-semibold text-gray-900">{event.name}</h2>
+          <h2 className="text-[22px] font-bold text-navy tracking-[-.02em]">{event.name}</h2>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <EventStatusBadge status={event.status} />
-            <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
               event.deposit_paid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
             }`}>
               {event.deposit_paid ? 'Deposit Paid' : 'Deposit Unpaid'}
@@ -290,7 +291,7 @@ export default function EventDetailTab({ eventId, onBack }) {
           <div className="flex gap-2 flex-wrap">
             {event.status === 'enquiry' && (
               <button onClick={() => changeStatus('confirmed')} disabled={statusBusy}
-                className="px-3 py-1.5 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg disabled:opacity-60">
+                className="px-3 py-1.5 text-xs font-medium bg-teal hover:bg-teal-deep text-white rounded-lg disabled:opacity-60">
                 Confirm Event
               </button>
             )}
@@ -302,7 +303,7 @@ export default function EventDetailTab({ eventId, onBack }) {
             )}
             {event.status === 'in_progress' && (
               <button onClick={() => changeStatus('completed')} disabled={statusBusy}
-                className="px-3 py-1.5 text-xs font-medium bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg disabled:opacity-60">
+                className="px-3 py-1.5 text-xs font-medium bg-teal hover:bg-teal-deep text-white rounded-lg disabled:opacity-60">
                 Complete Event
               </button>
             )}
@@ -352,7 +353,7 @@ export default function EventDetailTab({ eventId, onBack }) {
       {checklists.length > 0 ? (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-base font-semibold text-gray-800">BEO Checklists</h3>
+            <h3 className="text-sm font-bold text-navy">BEO Checklists</h3>
             <span className="text-sm text-gray-500">{overallPct}% complete</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2 mb-5">
@@ -364,7 +365,7 @@ export default function EventDetailTab({ eventId, onBack }) {
               const dDone = tasks.filter(t => t.is_complete).length
               const dPct  = tasks.length > 0 ? Math.round(dDone / tasks.length * 100) : 0
               return (
-                <div key={dept} className="border border-gray-200 rounded-xl p-4">
+                <div key={dept} className="border border-line rounded-xl p-4">
                   <div className="flex items-center justify-between mb-1.5">
                     <h4 className="text-sm font-semibold text-gray-800">{dept}</h4>
                     <span className="text-xs text-gray-500">{dDone}/{tasks.length}</span>
@@ -379,7 +380,7 @@ export default function EventDetailTab({ eventId, onBack }) {
                           type="checkbox"
                           checked={task.is_complete}
                           onChange={e => toggleTask(task, e.target.checked)}
-                          className="mt-0.5 rounded border-gray-300 text-green-600 focus:ring-brand-teal cursor-pointer shrink-0"
+                          className="mt-0.5 rounded border-gray-300 text-green-600 focus:ring-teal cursor-pointer shrink-0"
                         />
                         <div className="min-w-0">
                           <p className={`text-sm leading-snug ${task.is_complete ? 'line-through text-gray-400' : 'text-gray-800'}`}>

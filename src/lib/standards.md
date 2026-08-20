@@ -60,7 +60,7 @@ CREATE POLICY "authenticated_read_<t>" ON <t>
 -- 4. write policies, scoped to the roles the UI actually gives the action to
 CREATE POLICY "<t>_manage_insert" ON <t>
   FOR INSERT TO authenticated
-  WITH CHECK (public.current_app_role() IN ('owner', 'manager'));
+  WITH CHECK (public.current_app_role() IN ('owner', 'admin'));
 ```
 
 **`GRANT` and `CREATE POLICY` are two separate gates and you need both.** A table can have a perfectly correct SELECT policy and still return permission-denied because `authenticated` was never granted `SELECT`. This bit this project twice: Sprint A found `event_checklists`, `shift_settings` and `tables` with working policies and no grants, and Sprint B found the same on eleven more tables. Postgres grants DML to `service_role` by default in Supabase, which is why the bug hides while the browser is using a service-role client and surfaces the moment it stops.
@@ -73,7 +73,11 @@ public.current_app_role()   -- migration 021, SECURITY DEFINER
 
 It returns the caller's `user_profiles.role`, or NULL if their profile is deactivated (`is_active = false`). SECURITY DEFINER is what lets a policy *on* `user_profiles` consult `user_profiles` without infinite RLS recursion. Writing `EXISTS (SELECT 1 FROM user_profiles WHERE ...)` inline in a policy on that table will recurse.
 
-**Roles are authoritative in `src/lib/roles.js`:** `owner`, `manager`, `kitchen_manager`, `restaurant_manager`. Four. A policy must not reference a role outside that list.
+**Roles are authoritative in `src/lib/roles.js`:** `owner`, `admin`, `department_head`, `hr`. Four. A policy must not reference a role outside that list.
+
+**This list changed on 11 August 2026 and the old one is a live trap.** The Phase 2 collapse was `manager` → `admin`, and `kitchen_manager` + `restaurant_manager` → a single `department_head` scoped by `user_profiles.department`; `hr` is new. Until 20 August this file still named the dead set and its template above still gated on `IN ('owner','manager')` — so a policy written from it would have compiled, passed review, and silently excluded **every** `admin`, which is the whole management tier. That failure has already happened once in this project (AUDIT_3 C-16). The database enforces the current four through `public.current_app_role()` and migrations 037–042.
+
+The role CONSTANTS in `src/lib/roles.js` are the ones to gate on, not the raw strings: `MANAGE_ROLES` (owner + admin) is the default for a module write, `AT_MANAGE_ROLES` adds `hr` for attendance, and `INVENTORY_VIEW_ROLES` adds `department_head` for read. `supabase/functions/create-user/index.ts` carries a hand-synced duplicate of the role list because Deno cannot import a browser module — change both together (§9).
 
 **Authoritative:** `STREAMLINE_BUILD_STANDARD.md` §2.2 ("RLS is part of 'the table exists', not a later task").
 

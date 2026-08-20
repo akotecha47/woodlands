@@ -1,3 +1,6 @@
+import { Check } from 'lucide-react'
+import { Badge } from '../ui/kit'
+
 // ── constants ──────────────────────────────────────────────────────────────────
 
 export const STALL_TYPES = ['Produce', 'Crafts', 'Food & Beverages', 'Clothing', 'Other']
@@ -34,12 +37,12 @@ export const FM_PAY_TYPES = [
 ]
 
 export const HOLDER_STATUS_CFG = {
-  pending_review: { label: 'Pending Review', badge: 'bg-yellow-100 text-yellow-700' },
-  accepted:       { label: 'Accepted',       badge: 'bg-blue-100 text-blue-700'    },
-  active:         { label: 'Active',         badge: 'bg-green-100 text-green-700'  },
-  inactive:       { label: 'Inactive',       badge: 'bg-gray-100 text-gray-500'    },
-  at_risk:        { label: 'At Risk',        badge: 'bg-red-100 text-red-700'      },
-  forfeited:      { label: 'Forfeited',      badge: 'bg-stone-200 text-stone-700'  },
+  pending_review: { label: 'Pending Review', tone: 'warn'    },
+  accepted:       { label: 'Accepted',       tone: 'brand'   },
+  active:         { label: 'Active',         tone: 'ok'      },
+  inactive:       { label: 'Inactive',       tone: 'neutral' },
+  at_risk:        { label: 'At Risk',        tone: 'alert'   },
+  forfeited:      { label: 'Forfeited',      tone: 'neutral' },
 }
 
 // Role gates (FM_MANAGE_ROLES etc.) live in src/lib/roles.js, not here.
@@ -142,25 +145,15 @@ export function fmtMWK(n) {
 
 export function HolderStatusBadge({ status }) {
   const cfg = HOLDER_STATUS_CFG[status]
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cfg?.badge ?? 'bg-gray-100 text-gray-500'}`}>
-      {cfg?.label ?? status}
-    </span>
-  )
+  return <Badge tone={cfg?.tone ?? 'neutral'}>{cfg?.label ?? status}</Badge>
 }
 
 export function PaidIcon({ paid }) {
   return paid
-    ? <span className="text-xs font-medium text-green-600">✓ Yes</span>
+    ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700">
+        <Check size={13} aria-hidden="true" />Yes
+      </span>
     : <span className="text-xs text-gray-400">—</span>
 }
 
-export function AccessDenied() {
-  return (
-    <div className="p-6">
-      <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-        Access denied. You don't have permission to use this feature.
-      </div>
-    </div>
-  )
-}
+export { AccessDenied } from '../ui/kit'

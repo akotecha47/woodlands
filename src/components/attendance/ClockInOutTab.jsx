@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Toast, useFlash } from '../admin/AdminUI'
+import { Toast } from '../admin/AdminUI'
 import {
   LODGE_LAT, LODGE_LNG, RADIUS_M,
   haversineM, getPosition, fmtTime, fmtDuration,
   breakMins, netMins, getShiftForUser, isLate,
 } from './AttendanceUI'
+import { useFlash } from '../ui/useFlash'
 
 const GPS_TIMEOUT_MS = 5000
 
@@ -187,7 +188,7 @@ export default function ClockInOutTab() {
       <Toast toast={toast} />
 
       {/* User info */}
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
+      <div className="bg-gray-50 border border-line rounded-xl p-4 mb-6">
         <p className="text-base font-semibold text-gray-900">{profile?.full_name ?? 'You'}</p>
         <p className="text-sm text-gray-500 mt-0.5">
           {profile?.department ?? '—'} · {profile?.shift_name ?? profile?.role ?? '—'}
@@ -226,7 +227,7 @@ export default function ClockInOutTab() {
           <button
             onClick={handleClockIn}
             disabled={busy}
-            className="w-full max-w-xs bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold text-lg py-4 rounded-2xl transition-colors disabled:opacity-60 shadow-sm"
+            className="w-full max-w-xs bg-teal hover:bg-teal-deep text-white font-semibold text-lg py-4 rounded-2xl wl-transition disabled:opacity-60 shadow-sm"
           >
             {busy ? 'Clocking in…' : '🟢 Clock In'}
           </button>
@@ -243,11 +244,11 @@ export default function ClockInOutTab() {
           </div>
           <div className="flex gap-3">
             <button onClick={handleStartBreak} disabled={busy}
-              className="flex-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-60">
+              className="flex-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-medium py-2.5 rounded-xl text-sm wl-transition disabled:opacity-60">
               Start Break
             </button>
             <button onClick={handleClockOut} disabled={busy}
-              className="flex-1 bg-gray-800 hover:bg-gray-900 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors disabled:opacity-60">
+              className="flex-1 bg-gray-800 hover:bg-gray-900 text-white font-semibold py-2.5 rounded-xl text-sm wl-transition disabled:opacity-60">
               {busy ? 'Saving…' : 'Clock Out'}
             </button>
           </div>
@@ -262,7 +263,7 @@ export default function ClockInOutTab() {
             <p className="text-lg font-semibold text-amber-800">Since {fmtTime(record.break_start)}</p>
           </div>
           <button onClick={handleEndBreak} disabled={busy}
-            className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl text-sm transition-colors disabled:opacity-60">
+            className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl text-sm wl-transition disabled:opacity-60">
             {busy ? 'Saving…' : 'End Break'}
           </button>
         </div>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast } from '../admin/AdminUI'
+import { useFlash } from '../ui/useFlash'
 
 const BLANK = { staff_id: '', role_label: '', notes: '' }
 
@@ -76,14 +77,14 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
   return (
     <div>
       <Toast toast={toast} />
-      <h3 className="text-base font-semibold text-gray-800 mb-4">Assigned Staff</h3>
+      <h3 className="text-sm font-bold text-navy mb-4">Assigned Staff</h3>
 
       {/* Assigned staff table */}
       {assignments.length > 0 ? (
-        <div className="overflow-x-auto mb-4 border border-gray-200 rounded-xl">
+        <div className="overflow-x-auto mb-4 border border-line rounded-xl">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 border-b border-line">
                 <Th>Staff Name</Th>
                 <Th>Department</Th>
                 <Th>Role on Event</Th>
@@ -93,8 +94,8 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
             </thead>
             <tbody>
               {assignments.map(a => (
-                <tr key={a.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                <tr key={a.id} className="border-b border-line last:border-0 hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm font-semibold text-navy">
                     {a.staff?.full_name ?? '—'}
                   </td>
                   <Td>{a.staff?.department}</Td>
@@ -105,7 +106,7 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
                       <button
                         onClick={() => handleRemove(a.id)}
                         title="Remove assignment"
-                        className="text-red-400 hover:text-red-600 transition-colors text-lg leading-none font-medium"
+                        className="text-red-400 hover:text-red-600 wl-transition text-lg leading-none font-medium"
                       >
                         ×
                       </button>
@@ -117,15 +118,15 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
           </table>
         </div>
       ) : (
-        <p className="text-sm text-gray-400 mb-4">No staff assigned yet.</p>
+        <p className="text-sm text-ink-soft mb-4">Nobody assigned to this event yet. Add the people who will work it below.</p>
       )}
 
       {/* Assign form — owner/manager only */}
       {canManage && (
-        <div className="border border-gray-200 rounded-xl p-4">
+        <div className="border border-line rounded-xl p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-3">Assign Staff</h4>
           <form onSubmit={handleAssign} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div className="col-span-2">
                 <Field label="Staff *">
                   <Sel
@@ -143,7 +144,7 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
                 </Field>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <Field label="Role on Event *">
                 <Inp
                   required
@@ -161,7 +162,7 @@ export default function EventStaffSection({ eventId, canManage, onRefresh }) {
               </Field>
             </div>
             <button type="submit" disabled={busy}
-              className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
               {busy ? 'Assigning…' : 'Assign'}
             </button>
           </form>

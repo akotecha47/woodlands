@@ -3,9 +3,11 @@ import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, fieldCls, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Toast, Button } from '../admin/AdminUI'
 import { TB_MANAGE_ROLES } from '../../lib/roles'
 import { fmtDate, fmtTime, toDateStr, todayStr, StatusBadge } from './TableBookingsUI'
+import { fieldCls } from '../ui/kit.constants'
+import { useFlash } from '../ui/useFlash'
 
 function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T12:00:00')
@@ -103,7 +105,7 @@ export default function UpcomingTab() {
   return (
     <div className="p-6">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800 mb-5">Next 7 Days</h2>
+      <h2 className="text-[15px] font-bold text-navy mb-5">Next 7 Days</h2>
 
       {groups.length === 0 && (
         <p className="text-sm text-gray-400 py-6 text-center">No upcoming bookings</p>
@@ -124,14 +126,14 @@ export default function UpcomingTab() {
                 </span>
               </div>
 
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="border border-line rounded-xl overflow-hidden">
                 {grp.bookings.map((b, i) => (
                   <div key={b.id}>
                     {/* Compact row — click to expand */}
                     <button
                       onClick={() => setExpandedId(expandedId === b.id ? null : b.id)}
-                      className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors hover:bg-gray-50 ${
-                        i > 0 ? 'border-t border-gray-100' : ''
+                      className={`w-full text-left px-4 py-3 flex items-center gap-3 wl-transition hover:bg-gray-50 ${
+                        i > 0 ? 'border-t border-line' : ''
                       } ${expandedId === b.id ? 'bg-gray-50' : ''}`}
                     >
                       <span className="text-xs font-mono text-gray-500 w-12 shrink-0">{fmtTime(b.booking_time)}</span>
@@ -144,7 +146,7 @@ export default function UpcomingTab() {
 
                     {/* Expanded detail */}
                     {expandedId === b.id && (
-                      <div className="border-t border-gray-100 bg-blue-50/30 px-4 py-4">
+                      <div className="border-t border-line bg-blue-50/30 px-4 py-4">
                         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-4">
                           <div>
                             <dt className="text-xs text-gray-500 mb-0.5">Guest</dt>
@@ -194,7 +196,7 @@ export default function UpcomingTab() {
                         {canManage && (
                           <button
                             onClick={() => openEdit(b)}
-                            className="text-xs font-medium px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors"
+                            className="text-xs font-medium px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg wl-transition"
                           >
                             Edit Booking
                           </button>
@@ -218,13 +220,13 @@ export default function UpcomingTab() {
               <button onClick={() => setEditModal(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
             </div>
             <form onSubmit={handleEdit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Guest Name *">
                   <Inp required value={editForm.guest_name}
                     onChange={e => setEditForm(p => ({ ...p, guest_name: e.target.value }))} />
                 </Field>
                 <Field label="Phone *">
-                  <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                  <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-teal/25 focus-within:border-teal">
                     <PhoneInput international defaultCountry="MW"
                       value={editForm.guest_phone}
                       onChange={val => setEditForm(p => ({ ...p, guest_phone: val ?? '' }))}
@@ -232,7 +234,7 @@ export default function UpcomingTab() {
                   </div>
                 </Field>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
                 <Field label="Date *">
                   <Inp type="date" required value={editForm.booking_date}
                     onChange={e => setEditForm(p => ({ ...p, booking_date: e.target.value }))} />
@@ -259,25 +261,23 @@ export default function UpcomingTab() {
               </Field>
               <Field label="Special Requests">
                 <textarea rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none"
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25 resize-none"
                   value={editForm.special_requests}
                   onChange={e => setEditForm(p => ({ ...p, special_requests: e.target.value }))} />
               </Field>
               <Field label="Notes">
                 <textarea rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none"
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25 resize-none"
                   value={editForm.notes}
                   onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} />
               </Field>
               <div className="flex gap-3">
-                <button type="submit" disabled={editBusy}
-                  className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                <Button type="submit" disabled={editBusy} className="flex-1">
                   {editBusy ? 'Saving…' : 'Save Changes'}
-                </button>
-                <button type="button" onClick={() => setEditModal(null)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+                </Button>
+                <Button variant="secondary" onClick={() => setEditModal(null)} className="flex-1">
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           </div>

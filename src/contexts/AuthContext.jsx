@@ -42,15 +42,40 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  /**
+   * Sign out must actually END the session (U-02).
+   *
+   * `supabase.auth.signOut()` defaults to a GLOBAL sign-out, which calls the
+   * server to revoke every refresh token. When that call fails — an expired or
+   * already-revoked refresh token returns 403 session_not_found, and so does an
+   * offline browser — the SDK surfaces the error and, in that path, the local
+   * session can survive in storage. The user clicks Sign out, sees nothing
+   * happen, and is still signed in.
+   *
+   * So: try the global sign-out, and if it reports an error fall back to a
+   * local one, which only clears storage and cannot fail server-side. Either
+   * way the local state is cleared here, so RequireAuth redirects on the next
+   * render whatever the network did.
+   *
+   * Nothing else about auth changes: same client, same anon key, same
+   * signInWithPassword.
+   */
   async function signOut() {
-    await supabase.auth.signOut()
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) await supabase.auth.signOut({ scope: 'local' })
+    } catch {
+      try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* storage only */ }
+    }
+    setSession(null)
+    setProfile(null)
   }
 
   return (
     <AuthContext.Provider value={{ session, profile, loading, signOut }}>
       {loading ? (
-        <div className="fixed inset-0 flex items-center justify-center bg-white">
-          <div className="w-8 h-8 border-4 border-brand-teal border-t-transparent rounded-full animate-spin" />
+        <div className="fixed inset-0 flex items-center justify-center bg-paper">
+          <div className="w-8 h-8 border-[3px] border-teal border-t-transparent rounded-full animate-spin" />
         </div>
       ) : children}
     </AuthContext.Provider>

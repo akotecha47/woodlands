@@ -3,12 +3,13 @@ import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Th, Td, Toast, Field, Inp, Sel, Button, EmptyRow } from '../admin/AdminUI'
 import { TB_MANAGE_ROLES } from '../../lib/roles'
 import {
   STATUS_CFG, fmtDate, fmtTime,
   todayStr, currentTimeStr, isPotentialNoShow, StatusBadge,
 } from './TableBookingsUI'
+import { useFlash } from '../ui/useFlash'
 
 export default function TodayTab() {
   const { profile, session } = useAuth()
@@ -93,13 +94,13 @@ export default function TodayTab() {
           <label className="text-sm font-medium text-gray-700">Date</label>
           <input
             type="date" value={date} onChange={e => setDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
+            className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25"
           />
         </div>
         {canManage && (
           <button
             onClick={() => setWalkIn(true)}
-            className="ml-auto bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-3 py-1.5 rounded-lg text-sm transition-colors"
+            className="ml-auto bg-teal hover:bg-teal-deep text-white font-medium px-3 py-1.5 rounded-lg text-sm wl-transition"
           >
             + Walk In
           </button>
@@ -108,7 +109,7 @@ export default function TodayTab() {
 
       {/* Summary strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+        <div className="bg-gray-50 border border-line rounded-xl p-3">
           <p className="text-xs text-gray-500 mb-0.5">Total Covers</p>
           <p className="text-xl font-bold text-gray-900">{totalCovers}</p>
         </div>
@@ -120,7 +121,7 @@ export default function TodayTab() {
           <p className="text-xs text-green-700 mb-0.5">Seated</p>
           <p className="text-xl font-bold text-green-800">{countOf('seated')}</p>
         </div>
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+        <div className="bg-gray-50 border border-line rounded-xl p-3">
           <p className="text-xs text-gray-500 mb-0.5">Completed</p>
           <p className="text-xl font-bold text-gray-700">{countOf('completed')}</p>
         </div>
@@ -135,10 +136,10 @@ export default function TodayTab() {
       </div>
 
       {/* Bookings table */}
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50 border-b border-line">
               <Th>Time</Th>
               <Th>Guest Name</Th>
               <Th>Party Size</Th>
@@ -151,7 +152,7 @@ export default function TodayTab() {
             {bookings.map(b => {
               const noShowRisk = isPotentialNoShow(b)
               return (
-                <tr key={b.id} className={`border-b border-gray-100 transition-colors ${
+                <tr key={b.id} className={`border-b border-line wl-transition ${
                   noShowRisk ? 'bg-amber-50/70' : 'hover:bg-gray-50'
                 }`}>
                   <td className="px-4 py-3 text-sm">
@@ -162,7 +163,7 @@ export default function TodayTab() {
                       <span className="ml-1.5 text-xs text-amber-500" title="Confirmed 45+ min ago — possible no-show">⚠</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                  <td className="px-4 py-3 text-sm font-semibold text-navy">
                     {b.guest_name}
                     {b.special_requests && (
                       <span className="ml-1.5 text-blue-400 cursor-help text-xs" title={b.special_requests}>📋</span>
@@ -178,13 +179,13 @@ export default function TodayTab() {
                           <>
                             <button
                               onClick={() => updateStatus(b.id, 'confirmed')}
-                              className="text-xs font-medium px-2.5 py-1 bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors"
+                              className="text-xs font-medium px-2.5 py-1 bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition"
                             >
                               Confirm
                             </button>
                             <button
                               onClick={() => updateStatus(b.id, 'cancelled')}
-                              className="text-xs font-medium px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg transition-colors"
+                              className="text-xs font-medium px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg wl-transition"
                             >
                               Cancel
                             </button>
@@ -194,19 +195,19 @@ export default function TodayTab() {
                           <>
                             <button
                               onClick={() => updateStatus(b.id, 'seated')}
-                              className="text-xs font-medium px-2.5 py-1 bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors"
+                              className="text-xs font-medium px-2.5 py-1 bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition"
                             >
                               Seat
                             </button>
                             <button
                               onClick={() => updateStatus(b.id, 'no_show')}
-                              className="text-xs font-medium px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg transition-colors"
+                              className="text-xs font-medium px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg wl-transition"
                             >
                               No Show
                             </button>
                             <button
                               onClick={() => updateStatus(b.id, 'cancelled')}
-                              className="text-xs font-medium px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg transition-colors"
+                              className="text-xs font-medium px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg wl-transition"
                             >
                               Cancel
                             </button>
@@ -215,7 +216,7 @@ export default function TodayTab() {
                         {b.status === 'seated' && (
                           <button
                             onClick={() => updateStatus(b.id, 'completed')}
-                            className="text-xs font-medium px-2.5 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                            className="text-xs font-medium px-2.5 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded-lg wl-transition"
                           >
                             Complete
                           </button>
@@ -227,11 +228,10 @@ export default function TodayTab() {
               )
             })}
             {bookings.length === 0 && (
-              <tr>
-                <td colSpan={colSpan} className="px-4 py-8 text-center text-sm text-gray-400">
-                  No bookings for {fmtDate(date)}
-                </td>
-              </tr>
+              <EmptyRow
+                cols={colSpan}
+                msg={'No bookings for ' + fmtDate(date) + '. New reservations appear here as they are taken, or seat a walk-in above.'}
+              />
             )}
           </tbody>
         </table>
@@ -247,18 +247,16 @@ export default function TodayTab() {
             </div>
             <p className="text-xs text-gray-400 mb-4">Status set to Seated immediately.</p>
             <form onSubmit={handleWalkIn} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Guest Name *</label>
-                <input
+              <Field label="Guest Name *">
+                <Inp
                   required type="text" value={walkInForm.guest_name}
                   onChange={e => setWalkInForm(p => ({ ...p, guest_name: e.target.value }))}
                   placeholder="Full name"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                 />
-              </div>
+              </Field>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-                <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-teal/25 focus-within:border-teal">
                   <PhoneInput
                     international defaultCountry="MW"
                     value={walkInForm.guest_phone}
@@ -267,21 +265,17 @@ export default function TodayTab() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Party Size *</label>
-                  <input
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                <Field label="Party Size *">
+                  <Inp
                     required type="number" min="1" value={walkInForm.party_size}
                     onChange={e => setWalkInForm(p => ({ ...p, party_size: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Table</label>
-                  <select
+                </Field>
+                <Field label="Table">
+                  <Sel
                     value={walkInForm.table_id}
                     onChange={e => setWalkInForm(p => ({ ...p, table_id: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   >
                     <option value="">No table</option>
                     {walkInTables.map(t => (
@@ -289,22 +283,16 @@ export default function TodayTab() {
                         {t.table_number} · {t.location} · {t.capacity}
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </Sel>
+                </Field>
               </div>
               <div className="flex gap-3 pt-1">
-                <button
-                  type="submit" disabled={walkInBusy}
-                  className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
-                >
+                <Button type="submit" disabled={walkInBusy} className="flex-1">
                   {walkInBusy ? 'Seating…' : 'Seat Guest'}
-                </button>
-                <button
-                  type="button" onClick={() => setWalkIn(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
-                >
+                </Button>
+                <Button variant="secondary" onClick={() => setWalkIn(false)} className="flex-1">
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           </div>

@@ -3,7 +3,8 @@ import { Lock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { applyStockDelta, allocatableQuantities } from '../../lib/stock'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast } from '../admin/AdminUI'
+import { useFlash } from '../ui/useFlash'
 
 const STATUS_BADGE = {
   pending:   'bg-gray-100 text-gray-500',
@@ -213,14 +214,14 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
   return (
     <div>
       <Toast toast={toast} />
-      <h3 className="text-base font-semibold text-gray-800 mb-4">Stock Allocations</h3>
+      <h3 className="text-sm font-bold text-navy mb-4">Stock Allocations</h3>
 
       {/* Allocations table */}
       {allocations.length > 0 ? (
-        <div className="overflow-x-auto mb-4 border border-gray-200 rounded-xl">
+        <div className="overflow-x-auto mb-4 border border-line rounded-xl">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 border-b border-line">
                 <Th>Item</Th>
                 <Th>SKU</Th>
                 <Th>Dept</Th>
@@ -236,15 +237,15 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                 const item = a.stock_items
                 const unit = item?.unit ?? ''
                 return (
-                  <tr key={a.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{item?.name ?? '—'}</td>
+                  <tr key={a.id} className="border-b border-line last:border-0 hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-semibold text-navy">{item?.name ?? '—'}</td>
                     <Td>{item?.sku}</Td>
                     <Td>{item?.department}</Td>
                     <Td>{a.allocated_qty} {unit}</Td>
                     <Td>{a.consumed_qty != null ? `${a.consumed_qty} ${unit}` : null}</Td>
                     <Td>{a.returned_qty != null ? `${a.returned_qty} ${unit}` : null}</Td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium capitalize ${STATUS_BADGE[a.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold capitalize ${STATUS_BADGE[a.status] ?? 'bg-gray-100 text-gray-500'}`}>
                         {a.status}
                       </span>
                     </td>
@@ -254,7 +255,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                           <button
                             onClick={() => handleRemove(a)}
                             title="Remove allocation"
-                            className="text-red-400 hover:text-red-600 transition-colors text-lg leading-none font-medium"
+                            className="text-red-400 hover:text-red-600 wl-transition text-lg leading-none font-medium"
                           >
                             ×
                           </button>
@@ -275,7 +276,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
 
       {/* Add allocation form — enquiry or confirmed only */}
       {canAddMore && (
-        <div className="border border-gray-200 rounded-xl p-4 mb-4">
+        <div className="border border-line rounded-xl p-4 mb-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-3">Add to Allocation</h4>
           <form onSubmit={handleAdd} className="space-y-3">
             <Field label="Stock Item *">
@@ -292,7 +293,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                 ))}
               </Sel>
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <Field label="Quantity *">
                 <Inp
                   type="number"
@@ -318,7 +319,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
               </p>
             )}
             <button type="submit" disabled={busy}
-              className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
               {busy ? 'Adding…' : 'Add to Allocation'}
             </button>
           </form>
@@ -327,17 +328,17 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
 
       {/* Post-event clearance — only when completed and there's something to clear or summarise */}
       {eventStatus === 'completed' && (deductedAllocations.length > 0 || showClearanceSummary) && (
-        <div className="border border-gray-200 rounded-xl p-4">
+        <div className="border border-line rounded-xl p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-3">Post-Event Stock Clearance</h4>
 
           {showClearanceSummary ? (
             /* Read-only summary once all cleared */
             <div>
               <p className="text-xs text-gray-400 mb-3">Clearance complete.</p>
-              <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <div className="wl-scroll-x border border-line rounded-xl bg-white">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
+                    <tr className="bg-gray-50 border-b border-line">
                       <Th>Item</Th>
                       <Th>Dept</Th>
                       <Th>Allocated</Th>
@@ -350,8 +351,8 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                       const item = a.stock_items
                       const unit = item?.unit ?? ''
                       return (
-                        <tr key={a.id} className="border-b border-gray-100 last:border-0">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{item?.name ?? '—'}</td>
+                        <tr key={a.id} className="border-b border-line last:border-0">
+                          <td className="px-4 py-3 text-sm font-semibold text-navy">{item?.name ?? '—'}</td>
                           <Td>{item?.department}</Td>
                           <Td>{a.allocated_qty} {unit}</Td>
                           <Td>{a.consumed_qty} {unit}</Td>
@@ -369,10 +370,10 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
               <p className="text-xs text-gray-500">
                 Enter actual quantities consumed. Unused stock will be returned automatically.
               </p>
-              <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <div className="wl-scroll-x border border-line rounded-xl bg-white">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
+                    <tr className="bg-gray-50 border-b border-line">
                       <Th>Item</Th>
                       <Th>Allocated</Th>
                       <Th>Consumed</Th>
@@ -390,8 +391,8 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                       const consumed = Number(clearanceForm[a.id] ?? deductedQty)
                       const returned = Math.max(0, deductedQty - consumed)
                       return (
-                        <tr key={a.id} className="border-b border-gray-100 last:border-0">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{item?.name ?? '—'}</td>
+                        <tr key={a.id} className="border-b border-line last:border-0">
+                          <td className="px-4 py-3 text-sm font-semibold text-navy">{item?.name ?? '—'}</td>
                           <Td>{a.allocated_qty} {unit}</Td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
@@ -402,7 +403,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                                 step="0.01"
                                 value={clearanceForm[a.id] ?? deductedQty}
                                 onChange={e => setClearanceForm(cf => ({ ...cf, [a.id]: e.target.value }))}
-                                className="w-24 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                                className="w-24 bg-white border border-gray-300 rounded-lg px-2 py-1 text-sm wl-transition focus:border-teal focus:ring-2 focus:ring-teal/25"
                               />
                               <span className="text-xs text-gray-500">{unit}</span>
                             </div>
@@ -417,7 +418,7 @@ export default function EventStockSection({ eventId, eventStatus, canManage, onR
                 </table>
               </div>
               <button type="submit" disabled={clearBusy}
-                className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
                 {clearBusy ? 'Processing…' : 'Complete Clearance'}
               </button>
             </form>

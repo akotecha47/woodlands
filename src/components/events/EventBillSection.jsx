@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast } from '../admin/AdminUI'
 import { fmtMWK } from './EventsUI'
+import { useFlash } from '../ui/useFlash'
 
 const CATEGORIES = [
   'Venue Hire',
@@ -65,14 +66,14 @@ export default function EventBillSection({ eventId, items, canManage, onRefresh 
   return (
     <div>
       <Toast toast={toast} />
-      <h3 className="text-base font-semibold text-gray-800 mb-4">Bill</h3>
+      <h3 className="text-sm font-bold text-navy mb-4">Bill</h3>
 
       {/* Bill items table */}
       {items.length > 0 ? (
-        <div className="overflow-x-auto mb-4 border border-gray-200 rounded-xl">
+        <div className="overflow-x-auto mb-4 border border-line rounded-xl">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 border-b border-line">
                 <Th>Category</Th>
                 <Th>Description</Th>
                 <Th>Amount</Th>
@@ -81,14 +82,14 @@ export default function EventBillSection({ eventId, items, canManage, onRefresh 
             </thead>
             <tbody>
               {items.map(item => (
-                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <tr key={item.id} className="border-b border-line hover:bg-gray-50">
                   <Td>{item.category}</Td>
                   <Td>{item.description}</Td>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{fmtMWK(item.amount)}</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-navy">{fmtMWK(item.amount)}</td>
                   {canManage && (
                     <td className="px-4 py-3">
                       <button onClick={() => handleDelete(item.id)}
-                        className="text-red-400 hover:text-red-600 transition-colors">
+                        className="text-red-400 hover:text-red-600 wl-transition">
                         <Trash2 size={14} />
                       </button>
                     </td>
@@ -114,10 +115,10 @@ export default function EventBillSection({ eventId, items, canManage, onRefresh 
 
       {/* Add bill item form — owner/manager only */}
       {canManage && (
-        <div className="border border-gray-200 rounded-xl p-4">
+        <div className="border border-line rounded-xl p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-3">Add Bill Item</h4>
           <form onSubmit={handleAdd} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <Field label="Category *">
                 <Sel required value={form.category} onChange={f('category')}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -137,7 +138,7 @@ export default function EventBillSection({ eventId, items, canManage, onRefresh 
                 value={form.amount} onChange={f('amount')} />
             </Field>
             <button type="submit" disabled={busy}
-              className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
               {busy ? 'Adding…' : 'Add Item'}
             </button>
           </form>

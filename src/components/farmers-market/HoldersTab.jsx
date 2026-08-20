@@ -6,7 +6,10 @@ import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { FM_FEES, FM_ID_CARD_EXTRA_FEE } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, fieldCls, Th, Td, Toast, useFlash } from '../admin/AdminUI'
+import { Field, Inp, Sel, Th, Td, Toast } from '../admin/AdminUI'
+import {
+  SearchInput, StatRow, StatTile, TableWrap, Thead, EmptyRow, Tabs, Button,
+} from '../ui/kit'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
 import { fetchAttendance, fetchTaxonomy, itemPath, changeHolderProducts, forfeitStall } from '../../lib/fm'
 import {
@@ -15,6 +18,8 @@ import {
   getLastNMarketDays, getMarketDaysSince,
   HolderStatusBadge, PaidIcon,
 } from './FarmersMarketUI'
+import { fieldCls } from '../ui/kit.constants'
+import { useFlash } from '../ui/useFlash'
 
 const FILTER_TABS = [
   { id: 'all',            label: 'All'           },
@@ -37,6 +42,9 @@ export default function HoldersTab() {
   const [holders,          setHolders]          = useState([])
   const [yearVisits,       setYearVisits]        = useState([])
   const [filter,           setFilter]            = useState('all')
+  // Display-only search over the rows already loaded. 311 holders behind six
+  // status tabs is not findable by scrolling (U-10). Nothing is refetched.
+  const [query,            setQuery]             = useState('')
   const [expandedId,       setExpandedId]        = useState(null)
   const [expandedPayments, setExpandedPayments]  = useState([])
   const [expandedVisits,   setExpandedVisits]    = useState([])
@@ -160,12 +168,44 @@ export default function HoldersTab() {
   // Do not infer debt from application_paid / acceptance_paid flags alone.
   const outstandingTotal = 0
 
-  const stallTypeBreakdown = STALL_TYPES.map(type => ({
-    type,
-    count: activeHolders.filter(h => h.stall_type === type).length,
-  }))
+  // §7 DISPLAY HALF (AUDIT_3 §7 / Fable).
+  //
+  // `stall_type` is the deprecated classification: all 311 live rows carry
+  // 'Other', so this strip read "Produce: 0 · Crafts: 0 · … Other: 311" and the
+  // Type column said "Other" on every row. The 3-level taxonomy replaced it in
+  // the data layer at 061 — fm_categories → fm_product_types → fm_items, with
+  // fm_holders.category_id as the holder's category — and the product picker
+  // already writes it through change_holder_products(). Only the DISPLAY was
+  // left behind.
+  //
+  // So this reads the taxonomy that load() already fetches, against the
+  // category_id that fm_holders.select('*') already returns. Nothing new is
+  // queried and nothing is written.
+  //
+  // Holders with no category_id are counted as "Not yet classified" rather than
+  // being dropped or folded into a category they were never assigned. That is a
+  // true statement about the data; filling it in is a data-curation job, not a
+  // display one.
+  const categoryName = h => taxonomy?.categories?.find(c => c.id === h.category_id)?.name ?? null
 
-  const filtered = filter === 'all' ? holders : holders.filter(h => h.status === filter)
+  const categoryBreakdown = [
+    ...(taxonomy?.categories ?? []).map(c => ({
+      key:   c.id,
+      label: c.name,
+      count: activeHolders.filter(h => h.category_id === c.id).length,
+    })),
+    {
+      key:   'unclassified',
+      label: 'Not yet classified',
+      count: activeHolders.filter(h => !h.category_id).length,
+    },
+  ].filter(row => row.count > 0)
+
+  const q = query.trim().toLowerCase()
+  const filtered = holders
+    .filter(h => filter === 'all' || h.status === filter)
+    .filter(h => !q || [h.stall_number, h.full_name, h.business_name, h.phone]
+      .some(v => (v ?? '').toLowerCase().includes(q)))
 
   // ── expand panel ───────────────────────────────────────────────────────────
 
@@ -439,31 +479,46 @@ export default function HoldersTab() {
     <div className="p-6">
       <Toast toast={toast} />
 
-      {/* Summary strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <div className="bg-gray-50 rounded-xl p-4 col-span-2 sm:col-span-1">
-          <p className="text-xs text-gray-500 mb-1">Active Businesses</p>
-          <p className="text-2xl font-bold text-gray-900">{activeHolders.length}</p>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5">
-            {stallTypeBreakdown.map(s => (
-              <span key={s.type} className="text-xs text-gray-500">{s.type}: {s.count}</span>
+      {/* Summary — the consistent stat treatment, not a fake dashboard hero. */}
+      <StatRow cols={4} className="mb-5">
+        <StatTile label="Active businesses" value={activeHolders.length} />
+        <StatTile label="Total registered"  value={holders.length} />
+        <StatTile
+          label="At risk"
+          value={atRiskHolders.length}
+          tone={atRiskHolders.length > 0 ? 'alert' : 'neutral'}
+          foot={atRiskHolders.length > 0 ? 'Requires follow-up' : 'None flagged'}
+        />
+        {/* Neutral, not amber. There is no invoicing system behind this figure,
+            so it is always 0 — an amber "outstanding" panel would be a warning
+            about nothing. The sub-line says what the number actually means. */}
+        <StatTile
+          label="Outstanding fees"
+          value={fmtMWK(outstandingTotal)}
+          foot="Not invoiced per-holder yet"
+        />
+      </StatRow>
+
+      {/* Product categories — the 3-level taxonomy, not the deprecated
+          stall_type. Only categories that actually have holders are shown. */}
+      {categoryBreakdown.length > 0 && (
+        <div className="mb-5">
+          <p className="text-[11px] font-bold uppercase tracking-[.08em] text-ink-soft mb-2">
+            Active businesses by product category
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {categoryBreakdown.map(c => (
+              <span
+                key={c.key}
+                className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-white text-xs"
+              >
+                <span className="font-semibold text-navy">{c.label}</span>
+                <span className="font-bold text-ink-soft tnum">{c.count}</span>
+              </span>
             ))}
           </div>
         </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <p className="text-xs text-amber-700 mb-1">Outstanding Fees</p>
-          <p className="text-lg font-bold text-amber-800">{fmtMWK(outstandingTotal)}</p>
-        </div>
-        <div className={`rounded-xl p-4 border ${atRiskHolders.length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-transparent'}`}>
-          <p className={`text-xs mb-1 ${atRiskHolders.length > 0 ? 'text-red-700' : 'text-gray-500'}`}>At Risk</p>
-          <p className={`text-2xl font-bold ${atRiskHolders.length > 0 ? 'text-red-700' : 'text-gray-900'}`}>{atRiskHolders.length}</p>
-          {atRiskHolders.length > 0 && <p className="text-xs text-red-600 mt-0.5">requires follow-up</p>}
-        </div>
-        <div className="bg-gray-50 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">Total Businesses</p>
-          <p className="text-2xl font-bold text-gray-900">{holders.length}</p>
-        </div>
-      </div>
+      )}
 
       {/* Last market day summary */}
       {lastMarketDay && (
@@ -506,7 +561,7 @@ export default function HoldersTab() {
                 <span className="text-sm text-gray-800">{h.full_name} ({h.stall_number})</span>
                 <button
                   onClick={() => setForfeitTarget(h)}
-                  className="text-xs font-medium text-white bg-red-600 hover:bg-red-700 px-2 py-0.5 rounded transition-colors"
+                  className="text-xs font-medium text-white bg-red-600 hover:bg-red-700 px-2 py-0.5 rounded wl-transition"
                 >
                   Forfeit
                 </button>
@@ -531,7 +586,7 @@ export default function HoldersTab() {
                 )}
                 <button
                   onClick={() => handleMarkContacted(h)}
-                  className="text-xs font-medium text-red-600 hover:text-red-800 border border-red-200 hover:border-red-300 px-2 py-0.5 rounded transition-colors"
+                  className="text-xs font-medium text-red-600 hover:text-red-800 border border-red-200 hover:border-red-300 px-2 py-0.5 rounded wl-transition"
                 >
                   Mark Contacted
                 </button>
@@ -541,85 +596,101 @@ export default function HoldersTab() {
         </div>
       )}
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-4 overflow-x-auto max-w-full">
-        {FILTER_TABS.map(t => (
-          <button key={t.id} onClick={() => setFilter(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-              filter === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
+      {/* Filter by status, then find by name. The tab bar is the one from the
+          kit, so it matches every other tab bar in the app (U-06). */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <Tabs
+          tabs={FILTER_TABS}
+          value={filter}
+          onChange={setFilter}
+          size="sm"
+          ariaLabel="Filter businesses by status"
+        />
+        <div className="flex items-center gap-3">
+          <SearchInput
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Stall no, name, business or phone…"
+            aria-label="Search businesses"
+            className="w-full sm:w-72"
+          />
+          <p className="text-xs text-ink-soft tnum whitespace-nowrap">
+            {filtered.length} of {holders.length}
+          </p>
+        </div>
       </div>
 
-      {/* Holders table */}
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+      {/* Holders table. The old "Outstanding" column printed a literal em dash
+          on all 311 rows under a header that promised a figure — a column with
+          no information in it, and one less thing to read now (U-10). */}
+      <TableWrap>
         <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <Th>Stall No</Th>
+          <Thead>
+            <tr>
+              <Th>Stall</Th>
               <Th>Name</Th>
               <Th>Business</Th>
-              <Th>Type</Th>
+              <Th>Category</Th>
               <Th>Phone</Th>
               <Th>Status</Th>
-              <Th>App Paid</Th>
-              <Th>Reg Fee Paid</Th>
+              <Th>App fee</Th>
+              <Th>Reg fee</Th>
               <Th>Visits (YTD)</Th>
-              <Th>Outstanding</Th>
               <Th>Actions</Th>
               <th className="w-8" />
             </tr>
-          </thead>
+          </Thead>
           <tbody>
             {filtered.map(h => (
               <Fragment key={h.id}>
-                <tr className={`border-b border-gray-100 transition-colors ${
+                <tr className={`border-b border-line wl-transition ${
                   h.status === 'at_risk' ? 'bg-amber-50' : 'hover:bg-gray-50'
                 }`}>
-                  <Td>{h.stall_number}</Td>
+                  <Td><span className="font-semibold text-navy">{h.stall_number}</span></Td>
                   <td className="px-4 py-3">
                     <button onClick={() => handleExpand(h)}
-                      className="text-sm font-medium text-blue-600 hover:text-blue-800 text-left">
+                      className="text-sm font-semibold text-teal hover:text-teal-deep text-left wl-transition">
                       {h.full_name}
                     </button>
                   </td>
                   <Td>{h.business_name}</Td>
-                  <Td>{h.stall_type}</Td>
+                  {/* §7: the category from the taxonomy, not the dead stall_type. */}
+                  <Td>
+                    {categoryName(h)
+                      ?? <span className="text-gray-400">Not yet classified</span>}
+                  </Td>
                   <Td>{h.phone}</Td>
                   <td className="px-4 py-3"><HolderStatusBadge status={h.status} /></td>
                   <td className="px-4 py-3"><PaidIcon paid={h.application_paid} /></td>
                   <td className="px-4 py-3"><PaidIcon paid={h.acceptance_paid} /></td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{yearVisitCountMap[h.id] ?? 0}</td>
-                  <td className="px-4 py-3 text-sm text-gray-400">—</td>
+                  <td className="px-4 py-3 text-sm text-gray-700 tnum">{yearVisitCountMap[h.id] ?? 0}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5 flex-wrap">
                       <button onClick={() => handleExpand(h)}
-                        className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors">
+                        className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-line bg-white hover:bg-gray-50 text-gray-700 wl-transition">
                         View
                       </button>
                       {canManage && (
                         <button onClick={() => openEdit(h)}
-                          className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors">
+                          className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-line bg-white hover:bg-gray-50 text-gray-700 wl-transition">
                           Edit
                         </button>
                       )}
                       {canManage && (
                         <button onClick={() => setQrHolder(h)}
-                          className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors">
+                          className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-line bg-white hover:bg-gray-50 text-gray-700 wl-transition">
                           QR Code
                         </button>
                       )}
                       {canManage && h.status === 'pending_review' && (
                         <button onClick={() => setConfirmAction({ type: 'approve', holder: h })}
-                          className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-700 transition-colors">
+                          className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-teal hover:bg-teal-deep text-white wl-transition">
                           Approve
                         </button>
                       )}
                       {canManage && ['active', 'at_risk', 'accepted'].includes(h.status) && (
                         <button onClick={() => setConfirmAction({ type: 'deactivate', holder: h })}
-                          className="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 rounded text-red-700 transition-colors">
+                          className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-red-200 bg-alert-bg hover:bg-red-200 text-red-700 wl-transition">
                           Deactivate
                         </button>
                       )}
@@ -632,7 +703,7 @@ export default function HoldersTab() {
 
                 {expandedId === h.id && (
                   <tr>
-                    <td colSpan={12} className="bg-gray-50 border-b border-gray-200 px-6 py-5">
+                    <td colSpan={11} className="bg-gray-50 border-b border-line px-6 py-5">
 
                       {/* Contact details */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-sm mb-5">
@@ -660,11 +731,11 @@ export default function HoldersTab() {
                         <div>
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Payment History</p>
                           {expandedPayments.length === 0 ? (
-                            <p className="text-sm text-gray-400">No payments recorded</p>
+                            <p className="text-sm text-ink-soft">No payments recorded against this business yet.</p>
                           ) : (
                             <table className="w-full text-sm">
                               <thead>
-                                <tr className="border-b border-gray-200">
+                                <tr className="border-b border-line">
                                   {['Date', 'Type', 'Amount', 'Method', 'Reference'].map(c => (
                                     <th key={c} className="text-left pb-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase">{c}</th>
                                   ))}
@@ -672,7 +743,7 @@ export default function HoldersTab() {
                               </thead>
                               <tbody>
                                 {expandedPayments.map(p => (
-                                  <tr key={p.id} className="border-t border-gray-100">
+                                  <tr key={p.id} className="border-t border-line">
                                     <td className="py-1.5 pr-4 text-gray-700">{fmtDate(p.payment_date)}</td>
                                     <td className="py-1.5 pr-4 text-gray-700">{FM_PAY_TYPES.find(t => t.value === p.payment_type)?.label ?? p.payment_type}</td>
                                     <td className="py-1.5 pr-4 font-semibold text-gray-900">{fmtMWK(p.amount)}</td>
@@ -697,7 +768,7 @@ export default function HoldersTab() {
                               <div className="max-h-52 overflow-y-auto">
                                 <table className="w-full text-sm">
                                   <thead>
-                                    <tr className="border-b border-gray-200">
+                                    <tr className="border-b border-line">
                                       {['Date', 'Checked In', 'Fee Paid', 'Notes'].map(c => (
                                         <th key={c} className="text-left pb-1.5 pr-4 text-xs font-semibold text-gray-500 uppercase">{c}</th>
                                       ))}
@@ -705,7 +776,7 @@ export default function HoldersTab() {
                                   </thead>
                                   <tbody>
                                     {history.map(({ date, checkedIn, feePaid, notes }) => (
-                                      <tr key={date} className="border-t border-gray-100">
+                                      <tr key={date} className="border-t border-line">
                                         <td className="py-1.5 pr-4 text-gray-700">{fmtDate(date)}</td>
                                         <td className="py-1.5 pr-4">
                                           <span className={`text-xs font-medium ${checkedIn ? 'text-green-600' : 'text-gray-400'}`}>
@@ -741,7 +812,7 @@ export default function HoldersTab() {
                           ) : (
                             <table className="w-full text-sm mb-3">
                               <thead>
-                                <tr className="border-b border-gray-200">
+                                <tr className="border-b border-line">
                                   {['Card #', 'Fee', 'Status', 'Issued'].map(c => (
                                     <th key={c} className="text-left pb-1.5 pr-3 text-xs font-semibold text-gray-500 uppercase">{c}</th>
                                   ))}
@@ -750,7 +821,7 @@ export default function HoldersTab() {
                               </thead>
                               <tbody>
                                 {expandedIdCards.map(c => (
-                                  <tr key={c.id} className="border-t border-gray-100">
+                                  <tr key={c.id} className="border-t border-line">
                                     <td className="py-1.5 pr-3 text-gray-700 font-medium">Card {c.card_number}</td>
                                     <td className="py-1.5 pr-3 text-gray-700">{fmtMWK(c.card_fee)}</td>
                                     <td className="py-1.5 pr-3">
@@ -767,7 +838,7 @@ export default function HoldersTab() {
                                         {c.status === 'active' && (
                                           <button
                                             onClick={() => openCardConfirm({ type: 'reprint', holder: h, cardNum: c.card_number, fee: FM_FEES.id_card_replace, cardId: c.id })}
-                                            className="text-xs px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded transition-colors"
+                                            className="text-xs px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded wl-transition"
                                           >
                                             Reprint
                                           </button>
@@ -789,7 +860,7 @@ export default function HoldersTab() {
                             return (
                               <button
                                 onClick={() => openCardConfirm({ type: 'issue', holder: h, cardNum: nextNum, fee: issueFee })}
-                                className="text-xs px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors"
+                                className="text-xs px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg wl-transition"
                               >
                                 Issue New Card
                               </button>
@@ -822,7 +893,7 @@ export default function HoldersTab() {
                           {canManage && (
                             <button
                               onClick={() => openProductEdit(h)}
-                              className="text-xs px-3 py-1.5 bg-brand-teal hover:bg-brand-teal-dark text-white rounded-lg transition-colors"
+                              className="text-xs px-3 py-1.5 bg-teal hover:bg-teal-deep text-white rounded-lg wl-transition"
                             >
                               Change Products
                             </button>
@@ -856,7 +927,7 @@ export default function HoldersTab() {
                                 {a.forfeit_eligible && canManage && (
                                   <button
                                     onClick={() => setForfeitTarget(h)}
-                                    className="mt-2 text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                                    className="mt-2 text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg wl-transition"
                                   >
                                     Forfeit Stall
                                   </button>
@@ -873,13 +944,18 @@ export default function HoldersTab() {
               </Fragment>
             ))}
             {filtered.length === 0 && (
-              <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-sm text-gray-400">No businesses found</td>
-              </tr>
+              <EmptyRow
+                cols={11}
+                msg={
+                  holders.length === 0
+                    ? 'No businesses registered yet. Add the first one under Add Business.'
+                    : 'No business matches this status and search. Clear the search, or pick All.'
+                }
+              />
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
 
       {/* Approve / Deactivate confirmation modal */}
       {confirmAction && (
@@ -895,22 +971,16 @@ export default function HoldersTab() {
               }
             </p>
             <div className="flex gap-3">
-              <button
+              <Button
                 onClick={executeConfirm}
-                className={`flex-1 font-medium py-2 rounded-lg text-sm transition-colors text-white ${
-                  confirmAction.type === 'approve'
-                    ? 'bg-brand-teal hover:bg-brand-teal-dark'
-                    : 'bg-red-600 hover:bg-red-700'
-                }`}
+                variant={confirmAction.type === 'approve' ? 'primary' : 'danger'}
+                className="flex-1"
               >
                 {confirmAction.type === 'approve' ? 'Approve' : 'Deactivate'}
-              </button>
-              <button
-                onClick={() => setConfirmAction(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmAction(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -922,7 +992,7 @@ export default function HoldersTab() {
           <div className="bg-white rounded-xl p-6 shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h4 className="text-base font-semibold text-gray-900 mb-4">Edit Business</h4>
             <form onSubmit={handleEditSave} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Full Name *">
                   <Inp required value={editForm.full_name} onChange={ef('full_name')} />
                 </Field>
@@ -930,21 +1000,30 @@ export default function HoldersTab() {
                   <Inp value={editForm.business_name} onChange={ef('business_name')} />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Stall Number *">
                   <Inp required placeholder="e.g. A001" value={editForm.stall_number}
                     onChange={e => { setEditStallError(''); setEditForm(p => ({ ...p, stall_number: e.target.value })) }}
                     onBlur={() => setEditForm(p => ({ ...p, stall_number: p.stall_number.trim().toUpperCase() }))} />
                   {editStallError && <p className="text-xs text-red-600 mt-1">{editStallError}</p>}
                 </Field>
-                <Field label="Stall Type *">
+                {/* Same honest hint the Add Business form carries. This field
+                    still writes the deprecated `stall_type`; the real product
+                    classification is `category_id`, set through the product
+                    picker, which is also the only path that raises the
+                    MWK 10,000 change fee. Repointing the two forms is a WRITE
+                    change and is FLAGGED-1, not Block 2 work. */}
+                <Field
+                  label="Stall Type *"
+                  hint="The broad category. What they are approved to SELL is set on the business record, through the product picker."
+                >
                   <Sel required value={editForm.stall_type} onChange={ef('stall_type')}>
                     {STALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </Sel>
                 </Field>
               </div>
               <Field label="Phone *">
-                <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-teal/25 focus-within:border-teal">
                   <PhoneInput
                     international
                     defaultCountry="MW"
@@ -954,7 +1033,7 @@ export default function HoldersTab() {
                   />
                 </div>
               </Field>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Email">
                   <Inp type="email" value={editForm.email} onChange={ef('email')} />
                 </Field>
@@ -972,11 +1051,11 @@ export default function HoldersTab() {
               </Field>
               <div className="flex gap-3 pt-1">
                 <button type="submit" disabled={busy}
-                  className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                  className="inline-flex items-center justify-center bg-teal hover:bg-teal-deep text-white font-medium px-4 py-2 rounded-lg text-sm shadow-sm hover:shadow-md wl-transition disabled:opacity-50 disabled:cursor-not-allowed">
                   {busy ? 'Saving…' : 'Save Changes'}
                 </button>
                 <button type="button" onClick={() => setEditHolder(null)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-lg text-sm wl-transition">
                   Cancel
                 </button>
               </div>
@@ -999,43 +1078,32 @@ export default function HoldersTab() {
               }
             </p>
             <div className="space-y-3 mb-5">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Payment Method</label>
-                <select
+              <Field label="Payment Method">
+                <Sel
                   value={cardPayMethod}
                   onChange={e => setCardPayMethod(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                 >
                   {FM_PAY_METHODS.map(m => (
                     <option key={m.value} value={m.value}>{m.label}</option>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Reference <span className="font-normal text-gray-400">(optional)</span></label>
-                <input
+                </Sel>
+              </Field>
+              <Field label="Reference" hint="Optional — receipt or transaction reference.">
+                <Inp
                   type="text"
                   value={cardPayRef}
                   onChange={e => setCardPayRef(e.target.value)}
                   placeholder="Receipt / transaction ref"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                 />
-              </div>
+              </Field>
             </div>
             <div className="flex gap-3">
-              <button
-                onClick={executeCardConfirm}
-                disabled={busy}
-                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
-              >
+              <Button onClick={executeCardConfirm} disabled={busy} className="flex-1">
                 Confirm
-              </button>
-              <button
-                onClick={() => setCardConfirm(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
-              >
+              </Button>
+              <Button variant="secondary" onClick={() => setCardConfirm(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1066,13 +1134,13 @@ export default function HoldersTab() {
             <div className="flex gap-2 mt-4">
               <button
                 onClick={handleDownloadQr}
-                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors"
+                className="flex-1 bg-teal hover:bg-teal-deep text-white font-medium py-2 rounded-lg text-sm wl-transition"
               >
                 Download QR
               </button>
               <button
                 onClick={handlePrintQr}
-                className="flex-1 bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+                className="flex-1 bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 rounded-lg text-sm wl-transition"
               >
                 Print
               </button>
@@ -1095,14 +1163,12 @@ export default function HoldersTab() {
               This is recorded permanently and cannot be undone from this screen.
             </p>
             <div className="flex gap-2">
-              <button onClick={() => doForfeit(forfeitTarget)} disabled={busy}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+              <Button variant="danger" onClick={() => doForfeit(forfeitTarget)} disabled={busy} className="flex-1">
                 {busy ? 'Forfeiting…' : 'Forfeit Stall'}
-              </button>
-              <button onClick={() => setForfeitTarget(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={() => setForfeitTarget(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1140,8 +1206,8 @@ export default function HoldersTab() {
                           const on = productEdit.selected.has(i.id)
                           return (
                             <button key={i.id} type="button" onClick={() => toggleProduct(i.id)}
-                              className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                                on ? 'bg-brand-teal text-white border-brand-teal'
+                              className={`text-xs px-2.5 py-1 rounded-lg border wl-transition ${
+                                on ? 'bg-teal text-white border-teal'
                                    : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
                               }`}>
                               {i.name}
@@ -1156,14 +1222,12 @@ export default function HoldersTab() {
             </div>
 
             <div className="flex gap-2 mt-5">
-              <button onClick={saveProducts} disabled={itemBusy || productEdit.selected.size === 0}
-                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-50">
+              <Button onClick={saveProducts} disabled={itemBusy || productEdit.selected.size === 0} className="flex-1">
                 {itemBusy ? 'Saving…' : `Save (${productEdit.selected.size} selected)`}
-              </button>
-              <button onClick={() => setProductEdit(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={() => setProductEdit(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>

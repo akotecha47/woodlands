@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { getDefaultRoute } from '../lib/roles'
 import { DEACTIVATED_MESSAGE } from '../components/RouteGuard'
+import { Button, Field, Inp } from '../components/ui/kit'
+import streamlineLogo from '../assets/streamline-s.svg'
 
 // U-11: staff sign in with a plain name -- "rose", not "rose@woodlands.com".
 //
@@ -64,62 +66,104 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-md p-8">
-        <div className="mb-8 text-center">
-          <h1 className="font-brand text-2xl font-bold text-gray-900">Woodlands Lodge</h1>
-          <p className="text-sm text-gray-500 mt-1">Management System</p>
-        </div>
+    <div className="min-h-screen flex flex-col lg:flex-row bg-paper">
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+      {/* The navy half. On a phone it collapses to a slim header band so the
+          form is still the first thing in reach. */}
+      <div className="lg:w-[42%] bg-navy text-white flex flex-col justify-between px-8 py-8 lg:px-12 lg:py-12">
+        <div className="flex items-center gap-3">
+          <img src={streamlineLogo} alt="" aria-hidden="true" className="h-[38px] w-auto" />
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Username
-            </label>
-            {/* type="text", not "email": the browser's own validation on
-                type="email" rejects a bare "rose" before submit ever runs. */}
-            <input
-              type="text"
-              required
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              autoComplete="username"
-              placeholder="rose"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              Just your name — no need to type {LOGIN_DOMAIN}
+            <p className="text-[17px] font-bold leading-none tracking-[-.01em]">Woodlands</p>
+            <p className="text-[9.5px] font-semibold uppercase tracking-[.16em] text-white/45 mt-1.5">
+              Lodge Management
             </p>
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
-            />
+        <div className="hidden lg:block max-w-sm">
+          <h2 className="text-[30px] font-bold tracking-[-.025em] leading-tight">
+            One system for the whole lodge.
+          </h2>
+          <p className="text-sm text-white/55 mt-4 leading-relaxed">
+            Stock, attendance, events, table bookings and the farmers market —
+            in one place, with each role seeing only its own work.
+          </p>
+        </div>
+
+        <div className="hidden lg:flex items-center gap-2 opacity-40">
+          <img src={streamlineLogo} alt="" aria-hidden="true" className="h-[15px] w-auto" />
+          <span className="text-[10.5px] font-medium tracking-wide">Built by Streamline</span>
+        </div>
+      </div>
+
+      {/* The form half. */}
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm">
+          <p className="text-[11px] font-bold uppercase tracking-[.12em] text-teal mb-2">
+            Sign in
+          </p>
+          <h1 className="text-[27px] font-bold text-navy tracking-[-.02em] leading-tight">
+            Welcome back
+          </h1>
+          <p className="text-sm text-ink-soft mt-2">
+            Use the name and password you were given.
+          </p>
+
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <Field
+              label="Username"
+              htmlFor="login-username"
+              hint={`Just your name — no need to type ${LOGIN_DOMAIN}`}
+            >
+              {/* type="text", not "email": the browser's own validation on
+                  type="email" rejects a bare "rose" before submit ever runs. */}
+              <Inp
+                id="login-username"
+                type="text"
+                required
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoComplete="username"
+                placeholder="rose"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
+            </Field>
+
+            <Field label="Password" htmlFor="login-password">
+              <Inp
+                id="login-password"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+            </Field>
+
+            {error && (
+              <p
+                role="alert"
+                className="text-sm text-red-700 bg-alert-bg border border-red-200 rounded-lg px-3 py-2.5"
+              >
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" size="lg" disabled={loading} className="w-full">
+              {loading ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </form>
+
+          <div className="lg:hidden flex items-center justify-center gap-2 mt-10 opacity-40">
+            <img src={streamlineLogo} alt="" aria-hidden="true" className="h-[15px] w-auto" />
+            <span className="text-[10.5px] font-medium text-ink tracking-wide">
+              Built by Streamline
+            </span>
           </div>
-
-          {error && (
-            <p className="text-sm text-red-600">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
-          >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+        </div>
       </div>
     </div>
   )

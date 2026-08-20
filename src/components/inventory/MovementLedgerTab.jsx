@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { MAIN_STORE } from '../../lib/constants'
 import { collapsePairs, parseSupplier, routeFor } from '../../lib/ledger'
-import { Th, Td, Toast, useFlash, fmtDate } from '../admin/AdminUI'
+import { Th, Td, Toast, Sel, fmtDate } from '../admin/AdminUI'
 import { EmptyRow, TdBold, fetchActiveItems, fetchDepartmentList, fetchUserMap } from './InventoryUI'
+import { Badge } from '../ui/kit'
+import { useFlash } from '../ui/useFlash'
 
 /**
  * The consolidated Movement Ledger — every stock movement in one place.
@@ -25,16 +27,21 @@ import { EmptyRow, TdBold, fetchActiveItems, fetchDepartmentList, fetchUserMap }
 // 060). Kept in step with that CHECK and with MOVEMENT_TYPES in src/lib/stock.js.
 // A type missing from this list still renders — TypeBadge falls back to the raw
 // value — but it cannot be FILTERED, which is the silent half of the drift.
+// A movement TYPE is a label, not a verdict. The old list gave each one its own
+// hue (indigo, purple, rose, slate...), which put nine decorative colours on one
+// screen and made "Event Allocation" look more alarming than "Delivery". Under
+// the Block 2 colour rule, a colour that is not carrying meaning is grey \u2014 and
+// the meaning here is already carried, correctly, by the signed quantity.
 const TYPES = [
-  { value: 'delivery',         label: 'Delivery',         badge: 'bg-green-100 text-green-700'   },
-  { value: 'issue',            label: 'Issue',            badge: 'bg-blue-100 text-blue-700'     },
-  { value: 'transfer',         label: 'Transfer',         badge: 'bg-indigo-100 text-indigo-700' },
-  { value: 'requisition',      label: 'Requisition',      badge: 'bg-amber-100 text-amber-700'   },
-  { value: 'adjustment',       label: 'Adjustment',       badge: 'bg-gray-100 text-gray-600'     },
-  { value: 'opening_balance',  label: 'Opening Balance',  badge: 'bg-slate-100 text-slate-600'   },
-  { value: 'event_allocation', label: 'Event Allocation', badge: 'bg-purple-100 text-purple-700' },
-  { value: 'event_return',     label: 'Event Return',     badge: 'bg-teal-100 text-teal-700'     },
-  { value: 'consumption',      label: 'Consumption',      badge: 'bg-rose-100 text-rose-700'     },
+  { value: 'delivery',         label: 'Delivery'         },
+  { value: 'issue',            label: 'Issue'            },
+  { value: 'transfer',         label: 'Transfer'         },
+  { value: 'requisition',      label: 'Requisition'      },
+  { value: 'adjustment',       label: 'Adjustment'       },
+  { value: 'opening_balance',  label: 'Opening Balance'  },
+  { value: 'event_allocation', label: 'Event Allocation' },
+  { value: 'event_return',     label: 'Event Return'     },
+  { value: 'consumption',      label: 'Consumption'      },
 ]
 const TYPE_META = Object.fromEntries(TYPES.map(t => [t.value, t]))
 
@@ -47,11 +54,7 @@ const ROW_LIMIT = 1000
 
 function TypeBadge({ type }) {
   const meta = TYPE_META[type]
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${meta?.badge ?? 'bg-gray-100 text-gray-600'}`}>
-      {meta?.label ?? type}
-    </span>
-  )
+  return <Badge tone="neutral">{meta?.label ?? type}</Badge>
 }
 
 /** Signed and coloured for single rows; a neutral magnitude for a collapsed move. */
@@ -150,7 +153,12 @@ export default function MovementLedgerTab() {
   }
   const locations = [MAIN_STORE, ...departments.map(d => d.name)]
 
-  const selectCls = 'border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal'
+  // The date inputs' own class. This used to be called `selectCls` and also
+  // dressed the three filter selects — a local name shadowing the kit's export
+  // with a DIFFERENT value (the kit's carries `appearance-none`, which needs
+  // <Sel>'s chevron to stay usable). The selects are <Sel> now; this is only
+  // ever an <input>, so it is named for what it is.
+  const dateCls = 'bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25'
 
   return (
     <div className="p-6 space-y-4">
@@ -158,31 +166,36 @@ export default function MovementLedgerTab() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
-        <h2 className="text-base font-semibold text-gray-800 mr-1">Movement Ledger</h2>
+        <h2 className="text-[15px] font-bold text-navy mr-1">Movement Ledger</h2>
 
-        <select value={itemFilter} onChange={e => setItemFilter(e.target.value)} className={selectCls}>
+        <Sel value={itemFilter} onChange={e => setItemFilter(e.target.value)}
+          aria-label="Filter by item" wrapClassName="w-56">
           <option value="">All Items</option>
           {items.map(i => <option key={i.id} value={i.id}>{i.name} — {i.sku}</option>)}
-        </select>
+        </Sel>
 
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className={selectCls}>
+        <Sel value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+          aria-label="Filter by movement type" wrapClassName="w-44">
           <option value="">All Types</option>
           {TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+        </Sel>
 
-        <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className={selectCls}>
+        <Sel value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
+          aria-label="Filter by department" wrapClassName="w-48">
           <option value="">All Departments</option>
           {locations.map(name => <option key={name} value={name}>{name}</option>)}
-        </select>
+        </Sel>
 
-        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={selectCls} />
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+          aria-label="From date" className={dateCls} />
         <span className="text-sm text-gray-400">to</span>
-        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={selectCls} />
+        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+          aria-label="To date" className={dateCls} />
 
         {/* Replaces the old delivery-only tab. */}
         <button
           onClick={() => setTypeFilter(DELIVERY_PRESET)}
-          className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+          className={`text-xs px-2.5 py-1.5 rounded-lg border wl-transition ${
             typeFilter === DELIVERY_PRESET
               ? 'bg-green-50 border-green-300 text-green-700'
               : 'border-gray-300 text-gray-500 hover:text-gray-700'
@@ -204,10 +217,10 @@ export default function MovementLedgerTab() {
       )}
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50 border-b border-line">
               <Th>Date</Th><Th>Item</Th><Th>SKU</Th><Th>Type</Th>
               <Th>From → To</Th><Th>Supplier</Th><Th>Qty</Th><Th>Performed By</Th>
             </tr>
@@ -216,7 +229,7 @@ export default function MovementLedgerTab() {
             {entries.map(entry => {
               const m = entry.row
               return (
-                <tr key={entry.key} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                <tr key={entry.key} className="border-b border-line last:border-0 hover:bg-gray-50">
                   <Td>{fmtDate(m.created_at)}</Td>
                   <TdBold>{m.stock_items?.name}</TdBold>
                   <Td>{m.stock_items?.sku}</Td>

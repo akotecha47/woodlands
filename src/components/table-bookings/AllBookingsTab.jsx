@@ -3,9 +3,11 @@ import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Th, Td, Toast, useFlash, Field, Inp, Sel, fieldCls } from '../admin/AdminUI'
+import { Th, Td, Toast, Field, Inp, Sel, EmptyRow, Button } from '../admin/AdminUI'
 import { TB_MANAGE_ROLES } from '../../lib/roles'
 import { BOOKING_STATUSES, STATUS_CFG, fmtDate, fmtTime, toDateStr, StatusBadge } from './TableBookingsUI'
+import { fieldCls } from '../ui/kit.constants'
+import { useFlash } from '../ui/useFlash'
 
 export default function AllBookingsTab() {
   const { profile, session } = useAuth()
@@ -127,28 +129,28 @@ export default function AllBookingsTab() {
           <input
             type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Guest name or phone…"
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal w-52"
+            className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25 w-52"
           />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal">
+          <Sel value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            aria-label="Filter by status" wrapClassName="w-44">
             <option value="">All statuses</option>
             {BOOKING_STATUSES.map(s => (
               <option key={s} value={s}>{STATUS_CFG[s].label}</option>
             ))}
-          </select>
+          </Sel>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
           <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
+            className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
           <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal" />
+            className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25" />
         </div>
         {(search || filterStatus || filterFrom || filterTo) && (
           <button
@@ -164,10 +166,10 @@ export default function AllBookingsTab() {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50 border-b border-line">
               <Th>Date</Th>
               <Th>Time</Th>
               <Th>Guest</Th>
@@ -180,11 +182,11 @@ export default function AllBookingsTab() {
           </thead>
           <tbody>
             {filtered.map(b => (
-              <tr key={b.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <tr key={b.id} className="border-b border-line hover:bg-gray-50">
                 <Td>{fmtDate(b.booking_date)}</Td>
                 <Td>{fmtTime(b.booking_time)}</Td>
                 <td className="px-4 py-3">
-                  <p className="text-sm font-medium text-gray-900">{b.guest_name}</p>
+                  <p className="text-sm font-semibold text-navy">{b.guest_name}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{b.guest_phone}</p>
                 </td>
                 <Td>{b.party_size}</Td>
@@ -196,14 +198,14 @@ export default function AllBookingsTab() {
                     <div className="flex gap-1.5 flex-wrap">
                       <button
                         onClick={() => openEdit(b)}
-                        className="text-xs font-medium px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                        className="text-xs font-medium px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg wl-transition"
                       >
                         Edit
                       </button>
                       {b.status !== 'cancelled' && b.status !== 'completed' && (
                         <button
                           onClick={() => setCancelConfirm(b)}
-                          className="text-xs font-medium px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg transition-colors"
+                          className="text-xs font-medium px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg wl-transition"
                         >
                           Cancel
                         </button>
@@ -214,11 +216,10 @@ export default function AllBookingsTab() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr>
-                <td colSpan={colSpan} className="px-4 py-8 text-center text-sm text-gray-400">
-                  No bookings found
-                </td>
-              </tr>
+              <EmptyRow
+                cols={colSpan}
+                msg="No bookings match these filters. Clear them to see the full record."
+              />
             )}
           </tbody>
         </table>
@@ -233,13 +234,13 @@ export default function AllBookingsTab() {
               <button onClick={() => setEditModal(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
             </div>
             <form onSubmit={handleEdit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Guest Name *">
                   <Inp required value={editForm.guest_name}
                     onChange={e => setEditForm(p => ({ ...p, guest_name: e.target.value }))} />
                 </Field>
                 <Field label="Phone *">
-                  <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                  <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-teal/25 focus-within:border-teal">
                     <PhoneInput international defaultCountry="MW"
                       value={editForm.guest_phone}
                       onChange={val => setEditForm(p => ({ ...p, guest_phone: val ?? '' }))}
@@ -247,7 +248,7 @@ export default function AllBookingsTab() {
                   </div>
                 </Field>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
                 <Field label="Date *">
                   <Inp type="date" required value={editForm.booking_date}
                     onChange={e => setEditForm(p => ({ ...p, booking_date: e.target.value }))} />
@@ -274,25 +275,23 @@ export default function AllBookingsTab() {
               </Field>
               <Field label="Special Requests">
                 <textarea rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none"
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25 resize-none"
                   value={editForm.special_requests}
                   onChange={e => setEditForm(p => ({ ...p, special_requests: e.target.value }))} />
               </Field>
               <Field label="Notes">
                 <textarea rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none"
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm wl-transition hover:border-gray-400 focus:border-teal focus:ring-2 focus:ring-teal/25 resize-none"
                   value={editForm.notes}
                   onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} />
               </Field>
               <div className="flex gap-3">
-                <button type="submit" disabled={editBusy}
-                  className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                <Button type="submit" disabled={editBusy} className="flex-1">
                   {editBusy ? 'Saving…' : 'Save Changes'}
-                </button>
-                <button type="button" onClick={() => setEditModal(null)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+                </Button>
+                <Button variant="secondary" onClick={() => setEditModal(null)} className="flex-1">
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -311,14 +310,12 @@ export default function AllBookingsTab() {
               {fmtDate(cancelConfirm.booking_date)} at {fmtTime(cancelConfirm.booking_time)} · {cancelConfirm.party_size} guests
             </p>
             <div className="flex gap-3">
-              <button onClick={handleCancel}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors">
+              <Button variant="danger" onClick={handleCancel} className="flex-1">
                 Cancel Booking
-              </button>
-              <button onClick={() => setCancelConfirm(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={() => setCancelConfirm(null)} className="flex-1">
                 Keep
-              </button>
+              </Button>
             </div>
           </div>
         </div>

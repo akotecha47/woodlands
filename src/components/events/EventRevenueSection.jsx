@@ -58,7 +58,7 @@ export default function EventRevenueSection({ eventId, billItems = [] }) {
     <div>
       <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
         <div>
-          <h3 className="text-base font-semibold text-gray-800">Revenue</h3>
+          <h3 className="text-sm font-bold text-navy">Revenue</h3>
           <p className="text-xs text-gray-500 mt-0.5">{cfg?.blurb}</p>
         </div>
         <RevenueReadingPicker reading={r.reading} onChange={setReading} />
@@ -69,7 +69,7 @@ export default function EventRevenueSection({ eventId, billItems = [] }) {
       {loading ? (
         <p className="text-sm text-gray-400">Loading…</p>
       ) : (
-        <div className="border border-gray-200 rounded-xl p-5">
+        <div className="border border-line rounded-xl p-5">
           {/* Headline — or, where the reading cannot honestly produce one, the
               reason instead. Never a fallback zero. */}
           {r.available ? (
@@ -114,7 +114,7 @@ function Row({ label, value, tone = 'gray', hint }) {
 
 function ReceivedDetail({ d }) {
   return (
-    <div className="mt-4 pt-4 border-t border-gray-100">
+    <div className="mt-4 pt-4 border-t border-line">
       <Row label="Payments received" value={fmtMWK(d.gross)} />
       {d.refunded > 0 && <Row label="Less refunds" value={`(${fmtMWK(d.refunded)})`} tone="red" />}
       {/* Only shown once a reversal exists, so the panel does not carry a
@@ -135,7 +135,7 @@ function ReceivedDetail({ d }) {
 
 function NetOfCostDetail({ d, available }) {
   return (
-    <div className="mt-4 pt-4 border-t border-gray-100">
+    <div className="mt-4 pt-4 border-t border-line">
       <Row label="Billed" value={fmtMWK(d.billed)} />
       <Row label="Stock cost" value={available ? fmtMWK(d.cost) : '—'} tone={available ? 'red' : 'gray'} />
       <Row label="Margin" value={d.marginPct === null ? '—' : `${d.marginPct.toFixed(1)}%`} tone="green" />
@@ -167,7 +167,7 @@ function NetOfCostDetail({ d, available }) {
 function ByLineDetail({ lines, d, total }) {
   if (lines.length === 0) return null
   return (
-    <div className="mt-4 pt-4 border-t border-gray-100">
+    <div className="mt-4 pt-4 border-t border-line">
       {lines.map(l => (
         <div key={l.category} className="py-2">
           <div className="flex items-baseline justify-between gap-4">
@@ -180,12 +180,12 @@ function ByLineDetail({ lines, d, total }) {
             <span className="text-sm font-semibold text-gray-900">{fmtMWK(l.amount)}</span>
           </div>
           <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-brand-teal rounded-full" style={{ width: `${l.pct}%` }} />
+            <div className="h-full bg-teal rounded-full" style={{ width: `${l.pct}%` }} />
           </div>
           <p className="text-[11px] text-gray-400 mt-0.5">{l.pct.toFixed(1)}% of the bill</p>
         </div>
       ))}
-      <div className="mt-3 pt-3 border-t border-gray-100">
+      <div className="mt-3 pt-3 border-t border-line">
         <Row label="Bill total" value={fmtMWK(total)} />
         <Row label="Collected against it" value={fmtMWK(d.collected)}
           tone={d.outstanding > 0 ? 'amber' : 'green'} />

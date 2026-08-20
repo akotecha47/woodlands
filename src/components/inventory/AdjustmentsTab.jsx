@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
+import { Field, Inp, Sel, Txt, Toast } from '../admin/AdminUI'
+import { FormPanel, FormGrid, FormActions, Button } from '../ui/kit'
 import { itemLabel, AccessDenied, fetchActiveItems, fetchDepartmentList } from './InventoryUI'
 import { setStockQuantity } from '../../lib/stock'
 import { MANAGE_ROLES } from '../../lib/roles'
 import { stockLocations, SUB_LOCATIONS } from '../../lib/constants'
+import { useFlash } from '../ui/useFlash'
 
 // Balances are keyed by (item, location, sub_location) since 051, so a stock
 // take has to name WHICH balance it is setting. Until 17 August 2026 this tab
@@ -94,61 +96,76 @@ export default function AdjustmentsTab() {
   const ready = form.stock_item_id !== '' && form.location !== ''
 
   return (
-    <div className="p-6 max-w-md">
+    <>
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800 mb-5">Stock Adjustment</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Item *">
-          <Sel required value={form.stock_item_id}
-            onChange={e => setForm(f => ({ ...f, stock_item_id: e.target.value, new_quantity: '' }))}>
-            <option value="">Select item…</option>
-            {items.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
-          </Sel>
-        </Field>
-        <Field label="Location *">
-          <Sel required value={form.location}
-            onChange={e => setForm(f => ({
-              ...f, location: e.target.value, sub_location: '', new_quantity: '',
-            }))}>
-            <option value="">Select location…</option>
-            {locations.map(l => <option key={l} value={l}>{l}</option>)}
-          </Sel>
-        </Field>
-        {subOptions.length > 0 && (
-          <Field label="Sub-location">
-            <Sel value={form.sub_location}
-              onChange={e => setForm(f => ({ ...f, sub_location: e.target.value, new_quantity: '' }))}>
-              <option value="">{form.location} (main)</option>
-              {subOptions.map(s => <option key={s} value={s}>{s}</option>)}
+      <FormPanel
+        title="Stock adjustment"
+        subtitle="A stock take: the balance is SET to what was counted, and the difference is worked out and recorded server-side."
+        onSubmit={handleSubmit}
+      >
+        <FormGrid>
+          <Field label="Item *" span="full">
+            <Sel required value={form.stock_item_id}
+              onChange={e => setForm(f => ({ ...f, stock_item_id: e.target.value, new_quantity: '' }))}>
+              <option value="">Select item…</option>
+              {items.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
             </Sel>
           </Field>
-        )}
-        {ready && (
-          <p className="text-sm text-gray-500">
-            {currentQty === undefined
-              ? <>No balance held here yet — a row will be created.</>
-              : <>Current stock: <span className="font-medium text-gray-800">{currentQty}</span></>}
+
+          <Field label="Location *">
+            <Sel required value={form.location}
+              onChange={e => setForm(f => ({
+                ...f, location: e.target.value, sub_location: '', new_quantity: '',
+              }))}>
+              <option value="">Select location…</option>
+              {locations.map(l => <option key={l} value={l}>{l}</option>)}
+            </Sel>
+          </Field>
+
+          {subOptions.length > 0 ? (
+            <Field label="Sub-location">
+              <Sel value={form.sub_location}
+                onChange={e => setForm(f => ({ ...f, sub_location: e.target.value, new_quantity: '' }))}>
+                <option value="">{form.location} (main)</option>
+                {subOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </Sel>
+            </Field>
+          ) : <div className="hidden md:block" aria-hidden="true" />}
+
+          <Field
+            label="New quantity *"
+            hint={ready
+              ? (currentQty === undefined
+                  ? 'No balance is held here yet — a row will be created.'
+                  : `Currently ${currentQty} at this location.`)
+              : 'Choose an item and a location first.'}
+          >
+            <Inp type="number" required min="0" step="any"
+              value={form.new_quantity}
+              onChange={e => setForm(f => ({ ...f, new_quantity: e.target.value }))} />
+          </Field>
+
+          <Field label="Recorded by" hint="Taken from your sign-in; not editable.">
+            <Inp disabled value={profile?.full_name ?? '—'} />
+          </Field>
+
+          <Field label="Reason *" span="full">
+            <Txt required rows={2}
+              placeholder="Why is this adjustment being made?"
+              value={form.reason}
+              onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+          </Field>
+        </FormGrid>
+
+        <FormActions>
+          <Button type="submit" disabled={busy || !ready}>
+            {busy ? 'Saving…' : 'Record adjustment'}
+          </Button>
+          <p className="text-xs text-ink-soft">
+            An unchanged value writes no ledger entry at all.
           </p>
-        )}
-        <Field label="New Quantity *">
-          <Inp type="number" required min="0" step="any"
-            value={form.new_quantity}
-            onChange={e => setForm(f => ({ ...f, new_quantity: e.target.value }))} />
-        </Field>
-        <Field label="Reason *">
-          <textarea required rows={2} className={fieldCls}
-            placeholder="Why is this adjustment being made?"
-            value={form.reason}
-            onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
-        </Field>
-        <Field label="Recorded By">
-          <Inp disabled value={profile?.full_name ?? '—'} />
-        </Field>
-        <button type="submit" disabled={busy || !ready}
-          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
-          {busy ? 'Saving…' : 'Record Adjustment'}
-        </button>
-      </form>
-    </div>
+        </FormActions>
+      </FormPanel>
+    </>
   )
 }

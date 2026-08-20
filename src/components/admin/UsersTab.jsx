@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ROLE_LABELS } from '../../lib/roles'
-import { Th, Td, fmtDate, Toast, useFlash } from './AdminUI'
+import { Th, Td, fmtDate, Toast, Field, Inp, Sel, Button, EmptyRow } from './AdminUI'
+import { useFlash } from '../ui/useFlash'
 
 export default function UsersTab() {
   const [users,       setUsers]       = useState([])
@@ -89,11 +90,11 @@ export default function UsersTab() {
   return (
     <div className="p-6 space-y-4">
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800">System Users ({users.length})</h2>
-      <div className="overflow-x-auto">
+      <h2 className="text-[15px] font-bold text-navy">System Users ({users.length})</h2>
+      <div className="wl-scroll-x border border-line rounded-xl bg-white">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50 border-b border-line">
               <Th>Name</Th>
               <Th>Email</Th>
               <Th>Role</Th>
@@ -108,14 +109,14 @@ export default function UsersTab() {
             {users.map(u => {
               const busy = busyId === u.id
               return (
-                <tr key={u.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{u.full_name ?? '—'}</td>
+                <tr key={u.id} className="border-b border-line last:border-0 hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm font-semibold text-navy">{u.full_name ?? '—'}</td>
                   <Td>{u.email}</Td>
                   <Td>{ROLE_LABELS[u.role] ?? u.role}</Td>
                   <Td>{u.department}</Td>
                   <Td>{u.shift_name}</Td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
                       u.is_active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
                     }`}>
                       {u.is_active !== false ? 'Active' : 'Inactive'}
@@ -126,16 +127,16 @@ export default function UsersTab() {
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => openEdit(u)}
-                        className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+                        className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 wl-transition">
                         Edit
                       </button>
                       <button
                         onClick={() => toggleActive(u)}
                         disabled={busy}
-                        className={`px-3 py-1 text-xs font-medium rounded-lg disabled:opacity-60 transition-colors ${
+                        className={`px-3 py-1 text-xs font-medium rounded-lg disabled:opacity-60 wl-transition ${
                           u.is_active !== false
                             ? 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'
-                            : 'bg-brand-teal/5 hover:bg-brand-teal/10 text-brand-teal border border-brand-teal/20'
+                            : 'bg-teal/5 hover:bg-teal/10 text-teal border border-teal/20'
                         }`}>
                         {busy ? '…' : u.is_active !== false ? 'Deactivate' : 'Reactivate'}
                       </button>
@@ -145,9 +146,10 @@ export default function UsersTab() {
               )
             })}
             {users.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">No users found</td>
-              </tr>
+              <EmptyRow
+                cols={8}
+                msg="No system users yet. Create the first login under Add User — these are the accounts that can sign in, not the staff roster."
+              />
             )}
           </tbody>
         </table>
@@ -163,36 +165,30 @@ export default function UsersTab() {
             </div>
 
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Full Name</label>
-                <input
+              <Field label="Full Name">
+                <Inp
                   type="text"
                   value={editForm.full_name}
                   onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                 />
-              </div>
+              </Field>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-                <select
+              <Field label="Department">
+                <Sel
                   value={editForm.department}
                   onChange={e => handleEditDeptChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                 >
                   <option value="">— None —</option>
                   {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                </select>
-              </div>
+                </Sel>
+              </Field>
 
               {/* Shift selector */}
               {nonRotatingShifts.length > 1 && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Shift</label>
-                  <select
+                <Field label="Shift">
+                  <Sel
                     value={editForm.shift_name}
                     onChange={e => setEditForm(f => ({ ...f, shift_name: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal"
                   >
                     <option value="">— Select shift —</option>
                     {nonRotatingShifts.map(s => (
@@ -200,8 +196,8 @@ export default function UsersTab() {
                         {s.shift_name} ({s.shift_start?.slice(0,5)} – {s.shift_end?.slice(0,5)})
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </Sel>
+                </Field>
               )}
               {nonRotatingShifts.length === 1 && (
                 <p className="text-xs text-gray-500">
@@ -212,16 +208,15 @@ export default function UsersTab() {
             </div>
 
             <div className="flex gap-3 pt-1">
-              <button
+              <Button
                 onClick={handleSaveEdit}
                 disabled={!!busyId}
-                className="flex-1 bg-brand-teal hover:bg-brand-teal-dark text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
+                className="flex-1">
                 {busyId ? 'Saving…' : 'Save'}
-              </button>
-              <button onClick={() => setEditUser(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={() => setEditUser(null)} className="flex-1">
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>

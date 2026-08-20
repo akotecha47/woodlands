@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Toast, useFlash, fieldCls } from '../admin/AdminUI'
+import { Field, Inp, Sel, Txt, Toast } from '../admin/AdminUI'
+import { FormPanel, FormGrid, FormActions, Button } from '../ui/kit'
 import { todayStr, itemLabel, AccessDenied, fetchActiveItems, fetchStaffUsers } from './InventoryUI'
 import { applyStockDelta } from '../../lib/stock'
 import { MAIN_STORE } from '../../lib/constants'
 import { MANAGE_ROLES } from '../../lib/roles'
+import { useFlash } from '../ui/useFlash'
 
 // 'store_supervisor' removed — deleted from roles.js in June, so no user could
 // hold it and this tab was AccessDenied to everyone except owner/manager anyway.
@@ -62,52 +64,68 @@ export default function LogDeliveryTab() {
   }
 
   return (
-    <div className="p-6 max-w-md">
+    <>
       <Toast toast={toast} />
-      <h2 className="text-base font-semibold text-gray-800 mb-5">Log Delivery</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Item *">
-          <Sel required value={form.stock_item_id}
-            onChange={e => setForm(f => ({ ...f, stock_item_id: e.target.value }))}>
-            <option value="">Select item…</option>
-            {items.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
-          </Sel>
-        </Field>
-        <Field label="Quantity *">
-          <Inp type="number" required min="0.01" step="any"
-            value={form.quantity}
-            onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
-        </Field>
-        <Field label="Supplier *">
-          <Inp required placeholder="Supplier name"
-            value={form.supplier}
-            onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} />
-        </Field>
-        <Field label="Date *">
-          <Inp type="date" required
-            value={form.date}
-            onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-        </Field>
-        <Field label="Received By *">
-          <Sel required value={form.received_by_id}
-            onChange={e => setForm(f => ({ ...f, received_by_id: e.target.value }))}>
-            <option value="">Select staff member…</option>
-            {staffUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-          </Sel>
-        </Field>
-        <Field label="Notes">
-          <textarea rows={2} className={fieldCls} placeholder="Any notes…"
-            value={form.notes}
-            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-        </Field>
-        <Field label="Logged By">
-          <Inp disabled value={profile?.full_name ?? '—'} />
-        </Field>
-        <button type="submit" disabled={busy}
-          className="bg-brand-teal hover:bg-brand-teal-dark text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60">
-          {busy ? 'Logging…' : 'Log Delivery'}
-        </button>
-      </form>
-    </div>
+      <FormPanel
+        title="Log delivery"
+        subtitle="Everything arrives at the Main Store first and is issued out to departments afterwards."
+        onSubmit={handleSubmit}
+      >
+        <FormGrid>
+          <Field label="Item *" span="full">
+            <Sel required value={form.stock_item_id}
+              onChange={e => setForm(f => ({ ...f, stock_item_id: e.target.value }))}>
+              <option value="">Select item…</option>
+              {items.map(i => <option key={i.id} value={i.id}>{itemLabel(i)}</option>)}
+            </Sel>
+          </Field>
+
+          <Field label="Quantity *">
+            <Inp type="number" required min="0.01" step="any"
+              value={form.quantity}
+              onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+          </Field>
+
+          <Field label="Date *">
+            <Inp type="date" required
+              value={form.date}
+              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+          </Field>
+
+          <Field label="Supplier *">
+            <Inp required placeholder="Supplier name"
+              value={form.supplier}
+              onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} />
+          </Field>
+
+          <Field label="Received by *">
+            <Sel required value={form.received_by_id}
+              onChange={e => setForm(f => ({ ...f, received_by_id: e.target.value }))}>
+              <option value="">Select staff member…</option>
+              {staffUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </Sel>
+          </Field>
+
+          <Field label="Notes" span="full">
+            <Txt rows={2} placeholder="Anything worth recording about this delivery…"
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+          </Field>
+
+          <Field label="Logged by" hint="Taken from your sign-in; not editable.">
+            <Inp disabled value={profile?.full_name ?? '—'} />
+          </Field>
+        </FormGrid>
+
+        <FormActions>
+          <Button type="submit" disabled={busy}>
+            {busy ? 'Logging…' : 'Log delivery'}
+          </Button>
+          <p className="text-xs text-ink-soft">
+            Raises the Main Store balance and writes one ledger entry.
+          </p>
+        </FormActions>
+      </FormPanel>
+    </>
   )
 }
