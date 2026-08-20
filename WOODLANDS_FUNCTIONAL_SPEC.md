@@ -4,7 +4,11 @@
 
 **Rewritten 9 August 2026** to the end goal. Supersedes the 31 May 2026 version (which described the pre-hardening single-tier build with roles that no longer exist).
 
-**Updated 14 August 2026** — gate closed, role model built, two-tier inventory built, Movement Ledger built (`058` + data-ops/`006`). The corresponding [NEW]/[PROPOSED]/[BUG] markers below are flipped to [DONE]. Remaining [NEW] work: bar par levels, consumption attribution, rooms, QR attendance, Farmers Market taxonomy/waiting-list/fees, Events payments-editable + revenue.
+**Updated 20 August 2026** — **there is no [NEW] work left.** Every Phase 2 feature is built (`051`–`063`), and the three remediation blocks have shipped. The remaining markers to read carefully are the ones that are *not* [DONE]:
+
+- **[NOT WIRED]** — Clock In/Out (§4). Built, imported by nothing.
+- **[SUPERSEDED]** — QR staff check-in (§4). Never built; not the plan.
+- **[REMOVED]** — Events revenue display (§5) and the Farmers Market 3-level taxonomy / `stall_type` (§7). **Built, shipped, then deleted.** Both were in the original Phase 2 scope; neither is live. A `[DONE]` marker does not expire on its own — see §12.
 
 **Scope source:** the Phase 2 additions below come from `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md`. Where that doc and this one disagree, the meeting doc is the record of what Dhiren asked for; this doc is the build interpretation of it.
 
@@ -16,10 +20,11 @@ Every feature below carries one marker:
 
 - **[DONE]** — built and working today.
 - **[BUG]** — built but broken; fix required.
-- **[NEW]** — Phase 2, not yet built. This is the bulk of the remaining work.
+- **[NEW]** — Phase 2, not yet built. **Nothing carries this marker any more.**
 - **[VERIFY]** — a claim carried from the old spec or a session note that has NOT been confirmed against the live code or DB. Do not trust it until probed.
 - **[NOT WIRED]** — built and working *as code*, but reachable from no screen. Distinct from [DONE], which is a claim about the UI, and from [NEW], which is a claim about the code. Added 19 August after AUDIT_3 §9 found `[DONE]` being used for a component nothing imports.
-- **[SUPERSEDED]** — specified here, deliberately no longer the plan. The text is kept, not deleted: what was specified and why it changed is worth more than a clean page.
+- **[SUPERSEDED]** — specified here, deliberately no longer the plan, and **never built**. The text is kept, not deleted: what was specified and why it changed is worth more than a clean page.
+- **[REMOVED]** — **built, shipped, then deleted.** Distinct from [SUPERSEDED], which was never built. Added 20 August after two features (Events revenue, the FM taxonomy) were cut while their [DONE] markers stayed standing — see §12.
 
 The target for end of the week of 11 August: **every screen works on placeholder data.** Real data (bar stocktake, department stock lists, staff reconciliation, menus, real stallholder details) is explicitly out of scope until Dhiren verifies the system works. Blank screens fail the bar — every [NEW] table ships with placeholder seed as part of its own build step.
 
@@ -27,7 +32,9 @@ The target for end of the week of 11 August: **every screen works on placeholder
 
 ## 0. THE GATE — MIGRATION HISTORY RECONCILIATION [DONE — historical]
 
-**✅ GATE CLOSED.** History reconciled and schema provably rebuildable from files: `001`–`050` rebuild-proven (run 4, 12 August); `051`–`057` re-proven (run 5, 14 August). Migration history now **`001`–`058`**. `db push` is trustworthy for new schema. **This section no longer blocks anything** — retained for provenance. The one live re-proof item: `058` is post-run-5 and owed a from-files rebuild before the next migration is written (see `WOODLANDS_STATE.md` §2.6). Full detail in `WOODLANDS_STATE.md` and `WOODLANDS_FOLLOWUPS.md`.
+**✅ GATE CLOSED.** History reconciled and schema provably rebuildable from files. Migration history is now **`001`–`063`**, 63 rows, no gaps. `db push` is trustworthy for new schema. **This section no longer blocks anything** — retained for provenance.
+
+**The live rule is the standing one:** Standard §2.6 requires the current file range to be rebuild-proven **before the next migration is written**. Ten runs have been done; **run 10 (20 August) proved `001`–`062`**, and `063` was written on that proven base. **`063` is the proof now owed, before any `064`.** Full detail in `WOODLANDS_STATE.md` §2.6 and `WOODLANDS_FOLLOWUPS.md`; run 10’s record is in `WOODLANDS_FIX_PLAN.md`.
 
 ---
 
@@ -54,7 +61,8 @@ Departments stay plain text, never FK to a departments table (standing rule).
 
 | Route | Roles |
 |---|---|
-| `/login`, `/checkin` (FM), `/attend` (staff QR) | Public |
+| `/login`, `/checkin` (FM) | Public |
+| ~~`/attend` (staff QR)~~ | **[SUPERSEDED]** — does not exist in `App.jsx` and will not be added (§4) |
 | `/dashboard` | All authenticated |
 | `/inventory` | owner, admin, department_head (own dept view) |
 | `/attendance` | owner, admin, hr |
@@ -63,7 +71,7 @@ Departments stay plain text, never FK to a departments table (standing rule).
 | `/farmers-market` | owner, admin |
 | `/admin` | owner |
 
-**[VERIFY]** the old spec claimed a GPS geofence on clock-in (100 m radius, `unverified` status). AUDIT (4 July) corroborates "GPS-flagged clock in/out," so it likely exists — but confirm against live code before relying on it, and decide how it coexists with QR check-in (§4).
+**[ANSWERED, 18 August — AUDIT_3 §9]** the GPS geofence is real and the logic is sound (100 m haversine, `unverified` outside or unavailable) — **but it is reachable only through `ClockInOutTab`, which nothing mounts, so it is dead code.** Detail in §4. The "how does it coexist with QR" half of this question is **moot**: QR is [SUPERSEDED].
 
 **Known deferred surfaces (see FOLLOWUPS "PHASE 2 ROLE MODEL — deferred items"):** `hr` has `staff` write in RLS but no reachable UI (StaffTab lives under owner-only `/admin`); `RequisitionsTab` shows a head only their OWN requisitions where RLS now permits the whole department (fails closed, one-line fix); remaining `department_head` accounts (incl. a **Main Bar head**) deferred to real-data time with Rose.
 
@@ -177,7 +185,8 @@ The honest position: **the system would not perform biometric matching. It would
 
 ### Existing [DONE unless marked]
 
-- **Events List** — summary strip, status/deposit filters, sort, amber highlight for ≤7-day or confirmed-unpaid. View/Edit/Delete.
+- **Events List** — summary strip, status/deposit filters, sort, amber highlight for ≤7-day or confirmed-unpaid. View/Edit/Delete. Header tile reads **"Payments Received · This Month"** (see the revenue entry under End-goal fixes).
+  - **The Edit modal no longer writes `status` or `deposit_paid`** *(Block 1, C-10 / C-11, decision D-4)*. Both controls are **removed from the form, the update payload and the modal**. Status via Edit deducted no stock and built no BEO; cancel via Edit returned no stock, leaving allocations `deducted` for ever; and the Deposit Paid Yes/No was a **third writer** of `deposit_paid`, able to contradict the `062` payment ledger. **`changeStatus()` is now the only writer of status, and Add Payment / `reverse_event_payment()` the only writers of `deposit_paid`.** A short note in the modal says where status is changed and why.
 - **Create Event** — full form; new events `enquiry`, `deposit_paid=false`.
 - **Event Detail** — status pipeline (enquiry→confirm→start→complete, cancel); info grid; **BEO checklists** auto-generated on confirm/in_progress, grouped by department, progress bars. Stock Allocations section: allocate on confirm (writes `event_allocation`, deducts department tier), return/clearance writes `event_return`.
 - **Bill Section** — categorised line items, bill total.
@@ -192,9 +201,13 @@ The honest position: **the system would not perform biometric matching. It would
   - **Reversals are stored POSITIVE**, like refunds, because `CHECK (amount > 0)` makes a negative row impossible — and are reported **separately** from refunds throughout: a refund is money going back to the client, a reversal is money that never arrived in the shape recorded.
   - **11/11 live role scenarios passed, rolled back.** Reversing the only deposit moved Total Paid 1,300,000 → 1,000,000, Balance Due 500,000 → 800,000 **and `deposit_paid` true → false**; a second reversal of the same payment was refused (`23505`), reversing a reversal refused (`23514`), a hand-rolled direct insert with the wrong amount refused by the trigger and an untyped pointer by the CHECK; admin reversed a balance payment with `deposit_paid` correctly staying false; `department_head` and `hr` both denied `42501`.
   - **`reversal` is deliberately NOT in the Add Payment dropdown.** It is only ever written by the RPC, which pairs it with the row it reverses.
-- **Revenue display [DONE — PROVISIONAL, 18 August]** — built **toggleable** rather than guessed, because "revenue should be different" was never made specific and the 10 August call never answered it. Three readings, one shared selector across the Events List strip and a new read-only **Revenue** section on Event Detail, the choice persisted per browser: **Cash Received** (payments net of refunds *and* reversals — reversals are already handled so the figures need no re-touching when `062` lands) · **Net of Cost** · **By Line** (bill by category, with each line's share). Default is `received` and **every revenue surface carries a non-dismissible note saying the default is provisional**. Logic is pure and tested in `src/lib/revenue.js` (68/68); the read path is proven live as owner and admin, and as `department_head`/`hr` seeing zero. **Dhiren picks one on 28 August; the other two and the toggle then come out.**
-  - **Net of Cost cannot be populated and says so.** The only cost column in the schema is `deliveries.unit_cost`, on a table with **0 rows, RLS enabled and zero policies, and no reader or writer in the app** — a delivery is really a `stock_movements` row, and `stock_movements` has no price. The reading shows an em-dash and names the missing source rather than a 100% margin. The computation is built and tested for whenever a cost source exists. See FOLLOWUPS.
-  - **Also flagged for the 28th:** Events displayed **no** revenue figure at all before this build ("different" may have meant "absent"), and `events.total_amount` is a stale `0` against a MWK 1,800,000 bill that no Events code reads or maintains.
+- **~~Revenue display~~ — [REMOVED]** *(was `[DONE — PROVISIONAL, 18 August]`; **cut in Block 3, 20 August**)*. **There is no revenue surface anywhere in the app.** The three toggleable readings (Cash Received / Net of Cost / By Line), the shared selector on the Events List strip, the read-only Revenue section on Event Detail, `useRevenueReading`, `RevenueReadingPicker` and the non-dismissible provisional note are **all deleted**; `EventRevenueSection.jsx` is gone.
+  - **Why it went.** It was built toggleable rather than guessed, because "revenue should be different in Events" was never made specific — the intention being that Dhiren would pick one reading on 28 August and the other two would come out. Re-reading the 27 July record, that ask sits among requests about **recording payments**. Building a revenue-tracking apparatus he never asked for, then requiring him to adjudicate it, was solving the wrong problem. The honest cut was the whole feature, not two thirds of it.
+  - **What replaced it.** The Events List header tile — which was never on the dashboard — reads **"Payments Received · This Month"**: the same money under an honest label, net of refunds and reversals via `summarisePayments`, with no toggle and no provisional badge because there is nothing left to choose.
+  - **Nothing in the payment path changed.** Record Payment, payment history, Total Paid, Balance Due, the Reverse flow, Recorded By and `deposit_paid` are byte-for-byte what Block 1 left.
+  - **`src/lib/revenue.js` is deliberately KEPT as a library, and no test was deleted** — the pure logic still passes, and it is what a genuinely-requested costed revenue view would be built from. **A retained library is not a live feature. Do not read the file's existence as a screen.**
+  - **One finding from that build SURVIVES the removal and is still open:** the only cost column in the schema is `deliveries.unit_cost`, on a table with **0 rows, RLS enabled and zero policies, and no reader or writer in the app**. A delivery is really a `stock_movements` row, and `stock_movements` has no price. **The system does not know what anything costs, structurally** — that is a schema fact, not a revenue-display detail. See FOLLOWUPS.
+  - **Still owed from Dhiren, and now the only surviving question from this work:** `events.total_amount` is a stale `0` against a MWK 1,800,000 bill that no Events code reads or maintains. Authoritative or vestigial? See `WOODLANDS_CLIENT_INPUTS.md`.
 
 ---
 
@@ -213,16 +226,33 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 ### Existing [DONE]
 
 - **Market Day** — date picker, live indicator, market-conditions autosave, fee reconciliation strip, holders table (check-in / log fee / remove), realtime on `fm_visits`+`fm_payments`. Market day = last Saturday of month.
-- **Holders** — summary strip, at-risk banner, filter tabs, per-holder expand, Edit, QR code (→ `/checkin?holder={id}`), Approve, Deactivate. **At-risk auto-flag: active >90 days with 0 visits in last 3 market days.**
-- **Add Holder** — Name/Business/Stall/Type/Phone/Email/Notes; **[VERIFY] stall regex `/^[A-Za-z]+\d{2}$/` is two-digit but live stalls are three-digit `A001`–`A347`; if the code regex is still two-digit, the 305 imported stalls can't be edited/re-added — check the code.**
+- **Holders (Businesses)** — summary strip, at-risk banner, filter tabs, search, per-holder expand, Edit, QR code (→ `/checkin?holder={id}`), Approve, Deactivate. **At-risk auto-flag: active >90 days with 0 visits in last 3 market days** — now read from `v_fm_attendance`, no longer a browser write-on-read.
+  - **Summary strip reports approved-product lists**, not categories *(063)*: **approved lists on record · no list yet · total approved products**. The category chip row that briefly replaced the old `stall_type` strip is gone with the taxonomy.
+  - **The table's product column is `Products`** *(063)* — free-text approved items. It was `Type` (`stall_type`, `'Other'` on 311/311 rows), then briefly `Category` (`category_id`, populated on 50 of 311). Both are dropped.
+- **Add Holder** — Name/Business/Stall/Phone/Email/Notes. **No Type field** *(063 — `stall_type` is dropped; the field is gone from Add Business and from the Holders Edit modal alike)*. Stall regex is settled — see **Stall-number regex [FIXED]** under End-goal additions.
 - **Payments** — Application/Registration fees; visit fees logged from Market Day.
 - **Public QR check-in** (`CheckIn.jsx`) — public, `holder` param, within 1 day of market day, duplicate-blocked.
 
 ### End-goal additions
 
 - **3-month attendance history + waiting-list forfeiture [DONE]** (migration `061`, 18 August) — `v_fm_attendance` is a `security_invoker` view over `fm_visits` giving attended/not-attended per holder across the last three market days (a monthly market, so three market days *is* three months). It **replaces** the client-side write-on-read that used to UPDATE `fm_holders.status` to `at_risk` from a browser page load. At-risk is the warning state and forfeiture the action on it — one concept, not two. `fm_waiting_list` (new; nothing of the kind existed) orders by `(applied_at, created_at, id)` with position **derived, never stored**. `forfeit_stall()` is SECURITY DEFINER, gated owner/admin, **flag + manual confirm — never automatic**; it re-checks eligibility server-side, releases the stall number (the outgoing holder is renamed `A0nn-FFyyyymmdd` because `stall_number` is UNIQUE NOT NULL and could otherwise never be reissued), writes `fm_stall_forfeitures`, and marks the head of the queue `offered` — all atomically or not at all. `fm_stall_forfeitures` has **no INSERT policy and no INSERT grant**, so the RPC is the only write path.
-- **3-level product taxonomy [DONE]** (migration `061`) — `fm_categories` › `fm_product_types` › `fm_items`, three tables so "exactly three levels" is structural rather than a remembered rule. Seeded in the migration (6 / 17 / 51, including the spec's own Crafts › Paintings › Oil/Wax). `fm_approved_items.item_id` is **NOT NULL** — safe because the table held zero rows, asserted in-migration rather than assumed — and `item_name` demotes to an optional free-text qualifier. `fm_holders.category_id` is the new classification; **`stall_type` is deprecated in place, not dropped** (NOT NULL across 305 rows, and `category_id` cannot be backfilled until Rose confirms the `products` delimiter). Selection from a controlled list is what removes the comma-splitting problem.
-- **Fee schedule [DONE]** (migration `061`) — `fm_fee_schedule` holds all six fees as data: application 10,000 · registration 20,000 · ID cards 30,000 (incl. 2) · replacement 20,000 · visit 10,000 · product change 10,000, **all confirmed by Dhiren 18 August**. Read owner+admin, **write owner only** — a fee change is a money action, not front-desk work. `change_holder_products()` raises the product-change fee **by reading this table inside the same transaction as the change**, so it cannot be forgotten; a no-op change raises nothing. The old `FM_FEES` constants (ID card 5,000 / reprint 10,000) were **wrong, not stale**, and are corrected. **Open: card #3 onwards has no confirmed price** — charged at the replacement rate and flagged in FOLLOWUPS.
+- **Per-holder approved products list [DONE]** (migration `063`, 20 August) — **each business has its own approved list of free-text products, one row per product**, in `fm_holder_products` (`holder_id`, `item_name`, `added_at`, `added_by`; CASCADE on holder delete; case-insensitive unique per holder).
+  - **Backfilled from the February 2026 register.** `fm_holders.products` — free text, populated on **289 of 311** holders — was comma-split into **663 item rows covering 100% of those holders**, de-duplicated case-insensitively (A009's register carried both "soup"/"Soup" and "tarts"/"Tarts", which would otherwise have aborted the migration on the unique index). `fm_holders.products` is **preserved untouched** as the source it came from.
+  - **The INITIAL list is free.** Recording what a business is already confirmed to sell is not a change — it is the starting position. **The backfill IS that initial list**, so merging or splitting an item at the walkthrough costs the stallholder nothing. `fm_holders.products_set_at` makes this a **stored fact**, not an inference from row count: without it, an owner could empty a list (chargeable) and re-add it as a fresh free one.
+  - **Every edit after that raises the product-change fee PER ITEM CHANGED**, as **separate `fm_payments` rows** — three items changed is three rows, not one row of 30,000. Separate because each charge has to be individually visible, reversible and reconcilable in Payments.
+  - **`change_holder_products()`** was DROPped and recreated on a `text[]` signature (never overloaded). It computes the diff case-insensitively, applies it, and reads the amount from **`fm_fee_schedule` inside the same transaction** — never from a constant. A no-op change raises nothing.
+  - **The fee is unskippable by construction, not by convention.** `authenticated` holds **SELECT and nothing else** on `fm_holder_products` — no INSERT/UPDATE/DELETE grant and no write policy — so the SECURITY DEFINER RPC is the **only** write path. This is what `fm_approved_items` never had (finding C-39 / D-7), closed here by design rather than by dropping policies.
+  - **⚠ COUNTING RULE — implemented, FLAGGED for confirmation.** Chargeable items = **`|added| + |removed|`**, so **a replace counts 2**. A replace is not a distinct database operation: the UI edits a list, so swapping A for B *is* one removal plus one addition. It is the only reading that cannot be gamed — if a replace counted 1, re-listing every item under a new spelling would be cheaper than removing them. **The brief's "(add / remove / replace)" admits a 1-count reading; Dhiren confirms on 28 August.** One line of diff arithmetic if he means otherwise. See `WOODLANDS_CLIENT_INPUTS.md`.
+  - **UI:** the Businesses product picker is a **typed, editable list** with per-item remove and an **in-modal preview of what the save will cost** before it is saved. Messages reads `fm_holder_products`. The Waiting List's Intended Category picker is gone in favour of its existing free-text Products field.
+- **~~3-level product taxonomy~~ — [RETIRED]** *(was `[DONE]` (migration `061`); **dropped entirely in `063`, 20 August**)*. `fm_categories` › `fm_product_types` › `fm_items`, `fm_approved_items`, `fm_holders.category_id` and `fm_waiting_list.category_id` **no longer exist**.
+  - **It did not survive contact with real data.** All 311 holders sat on the deprecated `stall_type = 'Other'`; only **50 of 311** ever received a `category_id`; and the 51-item seeded catalogue could not describe what these businesses actually sell — *"Mello nana chips — Banana chips with seasoning"* is in nobody's taxonomy. Selection from a controlled list was supposed to remove the comma-splitting problem; instead it produced a screen reading "Produce: 0 · Crafts: 0 · … Other: 311".
+  - **Retired rather than left dormant, deliberately: two live product models is exactly how "Other: 311" happened.**
+  - Two dependencies the plan did not name, both found by the Step 0 probe and handled in `063`: `v_fm_attendance` SELECTed `category_id`, so the view was dropped and rebuilt (**`security_invoker=true` re-stated explicitly, because dropping a view drops its reloptions**); and `fm_waiting_list.category_id` was an FK populated on **8 of 8** rows, dropped with the table's existing `products_note` free text absorbing the intent.
+- **~~`fm_holders.stall_type`~~ — [DROPPED]** *(063)*. `NOT NULL`, no default, `'Other'` on 311/311, read by nothing but its own CHECK. Step 0 re-confirmed no view, function, policy or index depended on it. The column **and** its CHECK are gone, and the write is removed from both FM forms.
+- **Fee schedule [DONE]** (migration `061`) — `fm_fee_schedule` holds all six fees as data: application 10,000 · registration 20,000 · ID cards 30,000 (incl. 2) · replacement 20,000 · visit 10,000 · product change 10,000, **all confirmed by Dhiren 18 August**. Read owner+admin, **write owner only** — a fee change is a money action, not front-desk work. The old `FM_FEES` constants (ID card 5,000 / reprint 10,000) were **wrong, not stale**, and are corrected. **Open: card #3 onwards has no confirmed price** — charged at the replacement rate and flagged in FOLLOWUPS.
+  - **✅ EXTENDED, Block 3 / C-08, 20 August: every charging surface now reads the table.** `061` wired only `change_holder_products()` to it, which meant the schedule was **authoritative in name only** — Market Day, Holders card fees, Payments and Messages all charged from constants, and FeesTab stated on screen that a change "takes effect immediately — no deploy needed". All five copies agreed *that day*, so nothing looked wrong until the owner edited a fee; then it was a self-contradiction demonstrable in two clicks.
+  - **All charging surfaces now resolve through a `useFeeSchedule()` seam in `fm.js`:** Market Day (visit fee, and the expected/collected reconciliation), Businesses (ID-card issue at initial / second-free / replacement rates, reprint, the product-change blurb, the last-market-day collected figure), Payments (type list, amount pre-fill, outstanding column and total) and Messages (the amounts quoted to a stallholder). There turned out to be **five** frontend copies, not four — `FM_PAY_TYPES` carried an uncounted fifth, each entry holding its own `amount`; it now carries a fee **code** instead, because a payment type and its fee code are not always the same word (a `reprint` payment is the `id_card_replace` fee).
+  - **`FM_FEES` survives only as a first-paint fallback**, which is what its own comment always claimed it was. **Proven live as the roles, rolled back:** admin read 10,000 → the admin's own edit **REFUSED** (owner-only policy, 0 rows through RLS) → owner set 12,345 → **the next charge read 12,345**. The on-screen claim is now true.
 - **Stall-number regex [FIXED]** (18 August) — was `/^[A-Za-z]+\d{2}$/`, which **no live stall could satisfy** (305/305 are three-digit `A001`–`A347`), so Add Business was unusable for every real stall; Edit meanwhile validated **nothing at all**. One `STALL_RE = /^[A-Za-z]+\d{3}$/` in `FarmersMarketUI.jsx`, used by both.
 
 ---
@@ -234,7 +264,7 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 ### Existing [DONE]
 
 - **Users** — list + Edit + Deactivate/Reactivate.
-- **Add User** — creates via `create-user` Edge Function (authenticated, owner-only, CORS pinned). Dropdown derives from `Object.keys(ROLE_LABELS)` → offers exactly the four live roles. **[VERIFY]** the dead bar1/bar2 `bar_week` branching is gone (roles removed; confirm no residue).
+- **Add User** — creates via `create-user` Edge Function (authenticated, owner-only, CORS pinned). Dropdown derives from `Object.keys(ROLE_LABELS)` → offers exactly the four live roles. **[ANSWERED, 18 August]** the dead bar1/bar2 `bar_week` branching **is gone from the UI**; rotating shifts are excluded from selection. Two inert residues only: `create-user` still accepts a `bar_week` body field the UI never sends, and `AttendanceUI` still carries bar-week shift logic whose only caller is dead code (FIX_PLAN C-05, PARKED).
 - **Departments** — add/edit/delete (plain text).
 - **Stock Items** — list, inline edit, deactivate; SKU auto-gen `{DeptCode}-{PaddedCount}`.
 
@@ -256,14 +286,14 @@ Today / Upcoming / New Booking / All Bookings. Statuses pending/confirmed/seated
 | No-show flag >45 min past booking | Table Bookings | [DONE] |
 | BEO auto-generated on Confirm/Start | Events | [DONE] |
 | At-risk flag: 0 visits across last 3 market days | Farmers Market | [DONE] (061) — a VIEW, no longer a browser write |
-| GPS outside radius → unverified clock-in | Attendance | [VERIFY] |
+| GPS outside radius → unverified clock-in | Attendance | [ANSWERED — logic sound, but DEAD CODE: only `ClockInOutTab` reaches it, and nothing mounts it (§4)] |
 | One inflow, many outflows (main store → depts) | Inventory | [DONE] (051–057) |
 | Movement Ledger shows all types with +/− direction | Inventory | [DONE] (058 + 006) |
 | Bar par level enforced before open | Inventory / bars | [DONE] (059) |
 | Consumption records what/where/who | Inventory / consumption | [DONE] (060) |
 | 3-month no-attendance → stall forfeit to waiting list | Farmers Market | [DONE] (061) — flag + manual confirm |
-| Product change raises 10k fee at point of change | Farmers Market | [DONE] (061) — same transaction |
-| QR scan writes clock-in/out at fixed station | Attendance | [NEW] |
+| Product change raises the fee at point of change | Farmers Market | [DONE] (063) — **per item changed**, amount read from `fm_fee_schedule` in the same transaction, one `fm_payments` row per item. A replace counts 2 — **flagged for Dhiren** |
+| ~~QR scan writes clock-in/out at fixed station~~ | Attendance | **[SUPERSEDED]** — never built, not the plan (§4) |
 
 ---
 
@@ -286,7 +316,20 @@ Recorded because it is the second time a marker in this project has been trusted
 
 `[NOT WIRED]` exists from 19 August to make that distinction impossible to fudge. **When marking something [DONE], the test is "can a person reach it in a browser", not "does the file exist and compile."**
 
-The same failure in the other direction is worth watching for: `§7 fee schedule` is marked **PARTIAL** precisely because the table and its editor are wired while no charging surface reads it (FIX_PLAN C-08). That marker is honest. Copy it.
+The same failure in the other direction was worth watching for, and `§7 fee schedule` was the case: the table and its editor were wired while **no charging surface read it** (FIX_PLAN C-08), so `fm_fee_schedule` was authoritative in name only. The honest fix was **not** to soften FeesTab’s on-screen claim that a change takes effect immediately — it was to make the claim true. Block 3 did that. **When a marker and the code disagree, change the code where the doc describes the right behaviour, and the doc where it does not.**
+
+### The third instance, 20 August: **a [DONE] marker outlives the feature it describes.**
+
+Both of this cycle's removals left their `[DONE]` markers standing:
+
+- **§5 Revenue display** carried `[DONE — PROVISIONAL, 18 August]` and the sentence *"Dhiren picks one on 28 August"* for a feature that had been **deleted from the codebase** — the single most misleading line in the repo at the time. A reader preparing the walkthrough would have scripted a demo of a screen that does not exist, in front of the client.
+- **§7 3-level product taxonomy** carried `[DONE] (migration 061)` describing five database objects that `063` had **dropped**.
+
+**The lesson is not "update the docs". It is structural:** `[DONE]` is a claim about *the present*, but it is written *once, in the past*, and nothing in the doc makes it decay. A feature's marker is only ever revisited by whoever deletes the feature — and deleting code feels finished when the code is gone.
+
+**So: `[REMOVED]` exists from 20 August, and the rule is that a build which deletes a feature is not complete until the marker is deleted with it.** Same discipline as `[NOT WIRED]`: make the gap between the doc and the app impossible to fudge, rather than trusting anyone to remember.
+
+**Corollary, learned the same day:** a retained library is not a live feature. `src/lib/revenue.js` and its passing tests survive the removal deliberately — but the file existing, and its tests going green in CI, are **not** evidence that a revenue screen exists. Test suites keep a deleted feature's ghost alive convincingly.
 
 ---
 

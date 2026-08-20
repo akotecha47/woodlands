@@ -12,11 +12,12 @@
 |---|---|---|
 | **Brief** | Not created at Stage 1 | Skipped — not needed for retro-documentation |
 | **Scope** | End-goal scope now lives in `WOODLANDS_FUNCTIONAL_SPEC.md` (target system) sourced from `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md`. Standing rules in `CLAUDE.md`. | Spec + meeting doc + `CLAUDE.md` in repo |
-| **Data Model** | Implicit in live Supabase schema. Migration files still don't fully reflect it — 3 ghost tables (`event_checklists`, `shift_settings`, `tables`) uncreatable from files. **Post-meeting Sprint D** to close. | Live DB is authoritative; reconciliation post-meeting |
+| **Data Model** | ✅ **Reconciled.** The 3 ghost tables (`event_checklists`, `shift_settings`, `tables`) got real CREATE migrations (`031`–`033`) in Session A, 9 August. Migration files now reproduce the schema, **proven by rebuild-and-diff — run 10 covered `001`–`062`** (20 August). `063` is the proof owed before any `064`. | Migration files are authoritative; live DB verified against them |
 | **Pricing** | N/A — gift build | — |
-| **CLAUDE.md** | Rewritten 26 July 2026. Correct 4-role list, correct stock deduction triggers, pointers to Standard v1.5 / state / audits / followups. Flags superseded files. | `akotecha47/woodlands:CLAUDE.md` |
+| **CLAUDE.md** | Rewritten 26 July 2026; **role list corrected 20 August.** It had carried the **dead** set (`owner`/`manager`/`kitchen_manager`/`restaurant_manager`) as “authoritative” ever since the 11 August collapse — the same C-16 trap AUDIT_3 caught in `standards.md`. Now the live four (`owner`/`admin`/`department_head`/`hr`), reconciled to `roles.js`. Also corrected: the gate section, the apply-SQL path, the audit list. | `akotecha47/woodlands:CLAUDE.md` |
 | **`WOODLANDS_AUDIT.md`** (4 July 2026) | Tracked and committed 26 July. Superseded for finding status by AUDIT_2 but retained for the diff. | Repo root |
-| **`WOODLANDS_AUDIT_2.md`** (26 July 2026) | Fresh Fable 5 audit against Standard v1.5. Committed. Current audit of record. | Repo root |
+| **`WOODLANDS_AUDIT_2.md`** (26 July 2026) | Fresh Fable 5 audit against Standard v1.5. Committed. **Superseded as the audit of record by AUDIT_3**; retained for the diff. | Repo root |
+| **`WOODLANDS_AUDIT_3.md`** (18 August 2026) | ✅ **The audit of record.** Read-only code audit — every file under `src/`, both Edge Functions, targeted migrations, plus a measured read-only dump of production. **Source of the `C-nn` findings that `WOODLANDS_FIX_PLAN.md` is built on.** | Repo root |
 | **Followups log** | `WOODLANDS_FOLLOWUPS.md` — comprehensive, sprint-organised, updated throughout 26 July. | Repo root |
 | **Handover reference** | Not yet created. Target: pre-final-handover in August. | — |
 | **Retrospective** | Not applicable yet — build not handed over. | — |
@@ -27,7 +28,9 @@
 
 | Artifact | Status | Location |
 |---|---|---|
-| **`WOODLANDS_STATE.md`** | Rewritten 9 August, end-goal aligned. Correct 4-role list, bar import + migrations to 030, transfers bug, post-meeting scope, handover target under review. | Repo root |
+| **`WOODLANDS_STATE.md`** | **Rewritten 20 August** — it had drifted three shipped commits behind. Now: Blocks 1–3 and `063` all shipped, migrations `001`–`063`, 8 users / 4 roles, Events revenue removed, FM taxonomy retired. **Cross-check against FIX_PLAN, which is updated as blocks land.** | Repo root |
+| **`WOODLANDS_FIX_PLAN.md`** | **Created 19 August.** The single merged remediation tracker — Aman's browser pass (`U-nn`) and AUDIT_3's code audit (`C-nn`) worked as one queue, plus the decisions ledger (`D-n`). **The freshest working doc; the practical source of truth for what is and is not done.** | Repo root |
+| **`WOODLANDS_CLIENT_INPUTS.md`** | **Created 19 August.** Every dependency on a person rather than on code, in three states (OPEN / KNOWN / SURFACED). The sheet taken into a client call. | Repo root |
 | **`WOODLANDS_HISTORY.md`** | Updated 9 August. Meeting write-up, bar import, transfers bug, two new exec decisions. | Repo root |
 | **`WOODLANDS_FUNCTIONAL_SPEC.md`** | **Rewritten 9 August to the end-goal system** — every module at target state with [DONE]/[BUG]/[NEW]/[VERIFY] markers. The build reference Claude Code reads for what "finished" looks like. Supersedes the 31 May version. | Repo root |
 | **`WOODLANDS_DEMO_PREP.md`** | Created — in repo, updated 27 July morning. Meeting walkthrough script, questions matrix, framing crib. | Repo root |
@@ -44,7 +47,9 @@
 - **Edge Functions (2):**
   - `create-user` — authenticated (owner-only JWT check, allowlisted 4 roles, CORS pinned)
   - `public-checkin` — unauthenticated by design (`--no-verify-jwt`, uses server-side `SERVICE_ROLE_KEY` for holder lookup + visit write; keeps holder PII off any public read policy)
-- **Migrations:** `001`–`057`, all applied to the live DB. Remote history records a clean **`001`–`057`, 57 rows, no gaps** (as of 14 August 2026); `db push --dry-run` reports "Remote database is up to date." The §2.6 rebuild proof closed the gate for `001`–`050` on 12 August — **`051`–`057` are not yet rebuild-proven and a re-proof is owed** (see `WOODLANDS_STATE.md` § "§2.6 RE-PROOF OWED"). Migrations `021` onward were applied by hand through the SQL Editor or Management API; history is recorded via `migration repair`, not `db push`.
+- **Migrations:** `001`–`063`, all applied to the live DB. Remote history records a clean **`001`–`063`, 63 rows, no gaps** (measured 20 August 2026); `db push --dry-run` reports "Remote database is up to date." **Ten §2.6 rebuild-proof runs have been done; run 10 (20 August) proved `001`–`062`, and `063` is the proof owed before any `064`** — the proof is a standing per-migration discipline, not a one-off. See `WOODLANDS_STATE.md` § "MIGRATIONS AND THE §2.6 REBUILD-PROOF DISCIPLINE". Migrations `021` onward are applied per-file through **`scripts/apply-sql.ps1`** (UTF-8 read + mojibake refusal — never a bare `Get-Content`, which corrupted `059` on 17 August); history is recorded via `migration repair`, never `db push`.
+
+  **Phase 2 — later migrations (`058`–`063`):** `058` Movement Ledger + `movement_type` `_v4` · `059` bar par levels + end-of-day count/refill cycle · `060` rooms + `v_stock_consumption` + `movement_type` `_v5` · `061` Farmers Market waiting list, forfeiture, fee schedule, `v_fm_attendance` · `062` event payment reversals · **`063` FM products redesign** — `fm_holder_products`, per-item change fee, and the retirement of the `061` taxonomy (`fm_categories` / `fm_product_types` / `fm_items` / `fm_approved_items` / `category_id` / `stall_type` all dropped).
 
   **Phase 2 — two-tier inventory (`051`–`057`, 13–14 August 2026):**
   - `051`: `location` / `sub_location` on `current_stock` + generated `tier`, keyed `UNIQUE NULLS NOT DISTINCT (stock_item_id, location, sub_location)`, per-tier `reorder_level`
@@ -67,7 +72,7 @@
   - 029: `fm_holders.products` text column for Feb 2026 register import
   - 030: widened `stock_movements.movement_type` to permit `opening_balance` (for the bar stock import)
 - **Migration 014** (`fm_visits.checked_in_at` / `checked_out_at`) existed since May but had never run — applied 26 July evening as part of Sprint D compressed session.
-- **`scripts/data-ops/`** — one-shot data-mutating scripts kept separate from `supabase/migrations/` because they must NOT replay on rebuild. Currently: `001` Farmers Market import (305 stallholders from Feb 2026 register), `002` bar stock reset + import (559 items across two bars), `003` department vocabulary re-tag (11-value canonical list across `departments` / `staff` / `stock_items`), `004` department orphan re-tag, `005` transfer orphan ledger cleanup (deleted the 2 false `transfer` rows written by the transfers bug on 27 July — balances deliberately untouched, since the movement never happened), and the test-data purge/seed procedure.
+- **`scripts/data-ops/`** — one-shot data-mutating scripts kept separate from `supabase/migrations/` because they must NOT replay on rebuild. **Currently `001`–`009`:** `001` Farmers Market import (305 stallholders from Feb 2026 register) · `002` bar stock reset + import (559 items across two bars) · `003` department vocabulary re-tag (11-value canonical list across `departments` / `staff` / `stock_items`) · `004` department orphan re-tag · `005` transfer orphan ledger cleanup (deleted the 2 false `transfer` rows written by the transfers bug on 27 July — balances deliberately untouched, since the movement never happened) · **`006`** event department backfill (`from_department`/`to_department` were NULL, so the Movement Ledger department filter silently dropped every event draw) · **`007`** encoding heal (repaired the mojibake `Get-Content` wrote into `post_bar_count` and `set_stock_quantity`) · **`008`** Farmers Market placeholder demo cohort (6 `Z00n` holders, seeded visits, waiting-list rows) · **`009`** `shift_settings` re-tag (three stale department values `003` had missed). Plus the test-data purge/seed procedure.
 
 ---
 

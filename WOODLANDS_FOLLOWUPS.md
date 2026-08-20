@@ -42,7 +42,7 @@ Each was a live defect; each is fixed, built and proven. Full proof per row in `
 | **U-12** | A `department_head` is no longer offered Inventory tabs they will be refused. **The other five modules were checked and do not have this pattern** |
 | **C-47#3** | New-user temporary password input masked, and no longer echoed in plaintext after creation. Open since AUDIT_1 |
 
-**Block 1 took no DDL. The 062 rebuild proof is untouched and still owed** before any `063`.
+**Block 1 took no DDL, so the rebuild-proof clock was untouched** — true as written on 19 August. *(Since: run 10 discharged `062` on 20 August, `063` was written and applied, and **`063` is now the proof owed before any `064`**.)*
 
 ---
 
@@ -80,9 +80,11 @@ Same UTF-8-read-as-Windows-1252 fault that `scripts/data-ops/007_encoding_heal.s
 
 It is on **one of only three live bookings**, so it is likely to be on screen at the walkthrough. One-row data-op to heal, through `apply-sql.ps1`, never bare `Get-Content`. Not fixed in Block 1 because that block's single data-op was scoped to the shift re-tag. Also logged in `WOODLANDS_CLIENT_INPUTS.md` as a *when*, not a *whether*.
 
-#### 🟢 `react-refresh/only-export-components` count moved 159 → 160
+#### 🟢 `react-refresh/only-export-components` — the lint baseline, reconciled 20 August
 
-Exporting `toDateStr` from `TableBookingsUI.jsx` adds a 4th instance of a rule already firing 3× in that file, which mixes helpers and components by design. Recorded so a future lint-baseline comparison does not read it as a regression. The six `*UI.jsx` files all share this shape — it resolves properly only with the C-19 extraction to a single `lib/format.jsx`, which is PARKED as churny.
+Exporting `toDateStr` from `TableBookingsUI.jsx` added a 4th instance of a rule already firing 3× in that file, which mixes helpers and components by design. Recorded so a future lint-baseline comparison does not read it as a regression. The six `*UI.jsx` files all share this shape — it resolves properly only with the C-19 extraction to a single `lib/format.jsx`, which is PARKED as churny.
+
+**⚠ Three different numbers for this baseline were in circulation across two docs (159, 160, 161). Measured 20 August, post-`063`: `npx eslint src` reports 177 problems — 156 errors, 21 warnings.** Block 2 moved it 170 → 159 by extracting the non-components (`kit.constants.js`, `useFlash.js`, `Sidebar.nav.js`); Block 3 and `063` took it to **156**. **156 errors is the current baseline** — compare against that, not against any earlier figure in this log.
 
 ---
 
@@ -164,13 +166,89 @@ to date."
 
 **No new finding.** The second run in this series to produce none.
 
-**`062` is now the outstanding proof**, owed before any `063` is written. It was
-written on a proven base, which is what the gate requires. It gives that run two
-things to check: a **self-referencing FK** on `event_payments` with a **partial
-UNIQUE index** (a rebuild must reproduce the `WHERE reverses_payment_id IS NOT
-NULL` predicate, not just the index), and a **row-level trigger plus its trigger
-function** — the trigger count moves 2 to 3, so the standing "triggers 2/2" line
-in earlier runs is superseded, not contradicted.
+**~~`062` is now the outstanding proof~~ — DISCHARGED by run 10, 20 August 2026.**
+It was written on a proven base, which is what the gate requires. What it gave
+run 10 to check is recorded in that entry immediately below.
+
+---
+
+## §2.6 RE-PROOF RUN 10 — 001-062, PASS (20 August 2026)
+
+**Run BEFORE a line of `063` DDL existed**, as the gate requires.
+
+Throwaway `qezqpzudpbelzgddjipl` (**eu-west-1**), confirmed empty first: 0 tables,
+0 views, no migrations table, the lone public function being the platform's
+`rls_auto_enable`. Pushed via the **session pooler** — host **`aws-1-eu-west-1`,
+not `aws-0`**, which is exactly why the host was pulled from the Management API
+rather than inferred from production's pattern; `db.<ref>` was IPv6-unresolvable
+for the **fifth run running**, so treat the direct host as unavailable rather
+than as first choice. **Never re-linked**; local link verified
+`gttsjmxltrxxfplqjans` before *and* after. Throwaway **deleted via the Management
+API and confirmed absent** (2 projects remain).
+
+**11 of 14 categories byte-identical by md5 over the full sorted detail, never
+by counts:** tables 37/37, views 2/2 (both `security_invoker`), columns-by-set
+430/430, constraints 145/145, indexes 77/77, privileges 873/873, `pg_default_acl`
+24/24, RLS enablement 37/37, **triggers 3/3 — not 2/2**, trigger functions 3/3,
+object comments 34/34.
+
+The three that differed differed by **exactly the four pre-declared residuals and
+nothing else**, enumerated rather than assumed: the 2 legacy `service_role`
+policies (149/147), `handle_new_user` vs `rls_auto_enable` (**functions 18/18 —
+the counts cancel, which is precisely why md5 was needed; all 17 shared functions
+byte-identical**), and `attendance_records` ordinals 14–18 (set-identical, the
+other 425 rows identical).
+
+**No new finding** — the third run in this series to produce none.
+
+**All eight `062`-specific checks passed:**
+
+- Self-FK `ON DELETE RESTRICT` identical.
+- The partial UNIQUE index reproduced **with its `WHERE (reverses_payment_id IS
+  NOT NULL)` predicate** in `pg_get_indexdef()` text on both sides, not merely
+  its name — the thing this run existed to check.
+- All three CHECKs identical by `pg_get_constraintdef()`.
+- `event_payments_reversal_guard` present with identical timing and events **and
+  its function byte-identical at `md5=14f2d5a6…`** — without which the
+  direct-insert path silently loses its guard on a rebuild while the RPC still
+  looks fine.
+- `reverse_event_payment` one signature, `md5=672d35c4…`, `prosecdef=true`,
+  `proacl` identical, **anon and PUBLIC EXECUTE false on both**.
+- `apply_stock_delta` `md5=42f31099…` — the same value runs 8 and 9 measured —
+  compared by `proacl` + `md5(prosrc)`, **never by oid**.
+- `event_payments` grants and policies unchanged: `authenticated` holding exactly
+  INSERT/SELECT/UPDATE of the DML privileges, **0 DELETE policies, 4 policies
+  total**.
+
+**⚠ Observation, not a rebuild finding:** `anon` holds REFERENCES / TRIGGER /
+**TRUNCATE** on all 39 public relations — **identically on both databases**, so
+the files reproduce production faithfully, which is all this proof asks. It is
+Supabase's default grant template rather than anything this project wrote, and
+`anon` holds **no DML at all**. Logged because it was measured, not because run
+10 failed on it.
+
+**⚠ `063` IS NOW THE OUTSTANDING PROOF**, owed before any `064` is written. It
+gives that run new things to check:
+
+- **`fm_holder_products` and its grant.** `authenticated` must hold **SELECT and
+  nothing else** — no INSERT/UPDATE/DELETE grant and no write policy. If a
+  rebuild grants more, **the product-change fee becomes skippable on the rebuilt
+  database while production still looks correct.** That is the whole enforcement
+  model of `063` in one grant.
+- **`v_fm_attendance` rebuilt.** It was dropped and recreated to remove
+  `category_id`, so **`security_invoker=true` must come back** — dropping a view
+  drops its reloptions, and a `security_invoker=false` view silently runs as its
+  owner.
+- **`change_holder_products()` on its new `text[]` signature** — exactly one
+  signature in `pg_proc`, `prosecdef=true`, `proacl` identical, no PUBLIC/anon
+  EXECUTE. It was DROPped and recreated rather than replaced precisely to avoid
+  the overload trap; the rebuild must not reintroduce a second signature.
+- **The ABSENCE of four tables.** `fm_categories`, `fm_product_types`,
+  `fm_items` and `fm_approved_items` must not exist on the rebuild. Table count
+  moves **37 → 34**, so the standing "tables 37/37" line above is superseded,
+  not contradicted.
+- **`fm_holders`** must come back without `stall_type` and without `category_id`,
+  and **with** `products_set_at`; `fm_waiting_list` without `category_id`.
 
 ---
 
@@ -214,40 +292,58 @@ its being unreachable. It matters for two reasons:
 policies and wire delivery cost into it. Do not leave it half-alive. Either way
 it is a migration, so it waits behind the current gate.
 
-### 🟡 Events revenue ships with THREE readings and no decision
+### ~~🟡 Events revenue ships with THREE readings and no decision~~ — CLOSED 20 August 2026, **resolved by REMOVAL, not by an answer**
 
-`WOODLANDS_MEETING_FEEDBACK_2026-07-27.md` records only "revenue should be
-different in Events", and question 1 for the 10 August call — *what that means,
-pointing at the number on screen* — was **never answered**. Built toggleable
-rather than guessed (`src/lib/revenue.js`, 68/68 tests): **Cash Received** ·
-**Net of Cost** · **By Line**, default `received`, with an on-screen note on
-every revenue surface saying the default is provisional.
+The entry as it stood: `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md` records only
+"revenue should be different in Events", and question 1 for the 10 August call —
+*what that means, pointing at the number on screen* — was **never answered**. So
+it was built toggleable rather than guessed (`src/lib/revenue.js`, 68/68 tests):
+**Cash Received** · **Net of Cost** · **By Line**, default `received`, with a
+non-dismissible on-screen note saying the default is provisional. Dhiren was to
+pick one on 28 August and the other two would come out.
 
-**Owed from Dhiren on his return (28 August): pick one.** The other two come out,
-along with the toggle and the `useRevenueReading` hook.
+**Block 3 removed the whole feature instead (20 August).** Re-reading the 27 July
+record, that ask sits among requests about **recording payments**. Building a
+revenue-tracking apparatus he never asked for and then requiring him to
+adjudicate it was solving the wrong problem — so the honest cut was the feature,
+not two of its three readings.
 
-Two things worth putting to him at the same time, both found in this diagnosis:
+- `EventRevenueSection.jsx` deleted; the Events-List three-reading strip gone;
+  `useRevenueReading` / `RevenueReadingPicker` / `ProvisionalRevenueNote` gone.
+- The Events List header tile is now **"Payments Received · This Month"** — same
+  money, honest label, net of refunds and reversals via `summarisePayments`, no
+  toggle and no provisional badge because there is nothing left to choose.
+- **No payment path changed.** Record Payment, history, Total Paid, Balance Due,
+  the Reverse flow, Recorded By and `deposit_paid` are byte-for-byte as before.
+- **`src/lib/revenue.js` is kept and no test was deleted.** The eight now-obsolete
+  test sections were named in the session report rather than removed. **A retained
+  library is not a live feature** — do not read the passing suite as a screen.
 
-- **Events showed no revenue figure at all before this build.** The list strip
-  was three counts; the detail was Bill Total / Total Paid / Balance Due. It is
-  possible "different" meant "absent".
-- **`events.total_amount` is a stale 0** on the one live event whose bill items
-  sum to MWK 1,800,000, and **no code in Events reads or maintains it**. If he
-  was pointing at a number on screen, that is the likeliest candidate. It is
-  also a column a rebuild will keep reproducing; decide whether it is
-  authoritative or vestigial.
+**One question from this work survives and is still owed from Dhiren:**
+**`events.total_amount` is a stale `0`** on the one live event whose bill items
+sum to MWK 1,800,000, and **no code in Events reads or maintains it**. If he was
+pointing at a number on screen when he said "different", that is the likeliest
+candidate. It is also a column a rebuild will keep reproducing — decide whether
+it is authoritative or vestigial. Dropping it is a migration, so it sits behind
+the `063` proof. Carried in `WOODLANDS_CLIENT_INPUTS.md`.
 
-### 🟡 Net-of-cost is built but cannot be populated
+*(Also worth putting to him: Events showed **no** revenue figure at all before
+the 18 August build — the list strip was three counts, the detail was Bill Total
+/ Total Paid / Balance Due. "Different" may simply have meant "absent", in which
+case "Payments Received · This Month" is already the answer.)*
 
-`unitCostIndex` / `allocationCost` are written and tested (weighted-average unit
-cost, consumption as `deducted_qty - returned_qty`, an unpriced line refusing to
-count as a zero-cost line). They have **no input**: see the `deliveries` entry
-above. The reading therefore reports its own coverage and shows an em-dash, and
-the panel states plainly that no cost source exists — deliberately *not* a
-100% margin, which is how a placeholder screen comes to look like a finding.
+### ~~🟡 Net-of-cost is built but cannot be populated~~ — MOOT for the reading; **the underlying finding stands**
 
-Labour and overhead are out of scope for the same reason: `event_staff` carries
-no rate, and no table in the schema does.
+The reading it described no longer renders anywhere (see above). `unitCostIndex`
+/ `allocationCost` remain in `revenue.js`, written and tested, unreferenced by
+any screen.
+
+**What survives, and it is structural rather than cosmetic:** they have **no
+input**, because the only cost column in the schema is `deliveries.unit_cost` on
+a dead table — see the `deliveries` entry above, which is **still open**. Labour
+and overhead are unavailable for the same reason: `event_staff` carries no rate,
+and no table in the schema does. **The system does not know what anything costs.**
+Any future costing, margin or P&L work needs a cost source built first.
 
 ---
 
@@ -283,7 +379,11 @@ no rate, and no table in the schema does.
 
 - **All 305 rows have `stall_type = 'Other'`.** The column is `NOT NULL` with a five-value CHECK (`Produce`, `Crafts`, `Food & Beverages`, `Clothing`, `Other`) and the register has no equivalent field. Uniform `'Other'` makes the category filter useless until reclassified — the `products` text is the obvious basis for doing so, semi-automatically.
 
-- **`fm_holders.products` is a text blob** (migration `029`), not normalised into `fm_approved_items` where the schema already models per-holder items. Deliberate: the register's product strings are comma-joined, but several individual product names contain internal commas — e.g. stall 79's `Chocolate "Salame Slab", Focaccia Slab`. Splitting on commas would have silently fragmented real product names across hundreds of rows, invisibly. **Needs Rose to confirm the intended delimiter before normalising.**
+- **~~`fm_holders.products` is a text blob, needs Rose to confirm the delimiter~~ — ANSWERED 20 August 2026, by doing it.** The concern was real and is recorded because it was **correct**: the register's product strings are comma-joined, but several individual product names contain internal commas — e.g. stall 79's `Chocolate "Salame Slab", Focaccia Slab`. Splitting on commas would fragment real product names invisibly.
+
+  **`063` performed the comma-split anyway, and that is defensible only because of how the fee rule is shaped.** 663 item rows across all 289 holders with text. The split *is* wrong in places — but **the initial list is free**, so a wrong split costs the stallholder nothing and is correctable in the UI by anyone who can read the business's name. Waiting indefinitely for a delimiter Rose was never going to be able to give (the register has no consistent one) would have left the feature unbuilt. `fm_holders.products` is **preserved untouched** as the source, so the split can always be re-derived.
+
+  **What remains is not a delimiter question — it is two named rows.** Exactly two of 289 split wrong, both because the register used commas *within* one description: **A002** (`Crochetted Stuffed, toys and wall hangings` → 2 items, should be 1) and **A069** (one sentence about architectural services → 3 items, should be 1). Free to fix at the walkthrough; carried in `WOODLANDS_CLIENT_INPUTS.md` so it is confirmed with Dhiren rather than silently "corrected" on a business's behalf.
 
 - **Stall-number format is now `A001`–`A347`** (three-digit zero-padded, A-prefixed). The ten test rows it replaced were two-digit `A01`–`A10`. **Needs Dhiren's sign-off** — printed QR cards and the physical stall signage have to agree with whatever the system uses. **Code caught up 18 August 2026:** `STALL_RE` in `FarmersMarketUI.jsx` is now `/^[A-Za-z]+\d{3}$/`, shared by Add and Edit. The sign-off is still owed; if Dhiren picks a different format, one constant changes.
 
@@ -293,11 +393,111 @@ no rate, and no table in the schema does.
 
 - **A third or later ID card has no confirmed price.** Dhiren confirmed six fees and `id_card_initial` MWK 30,000 explicitly "inclusive of 2". Nothing states what card #3 costs. The code charges the replacement rate (MWK 20,000) and says so in `src/lib/constants.js` (`FM_ID_CARD_EXTRA_FEE`) rather than inventing a number silently. **Ask Dhiren.** One row in `fm_fee_schedule` closes it.
 
-- **~~`stall_type` is uniformly 'Other'~~ — SUPERSEDED, not yet dropped.** `061` added `fm_holders.category_id` as the real classification and marked `stall_type` DEPRECATED with a column comment. The column stays because it is `NOT NULL` across 305 rows and because `category_id` can only be backfilled properly once Rose confirms the `products` delimiter (see above — unchanged). **Dropping `stall_type` is a real-data-session cleanup.** 50 of 311 holders are classified today, all via `data-ops/008` placeholder assignment; the remaining 261 are genuinely unclassified and that is the honest state.
+- **~~`stall_type` is uniformly 'Other'~~ — CLOSED 20 August 2026. The column is DROPPED**, along with the entire taxonomy that was meant to replace it. `061` had added `fm_holders.category_id` and marked `stall_type` DEPRECATED in place, deferring the drop to the real-data session because the column was `NOT NULL` across every row. **`063` dropped `stall_type`, its CHECK, `category_id`, and all four taxonomy tables** — see the `063` section below. The "50 of 311 classified, 261 genuinely unclassified" state this entry described no longer exists, because the column it counted is gone.
 
 - **All 305 imported holders carry `created_at = 2026-07-26`, the import timestamp — not their registration date.** The source register is February 2026. This matters now that `v_fm_attendance` gates forfeit-eligibility on "registered before the three-month window began": every market day in the current window pre-dates every real holder, so **no real holder can be forfeit-eligible, and that is the view behaving correctly on the data as it stands.** `data-ops/008` deliberately did NOT backdate the real cohort to fix this — mutating 305 rows of real client data to improve a demo is not a call to make unilaterally — and demonstrates the path on six clearly-marked placeholder holders (`Z001`–`Z006`) instead. **Decision owed at the real-data session: should the imported cohort's `created_at` be corrected to the register date?** Until then, forfeiture is provably built and provably correct, but will not fire on real holders.
 
-- **Placeholder Farmers Market demo data is live in production** (`scripts/data-ops/008`): 6 `Z00n` holders, ~684 seeded `fm_visits`, 72 `fm_approved_items`, 8 waiting-list entries. All are prefixed or noted `PLACEHOLDER`. **Must be purged before handover** — one delete keyed on the `Z` stall prefix and the placeholder notes.
+- **Placeholder Farmers Market demo data is live in production** (`scripts/data-ops/008`): 6 `Z00n` holders, ~684 seeded `fm_visits`, 8 waiting-list entries. All are prefixed or noted `PLACEHOLDER`. **Must be purged before handover** — one delete keyed on the `Z` stall prefix and the placeholder notes. *(The 72 `fm_approved_items` rows this entry also listed went with the table when `063` dropped it — nothing to purge there. The 6 `Z00n` holders did receive backfilled `fm_holder_products` rows, which CASCADE on holder delete, so the purge still needs no extra step.)*
+
+---
+
+## FROM FARMERS MARKET PRODUCTS REDESIGN (`063`, 20 August 2026)
+
+*The `061` taxonomy did not survive contact with real data and was retired
+outright rather than left dormant. What follows is what the build turned up.*
+
+### ⚠ The counting rule is IMPLEMENTED but NOT CONFIRMED — a money rule on real stallholders
+
+Chargeable items = **`|added| + |removed|`**, so **a replace counts 2**
+(MWK 20,000 at the current fee, not 10,000). Proven live: remove 1 + replace 1
+charged **3**.
+
+**Why that reading:** a replace is not a distinct database operation — the UI
+edits a list, so swapping A for B *is* one removal plus one addition. It is also
+the only reading that cannot be gamed: if a replace counted 1, re-listing every
+item under a new spelling would be cheaper than removing them.
+
+**Why it is flagged rather than settled:** the brief says "per item changed
+(add / remove / replace)", which **admits a reading where a replace counts 1**,
+and that reading is defensible — Dhiren may think of a swap as one edit. We chose
+the un-gameable reading and flagged it rather than silently picking one.
+**Owed from Dhiren, 28 August.** One line of diff arithmetic in
+`change_holder_products()` if he means otherwise — but it is a migration, so it
+sits behind the `063` proof. Carried in `WOODLANDS_CLIENT_INPUTS.md`.
+
+### ✅ C-39 / D-7 closed by construction, not by dropping policies
+
+The open finding was that `fm_approved_items` carried INSERT and DELETE policies
+for owner/admin, against `061`'s stated design that the RPC is the only write
+path so the fee cannot be skipped — enforced on `fm_stall_forfeitures` but not
+there. It was PARKED behind a rebuild proof because dropping policies is a
+migration.
+
+**`063` closed it a better way: the table is gone, and its replacement never had
+the hole.** `authenticated` holds **SELECT and nothing else** on
+`fm_holder_products` — no INSERT/UPDATE/DELETE grant and no write policy — so
+the SECURITY DEFINER RPC is the **only** write path. The fee is unskippable by
+construction rather than by convention. **Nothing to drop; nothing left parked.**
+
+### 🔴 Two dependencies the plan did not name, both caught by the Step 0 probe
+
+Recorded because both would have failed the migration mid-flight, and both were
+found by probing the catalogue rather than by reading the plan:
+
+1. **`v_fm_attendance` SELECTed `fm_holders.category_id`**, so the column could
+   not be dropped without rebuilding the view. Dropped and recreated in `063` —
+   with **`security_invoker = true` re-stated explicitly, because dropping a view
+   drops its reloptions.** A silently `security_invoker=false` view would run as
+   its owner and quietly bypass the RLS it is supposed to inherit.
+2. **`fm_waiting_list.category_id` was an FK to `fm_categories`, populated on
+   8 of 8 rows.** Retiring the taxonomy forced its removal. The waiting list
+   already carried a `products_note` free-text column — the same shape as the new
+   model — so that column absorbs the intent and the FK column went.
+
+`stall_type`, by contrast, was re-probed across the whole catalogue and had
+**exactly one dependency: its own CHECK.** No view, no function, no policy, no
+index.
+
+### 🟡 There was a FIFTH copy of the fee schedule nobody had counted
+
+C-08 named four frontend surfaces charging from constants instead of
+`fm_fee_schedule`. Wiring them up found a fifth: **`FM_PAY_TYPES` in
+`FarmersMarketUI`**, where each payment type carried its own hard-coded `amount`.
+
+It now carries a fee **code** rather than an amount — because a payment type and
+its fee code are **not always the same word**: a `reprint` payment is the
+`id_card_replace` fee. A naive `fee(type)` lookup would have silently charged
+nothing for reprints.
+
+**Lesson, and it is the C-08 lesson again:** the count of duplicate copies in a
+finding is a lower bound, not a total. Grep before believing the number.
+
+### 🟡 The backfill split two register entries wrong — free to fix, but confirm
+
+**A002** (`Crochetted Stuffed, toys and wall hangings` → 2 items) and **A069**
+(one sentence about architectural services → 3 items) are the only two of 289
+where the register used commas *within* a description rather than between
+products. Both are **free to correct** (the initial list carries no fee) and are
+carried in `WOODLANDS_CLIENT_INPUTS.md` so Dhiren confirms the intended reading —
+we should not silently rewrite what a business says it sells. A069 also carries
+three of the register's own spelling errors.
+
+### 🟡 Case-insensitive de-duplication was needed, and only showed up at apply time
+
+A009's register text carried both `soup`/`Soup` and `tarts`/`Tarts`. The unique
+index on `(holder_id, lower(item_name))` would have aborted the whole migration.
+De-duplicated case-insensitively in the backfill. **Recorded because the dry run
+is what caught it** — the plan had no reason to predict it, and only real data
+contained it.
+
+### 🟢 `fm_holders.products` is preserved, and still renders on screen
+
+The source text is deliberately **untouched** by `063`, so the split can always
+be re-derived. **But it is also still displayed** on the Businesses expand under
+a plain `Products:` label (`HoldersTab.jsx:935`), beside the new Approved
+Products list — **two product displays on one card.** That is a demo-curation
+decision before the walkthrough, not a defect. Flagged in
+`WOODLANDS_FIX_PLAN.md`; lean is to hide the older label.
 
 ---
 

@@ -2,7 +2,7 @@
 
 *What we need from Dhiren and Rose, what they have already given us, and what surfaces as we build. Live document.*
 
-**Created: 19 August 2026** · **Last updated: 19 August 2026**
+**Created: 19 August 2026** · **Last updated: 20 August 2026**
 
 ---
 
@@ -21,6 +21,43 @@ Three sections, and the distinction matters:
 ---
 
 ## OPEN — needed from the 28 August call onward
+
+### 0. The product-change fee: does a REPLACE count as one change or two? · **MONEY RULE ON REAL STALLHOLDERS — CONFIRM ON THE 28th**
+
+**What we need:** one sentence from Dhiren settling how many product-change fees a *swap* raises.
+
+**Where it came from.** The brief says the product-change fee is charged "per item changed **(add / remove / replace)**". That phrasing admits two readings, and they charge different amounts for the same action.
+
+**What `063` implemented, and why.** Chargeable items = **`|added| + |removed|`**, so **a replace counts 2** — MWK 20,000 at the current fee, not 10,000.
+
+- A replace is **not a distinct database operation.** The UI edits a list, so swapping "Banana chips" for "Banana bread" *is* one removal plus one addition. There is no third verb underneath.
+- It is the only reading that **cannot be gamed.** If a replace counted 1, re-listing every item under a new spelling would be cheaper than removing them — a holder could rewrite their entire list for the price of one change.
+- **Proven live:** remove 1 + replace 1 charged **3**.
+
+**Why it must be asked rather than assumed.** This is a **money rule applied to real stallholders**, and the alternative reading is defensible — Dhiren may well think of "replace" as one edit, one fee. We chose the un-gameable reading rather than silently picking the cheaper one, and flagged it instead of burying it.
+
+**Cost of being wrong: one line.** If he means a replace counts 1, it is a one-line change to the diff arithmetic in `063`'s `change_holder_products()`. No table changes, no backfill — but it **is** a migration, so it sits behind the `063` rebuild proof.
+
+**Worth saying in the same breath:** the **initial list is free**. The February register backfill IS each holder's starting list, so nothing that happens at the walkthrough — merging, splitting, correcting spelling — costs a stallholder anything. Only edits *after* that point charge.
+
+---
+
+### 0b. Two register entries were split wrong — free to fix at the walkthrough
+
+**What we need:** thirty seconds of Dhiren's eyes on two businesses, and a yes/no on the intended reading.
+
+`063` built each holder's approved list by comma-splitting their February 2026 register text. That is correct for 287 of the 289 holders with text. **Two are wrong, both because the register used commas inside a single description rather than between products:**
+
+| Stall | Register text | Split into | Should probably be |
+|---|---|---|---|
+| **A002** | `Crochetted Stuffed, toys and wall hangings` | `Crochetted Stuffed` + `toys and wall hangings` | **one item** — "Crocheted stuffed toys and wall hangings" |
+| **A069** | `Architectureal and design services, using local and natiral raw materials, like bamboo and raw mud items and furniture` | three items | **one item** — it is one sentence describing one service *(also carries three spelling errors from the register: "Architectureal", "natiral")* |
+
+**Why it is not urgent and not a data-op:** these are **free to correct**. The initial list carries no fee, so an owner fixing them in the Businesses product picker during the walkthrough costs the stallholder nothing and demonstrates the feature at the same time. **This is a nice thing to show him, not a defect to apologise for.**
+
+**Why it is on this list at all:** we should not silently "fix" what a business sells. A002 and A069 describe *their own* products; the merge is our reading of their punctuation, not theirs. Worth confirming rather than assuming.
+
+---
 
 ### 1. Attendance capture — the FA03H decision · **BLOCKS THE WHOLE ATTENDANCE END-GOAL**
 
@@ -98,12 +135,23 @@ Measured live, 19 August, after the re-tag:
 Do not re-ask these. If one needs revisiting, note the reason and move it to OPEN.
 
 - **The six Farmers Market fees — confirmed by Dhiren, 18 August 2026.** All six are live in `fm_fee_schedule` (migration 061). This also corrected `src/lib/constants.js`, whose ID-card fees were **wrong, not merely stale** — 5,000 / 10,000 against Dhiren's actual 30,000 / 20,000.
+  - **⚠ Reframes the fee conversation, as of 20 August: the schedule is now genuinely live.** Until Block 3 it was decorative — six editable rows that no charging surface read, so editing an amount changed nothing. **Every charging surface now reads `fm_fee_schedule`** (Market Day, Businesses, Payments, Messages), proven live as owner and admin. When he changes an amount in the Fees tab, **the next charge uses it** — no deploy, no code change. Worth demonstrating; also worth him knowing, because it is now a live money control rather than a reference list.
 - **The four-role model.** `owner` · `admin` (front desk) · `department_head` (scoped by department, several per department) · `hr`. One scoped role, not a role per department. Built and proven live (migrations 037–044); 5 head accounts plus hr exist.
 - **The attendance problem statement, in his words.** *No login from home. Catch lateness and no-shows. The owner should not have to sit and check.* This is the requirement the FA03H decision has to satisfy — it is about **capture that cannot be gamed**, not about a particular technology. QR was one answer to it; it was never the requirement itself.
 - **Prove the modules before perfecting the data** (27 July). Existing real data stays the test bed; the missing-data chase is off the critical path until he verifies.
 - **Walkthrough target: Mon 31 Aug / Tue 1 Sep 2026.** Feedback call 28 August.
 - **Stall-number format `A001`–`A347`** — three-digit, zero-padded, A-prefixed. Code matches (`STALL_RE`, shared by Add and Edit). ⚠ **Sign-off still owed** before any ID cards are printed — printed cards and physical stall signage have to agree with the system. If he picks a different format, one constant changes.
-- **Revenue reading — three shipped, one to be chosen.** Rather than guess what "revenue should be different" meant, Events ships **three toggleable readings** with the default flagged provisional on screen. He picks one on the 28th and the other two plus the toggle come out. Two things to put to him at the same time: Events showed **no** revenue figure at all before that build, so "different" may have meant "absent"; and `events.total_amount` is a stale `0` against a MWK 1,800,000 bill that no Events code reads or maintains.
+- **~~Revenue reading — three shipped, one to be chosen.~~ — WITHDRAWN 20 August. This is no longer a question for Dhiren.** It sat here as an ask because Events shipped three toggleable readings on 18 August, defaulting to `received` and flagged provisional on screen, waiting for him to pick one. **Block 3 removed the whole feature instead.** Re-reading the 27 July record, "revenue should be different in Events" sits among asks about *recording payments*; building a revenue-tracking apparatus he never asked for and then requiring him to adjudicate it was solving the wrong problem. The three readings, the selector and the provisional note are gone; the Events-List tile is now **"Payments Received · This Month"** — the same money under an honest label, net of refunds and reversals. **No payment path changed.** `src/lib/revenue.js` is kept as a library with its tests, in case a costed revenue view is ever genuinely wanted.
+  - **Recorded rather than deleted** because the reasoning matters more than the answer: *we resolved this by removing the feature, not by getting his decision.* If he asks at the walkthrough where the revenue figure went, that is the explanation — and if he says he *did* want revenue tracking, this becomes a new OPEN item with a real requirement behind it instead of a guess.
+
+---
+
+## STILL OWED FROM THE REVENUE WORK — one live question survives
+
+- **`events.total_amount` is a stale `0`** on the one live event whose bill items sum to **MWK 1,800,000**, and **no code in Events reads or maintains it.** If Dhiren was pointing at a number on screen when he said revenue "should be different", this is the likeliest candidate — a headline total that has silently been zero all along.
+  - **What we need:** is `total_amount` meant to be authoritative (in which case something must maintain it) or is it vestigial schema (in which case it should be dropped)?
+  - **Why it survived the removal:** this was never a revenue-display question. It is a column with no writer and no reader, and a rebuild will keep reproducing it either way. Dropping it is a migration, so it sits behind the `063` rebuild proof.
+  - Also worth putting to him in the same breath: **Events displayed no revenue figure at all before 18 August**, so "different" may simply have meant "absent" — and "Payments Received · This Month" may already be the answer.
 
 ---
 

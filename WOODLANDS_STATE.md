@@ -2,8 +2,10 @@
 
 *Current state, live commitments, next action. Updated at the end of every session that changed state.*
 
-**Last updated: 19 August 2026**
+**Last updated: 20 August 2026**
 **Governing doctrine:** STREAMLINE_BUILD_STANDARD.md v1.5, STREAMLINE_MATERIALS.md v2.4, STREAMLINE_SESSION.md v2.0.
+
+> **This doc lagged three shipped commits between 19 and 20 August** — it still described Block 2 and Block 3 as "planned", Events revenue as live, and the Farmers Market taxonomy as the product model, all of which were false. Rewritten from measured truth on 20 August. **If this doc and `WOODLANDS_FIX_PLAN.md` ever disagree again, believe FIX_PLAN** — it is updated as blocks land, this one at end of session.
 
 ---
 
@@ -16,38 +18,46 @@ Lodge in Lilongwe. Family relationship — Dhiren is Aman's uncle.
 - **HR:** Martin Lisilira
 - **Staff:** 62 in `staff` table
 - **Modules built (6):** Inventory, Attendance, Events, Table Bookings, Farmers Market, Admin
-- **Roles (4):** `owner`, `admin`, `department_head`, `hr`
-- **System users:** 8 (measured 18 August — 5 department heads, hr, admin, owner; all active)
+- **Roles (4):** `owner`, `admin`, `department_head`, `hr` — authoritative in `src/lib/roles.js`
+- **System users: 8** — measured live 20 August. 5 department heads (one per department), plus owner, admin and hr. All active. **8 accounts, 4 roles; do not conflate the two counts.**
+- **Migrations: `001`–`063`**, 63 rows, no gaps.
 
 ---
 
 ## THE GOAL — PHASE 2, FUNCTIONAL-COMPLETE ON PLACEHOLDER DATA
 
-**✅ MET — every Phase 2 build feature exists** (last one `062`, 18 August). The original target was *a fully functioning app on placeholder data by the week of 11 August (deadline 15th)*, and it landed. Every screen works and is populated.
+**✅ MET, and remediation is now done too.** Every Phase 2 build feature exists (last one `063`, 20 August). The original target — *a fully functioning app on placeholder data by the week of 11 August* — landed on time, and the three remediation blocks that followed it have all shipped.
 
-**The live target is now the walkthrough: Mon 31 Aug / Tue 1 Sep 2026**, with a feedback call on **28 August**. The work between here and there is **remediation and curation, not construction** — see "WHERE THE BUILD IS" below and `WOODLANDS_FIX_PLAN.md`.
+**The live target is the walkthrough: Mon 31 Aug / Tue 1 Sep 2026**, with a feedback call on **28 August**.
+
+**There is nothing left to BUILD.** What remains between here and the walkthrough is:
+
+1. **The 28 August feedback call** — Dhiren owes decisions, not data. Full ask list in `WOODLANDS_CLIENT_INPUTS.md`.
+2. **Demo curation** — the walkthrough script, the data the client will actually be shown, the placeholder-purge decisions.
+3. **A walkthrough run-through** — the full role-by-role pass, rehearsed.
+4. **A final audit pass** before the walkthrough.
 
 Once Dhiren verifies the modules work to his satisfaction, real data goes in — not before.
 
-**The end-goal system is specified in `WOODLANDS_FUNCTIONAL_SPEC.md`.** Scope source is `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md`. Read the spec for what "finished" looks like module by module.
+**The end-goal system is specified in `WOODLANDS_FUNCTIONAL_SPEC.md`.** Scope source is `WOODLANDS_MEETING_FEEDBACK_2026-07-27.md`. Remediation is tracked in `WOODLANDS_FIX_PLAN.md`.
 
-**Client framing decision (Dhiren, 27 July):** prove the modules work before perfecting the data. Existing real data (305 stallholders, 62 staff, 559 stock items) stays as the test bed; the missing-data chase (bar stocktake, department stock lists, staff reconciliation, menus, 12 missing phone numbers) is off the critical path for this week.
+**Client framing decision (Dhiren, 27 July):** prove the modules work before perfecting the data. Existing real data (305 real stallholders, 62 staff, 559 stock items) stays as the test bed; the missing-data chase (bar stocktake, department stock lists, staff reconciliation, menus, 12 missing phone numbers) is off the critical path.
 
 ---
 
-## WHERE THE BUILD IS — 19 AUGUST 2026
+## WHERE THE BUILD IS — 20 AUGUST 2026
 
-**Every Phase 2 build feature exists. The work now is remediation, not construction.**
+**All three remediation blocks have shipped, plus one migration.** Two audits ran in parallel ahead of the walkthrough — Aman's role-by-role **browser pass** (`U-nn`) and `WOODLANDS_AUDIT_3.md`, a read-only **code audit** (`C-nn`) — and were merged into one queue in **`WOODLANDS_FIX_PLAN.md`**. That is the tracker; per-finding file:line and live proof live there and are not duplicated here.
 
-Two audits ran in parallel ahead of the walkthrough: Aman's role-by-role **browser pass** (`U-nn`) and `WOODLANDS_AUDIT_3.md`, a read-only **code audit** (`C-nn`). They were merged into one queue in **`WOODLANDS_FIX_PLAN.md`** — that is the tracker, and the detail lives there. It is not duplicated here.
+| Block | What | Commit | Status |
+|---|---|---|---|
+| **Block 1 — Correctness** | Wrong numbers, wrong names, screens that throw, controls bypassing their own pipeline, tabs a role cannot use. Frontend + one data-op, **no DDL** | `5d340b2` | ✅ **DONE** 19 Aug |
+| **Block 2 — Look** (+ finish pass) | One shell, one component kit, one palette; internal project narrative out of client-facing UI; decorative controls removed. Frontend only | `8ca3378` | ✅ **DONE** 20 Aug |
+| **Block 3 — Fees, revenue, dropdown, polish** | Fee schedule wired live; Events revenue removed; custom dropdown; sub-page search; page descriptions stripped | `fae6738` | ✅ **DONE** 20 Aug |
+| **`063` — FM products redesign** | Per-holder approved-items table, per-item change fee, taxonomy retired, `stall_type` dropped | `846a5a6` | ✅ **DONE** 20 Aug |
+| **Demo curation** | Walkthrough script, data shown, placeholder purge | — | ⬜ **NEXT** |
 
-**Three blocks, then demo curation:**
-
-1. **Block 1 — Correctness.** ✅ **DONE, committed `5d340b2`, 19 August.**
-2. **Block 2 — Look.** Internal project narrative in client-facing UI, decorative controls, display halves left behind by their data layer. Planned.
-3. **Block 3 — Fee wiring.** `fm_fee_schedule` is read by no charging surface (C-08 / D-5). Planned; the decision is still open.
-
-**What Block 1 shipped, at a summary level** — per-fix file:line and live proof in `WOODLANDS_FIX_PLAN.md`:
+### What Block 1 shipped (19 August)
 
 - Admin → Users header reads the **live** count (8, was a literal `4`).
 - Movement Ledger collapses requisition fulfil pairs — **94 double-rendered movements**, display-only fix, no data touched.
@@ -60,7 +70,31 @@ Two audits ran in parallel ahead of the walkthrough: Aman's role-by-role **brows
 - Table Bookings → All Bookings shows real dates (`booking_date` is `timestamptz`, not `date` — see the trap in FOLLOWUPS).
 - Login accepts a bare username; the new-user temporary password is masked and no longer echoed on screen.
 
-**Verification:** `vite build` clean · `ledger.test.mjs` 38/38 · `revenue.test.mjs` 68/68 · real data unchanged throughout (62 staff / 311 stallholders / 15 attendance).
+### What Block 2 shipped (20 August, two passes)
+
+- **One shell on every route** — `AppShell` (sidebar + top bar + one content frame) replaced `Layout`. `TopBar` renders everywhere with breadcrumb, jump-to-section box, avatar and a **working Sign out** (`signOut()` now falls back to `{ scope: 'local' }` and clears state regardless, so an expired refresh token can no longer leave a user signed in after clicking).
+- **One component kit** — `FormPanel`/`FormGrid`/`Field`, `Sel`, `Tabs`, `TableWrap`, `EmptyRow`, `Button`. Self-hosted Inter (CDN removed — no live font dependency on a system demoed in Lilongwe).
+- **The finish pass corrected three false DONEs.** A kit component existing is not adoption: 19 raw `<select>` elements survived across 12 files (one shadowing the kit's own `selectCls` export with a different value), four screens hand-wrote the grid `FormGrid` exists to remove, and ~15 tables hand-rolled their empty row — two printing the kit's *default* placeholder on the first two screens of the walkthrough. **Only a grep proves adoption.**
+- Decorative search pill made real; fake notification bell removed.
+
+### What Block 3 shipped (20 August)
+
+- **Events revenue REMOVED.** The three toggleable readings, the shared selector, the Event Detail Revenue section and the non-dismissible provisional note are all gone. The client asked to **record payments**, not to track revenue. The Events-List tile is now **"Payments Received · This Month"** — same money, honest label, net of refunds and reversals. **Every payment path is byte-for-byte what Block 1 left.**
+- **`fm_fee_schedule` is now genuinely authoritative.** Every charging surface reads it through a new `useFeeSchedule()` seam — Market Day, Businesses, Payments and Messages. There were **five** frontend copies of the schedule, not four. Proven live as the roles and rolled back: an owner's edit changed what the next charge used; an admin's edit was refused. `FM_FEES` survives as a first-paint fallback only.
+- **Custom dropdown** — the OS-drawn `<select>` popup is suppressed and our own listbox opens in its place, with full keyboard support, opening *at* the selected option. The control underneath is still a real `<select>` (23 of 73 call sites pass `required`), and all 73 call sites are untouched.
+- **Search reaches sub-pages** — `src/lib/sections.js` is now the single source for every module's tab list, so the search index cannot drift from the screens. 30 tabs indexed; access mirrored on `ROUTE_ACCESS`, never widened.
+- Six page descriptions stripped; internal-note strings rewritten; the dead `RADIUS` column hidden (not deleted).
+
+### What `063` shipped (20 August)
+
+**The Farmers Market product model was replaced, and the old one retired rather than left dormant.**
+
+- **`fm_holder_products`** — one free-text row per approved product per holder. **Backfilled from `fm_holders.products`, the February 2026 register text: 663 item rows across all 289 holders that had text, 100% covered.**
+- **The initial list is free.** `fm_holders.products_set_at` makes that a stored fact rather than an inference from row count, so a holder's list cannot be emptied and re-added to dodge the fee.
+- **`change_holder_products()`** recreated on a `text[]` signature (dropped first, never overloaded). It computes the per-item diff case-insensitively and raises **one `fm_payments` row per item changed**, amount read from `fm_fee_schedule` **inside the same transaction**.
+- **The fee is unskippable by construction:** `authenticated` holds SELECT and nothing else on the new table — no write grant, no write policy — so the SECURITY DEFINER RPC is the only write path.
+- **The taxonomy is gone.** `fm_categories`, `fm_product_types`, `fm_items`, `fm_approved_items`, `fm_holders.category_id`, `fm_waiting_list.category_id` and `fm_holders.stall_type` are all dropped. Two live product models is exactly how "Other: 311" happened.
+- **⚠ One money rule is FLAGGED, not settled:** chargeable items = `|added| + |removed|`, so **a replace counts 2**. The brief's "(add / remove / replace)" admits a reading where it counts 1. **This needs Dhiren's confirmation on 28 August** — see `WOODLANDS_CLIENT_INPUTS.md`.
 
 **`scripts/data-ops/009_shift_settings_retag.sql` — applied 19 August.** data-ops/003 re-tagged `departments`, `staff` and `stock_items` on 12 August and **missed `shift_settings`**, so staff in the affected departments matched no shift at all. Three stale values found live and re-tagged: `Restaurant Bar` → `Main Bar`, `Front Desk` → `Front Office`, `Grounds` → `Grounds & Landscape`. Dry-run first inside a rolled-back transaction, baseline re-confirmed, then applied. 12 rows, 0 stale, 0 mojibake. **8 staff still show `—`** (Administration 3, Maintenance 3, Transport 2) because those departments have **no `shift_settings` row at all** — a data gap needing Rose's real times, logged in `WOODLANDS_CLIENT_INPUTS.md`.
 
@@ -68,7 +102,7 @@ Two audits ran in parallel ahead of the walkthrough: Aman's role-by-role **brows
 
 ## ATTENDANCE — THE PLAN CHANGED. QR IS NO LONGER IT.
 
-**QR staff attendance is superseded.** It was the plan out of the 27 July meeting and is still written that way in `WOODLANDS_FUNCTIONAL_SPEC.md` §4 (now re-marked). It is not what gets built.
+**QR staff attendance is superseded.** It was the plan out of the 27 July meeting and is marked `[SUPERSEDED]` in `WOODLANDS_FUNCTIONAL_SPEC.md` §4. It is not what gets built.
 
 **The pivot:** Dhiren already owns an **FA03H face-and-fingerprint machine**. The open question is now a **procurement decision, not a build decision**:
 
@@ -77,9 +111,11 @@ Two audits ran in parallel ahead of the walkthrough: Aman's role-by-role **brows
 
 **He has to find out which.** That is a question for the device or its supplier; we cannot answer it from here. **Pending the 28 August call.** Design arc in `WOODLANDS_HISTORY.md` (19 August); the ask, and what it blocks, in `WOODLANDS_CLIENT_INPUTS.md`.
 
-**Consequence to be honest about at the walkthrough:** there is **no staff clock-in surface in the app today.** `ClockInOutTab` — the only self-service clock-in and the only GPS code in the codebase — is built and **mounted nowhere**. All 15 live attendance rows are manager-written. Whether that component is wired, rewritten or deleted depends entirely on the answer above.
+**Consequence to be honest about at the walkthrough:** there is **no staff clock-in surface in the app today.** `ClockInOutTab` — the only self-service clock-in and the only GPS code in the codebase — is built and **mounted nowhere** (`[NOT WIRED]`). All 15 live attendance rows are manager-written. Whether that component is wired, rewritten or deleted depends entirely on the answer above.
 
-**Doctrine note, updated:** the standing rule in `CLAUDE.md` reads that QR supersedes "manual clock in/out only". That is now itself superseded and the no-biometrics position needs restating rather than assumed — **path (a) reads data off a face/fingerprint device**, which is a materially different claim from "QR is not biometrics, so no rule is broken." **The system would not perform biometric matching; it would import the result of matching done on a device the client already owns and already uses.** Worth stating to Dhiren in those words rather than leaving it implicit.
+**PARKED means parked, not deleted.** The built Attendance module (Today / History / Settings) and manual clock-in stay in the codebase; manual marking by front desk / ops is the working fallback. Whether anything is *hidden* for the walkthrough is a presentation decision, never a code deletion.
+
+**No biometrics in this system.** It performs no biometric capture, storage or matching of its own. If attendance data is ever taken in, what enters is the **already-matched result** from a device the client owns and operates — a staff identifier and a timestamp. Worth stating to Dhiren in those words rather than leaving it implicit, because path (a) reads data off a face/fingerprint device and that is a materially different claim from the old QR-era reasoning.
 
 ---
 
@@ -100,74 +136,75 @@ Two audits ran in parallel ahead of the walkthrough: Aman's role-by-role **brows
 - Repo: `akotecha47/woodlands`
 - Auth: Supabase Auth on `sb_publishable_*` + `sb_secret_*` key pair. Legacy JWT keys disabled 26 July — the previously-exposed key is permanently invalid.
 - Departments plain text, never FK.
+- SQL applied via `scripts/apply-sql.ps1` (UTF-8 read + mojibake refusal). Never a bare `Get-Content` one-liner — that corrupted `059` on 17 August.
 
 ---
 
 ## WHAT'S LIVE — REAL VS PLACEHOLDER
 
-**Real:** 305 Farmers Market stallholders (via `scripts/data-ops/001`); 559 bar item catalogue — 276 Restaurant Bar + 283 Sports Bar (via `scripts/data-ops/002`), names + SKUs real; 62 staff roster; 4 system users.
+**Real:** 305 Farmers Market stallholders (via `scripts/data-ops/001`); 559 bar item catalogue — 276 Restaurant Bar + 283 Sports Bar (via `scripts/data-ops/002`), names + SKUs real; 62 staff roster; **8 system users**; 663 approved-product rows backfilled from the February 2026 register (`063`).
 
-**Placeholder / demo:** bar stock quantities (pending stocktake); attendance (2–3 seed days); 1 seeded event; a few table bookings.
+**Placeholder / demo:** bar stock quantities (pending stocktake); bar par levels (2× catalogue reorder); attendance (2–3 seed days); 1 seeded event; a few table bookings; **6 `Z00n` Farmers Market holders** plus their visits and 8 waiting-list rows (`data-ops/008`) — total holders therefore **311** (305 real + 6 placeholder).
 
-**Empty / not there:** Kitchen, Restaurant, Grounds, Security stock lists (departments exist, items don't); Farmers Market visits + payments; menu items from POS PDFs. **Housekeeping now holds a 7-item placeholder catalogue** (`060`) at Main Store / Housekeeping / Housekeeping-Laundry — Laundry is a sub-location, deliberately never a department. **24 placeholder rooms** (`060`), real list still owed by Dhiren.
+**Empty / not there:** Kitchen, Restaurant, Grounds, Security stock lists (departments exist, items don't); menu items from POS PDFs. **Housekeeping holds a 7-item placeholder catalogue** (`060`) at Main Store / Housekeeping / Housekeeping-Laundry — Laundry is a sub-location, deliberately never a department. **24 placeholder rooms** (`060`), real list still owed by Dhiren.
 
 ---
 
-## THE GATE — MIGRATION HISTORY RECONCILIATION (P1)
+## MIGRATIONS AND THE §2.6 REBUILD-PROOF DISCIPLINE
 
-**✅ CLOSED — schema provably rebuildable from files (001–050), verified 12 August 2026 by full rebuild-and-diff. `db push` trustworthy for new schema.**
+**History is `001`–`063`, 63 rows, no gaps.** The migration-history reconciliation that was Priority 1 through Sessions A and B (9–10 August) is long closed, and `db push` is no longer a standing hazard — history is fully recorded, so a push has nothing to replay.
 
-**Done in Session A:**
-- Duplicate `008` resolved (merged to one file, one version).
-- Ghost tables `event_checklists`/`shift_settings`/`tables` now have real CREATE migrations (`031`/`032`/`033`), applied live as no-ops (tables + rows preserved).
-- Missing attendance indexes created for real (`034`): `attendance_records` went 1 → 3 indexes.
-- Ghost GPS columns migrated out of `seed.sql` into `035`; `seed.sql` rebuild landmines removed (`bar_week_config`, `shift_settings` blocks, GPS columns).
-- `021` ordering bug fixed (ghost-table grants/policies moved to `031`–`033`) so a from-files rebuild orders correctly.
-- `010` FK documented to live (`auth.users(id)`), file-only, no live ALTER.
-- History repaired to **001–035 minus 010, 012, 017** — verified on a fresh connection. `030` confirmed to widen the `movement_type` CHECK (not just comment).
-- Real data unchanged: 559 stock items, 305 stallholders, 62 staff.
+**Standard §2.6 is a STANDING PER-MIGRATION DISCIPLINE, not a one-off task.** A rebuild proof is a claim about a file range on a date, never a permanent property of the project. It expires the moment a new migration is written.
 
-**Done in Session B (012 auth):** blanket `ALL/authenticated/USING(true)` policy dropped from `attendance_records`; the three unfiled "staff can… own attendance" policies reconciled under canonical names; `017`'s policy-name drift fixed; `seed.sql`'s attendance block removed; the two `010` default divergences documented to live, file-only. History repaired to **001–036**.
+- **The rule: prove the current range BEFORE writing the next migration.**
+- **Ten runs done.** Docker is unavailable here, so every run pushes `001`–`0nn` into a throwaway Supabase project via `--db-url` on the **session pooler** (`db.<ref>` has been IPv6-unresolvable for five runs running — treat the direct host as unavailable, not as first choice), never by re-linking, with the local link verified as production before *and* after, and the throwaway deleted via the Management API and confirmed gone.
+- **Run 10 (20 August) proved `001`–`062` — PASSED, no new finding.** `063` was then written, applied and recorded on that proven base.
 
-**Closed by the rebuild proof — 4 runs, 12 August 2026.** A clean `db push --dry-run` only proves the history table is recorded, not that the files reproduce the database — runs 1–3 found real unfiled drift a dry-run couldn't see: `016`'s `staff.full_name` nullability, ~20 unfiled columns on `events`/`table_bookings`/`event_payments`, `user_profiles`'s FK missing `DEFERRABLE INITIALLY DEFERRED`, and the GRANT/default-privileges layer — all hand-applied to production over months, never filed. Fixed as migrations `045`–`050`. **Run 4 pushed `001`–`050` into an empty throwaway and diffed byte-identical against production**: 28/28 tables, 302/302 columns, 101/101 constraints, 41/41 indexes, 435/435 grants, `pg_default_acl` and all four core functions byte-identical. RLS policies matched except 2 known production-only legacy duplicates (`departments`, `user_profiles`) — a production-cleanup item, not a file gap.
+### ⚠ `063` IS THE PROOF NOW OWED, before any `064` is written.
 
-Full detail — all four runs, every divergence found and fixed, and the residual cleanup item — in `WOODLANDS_FOLLOWUPS.md`. `045`–`050` were rolled into production's migration history on 13 August via `migration repair` (never `db push` — `050`'s revoke/re-grant window must not run against live data).
+It gives that run new things to check: the `fm_holder_products` table with its **SELECT-only grant to `authenticated`** (if a rebuild grants more, the fee becomes skippable while production still looks fine), the rebuilt `v_fm_attendance` (**`security_invoker=true` must be re-stated — dropping a view drops its reloptions**), `change_holder_products()` on its new `text[]` signature with exactly one signature in `pg_proc`, and the **absence** of the four retired taxonomy tables. Code-only and data-op changes do not touch this clock.
 
-**The proof covers `001`–`050` directly; `051`–`057` were re-proven by run 5 (14 August).** `058` is post-run-5 and has not been rebuild-proven — it is owed on the next migration written. See "§2.6 RE-PROOF" below.
+**Known-expected residuals, so they are not misread as new findings:** the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`), the `handle_new_user` orphan (production-only) against `rls_auto_enable()` + the `ensure_rls` event trigger (rebuild-only, a platform default production predates — so RLS enablement must be argued from production's side), and the `attendance_records` ordinal divergence 14–18.
+
+**Run history:** runs 1–4 closed `001`–`050` (12 Aug) after finding real unfiled drift a dry-run could not see, fixed as `045`–`050` · run 5 `051`–`057` (14 Aug) · run 6 `001`–`058` (17 Aug), which caught a files gap granting `anon` EXECUTE on the role functions **and** production's history never having recorded `058` · run 7 `059` (17 Aug), which caught mojibake in **production** written by the apply path · run 8 `060` (18 Aug), first with no new finding · run 9 `061` (18 Aug) · run 10 `001`–`062` (20 Aug). Full per-run detail in `WOODLANDS_FOLLOWUPS.md`; run 10's record is in `WOODLANDS_FIX_PLAN.md`.
 
 ---
 
 ## KNOWN BUGS / BROKEN PATHS
 
 - **~~Transfers don't deduct stock~~ — FIXED AND PROVEN LIVE, 14 August 2026.** Migration `057` added `transfer_stock` (a thin delegation to `issue_stock`); `TransfersTab` now calls it instead of inserting two ledger rows directly. Proved as the `admin` role, rolled back: Sports Bar 17 → 10 with the Main Bar row created at 7, 2 ledger rows, `movement_type` `'transfer'`. The 2 orphan ledger rows the bug wrote on 27 July were deleted via `scripts/data-ops/005`.
-- **~~Events payments tab not editable~~ — FIXED AND PROVEN LIVE, 18 August 2026** (`062`). A correction is a **reversing entry**, not an edit: `event_payments` has no DELETE grant and no DELETE policy by design, so the original figure survives its own correction. 11/11 live role scenarios passed, rolled back — including `deposit_paid` going true → false when the only deposit was reversed, and back to false-not-true when a *balance* was reversed afterwards.
-- **`public-checkin` returns an internal `detail` field on failure.** Aids diagnosis; drop before handover.
+- **~~Events payments tab not editable~~ — FIXED AND PROVEN LIVE, 18 August 2026** (`062`). A correction is a **reversing entry**, not an edit: `event_payments` has no DELETE grant and no DELETE policy by design, so the original figure survives its own correction. 11/11 live role scenarios passed, rolled back.
+- **~~`fm_fee_schedule` is decorative~~ — FIXED 20 August (Block 3).** Every charging surface now reads the table. FeesTab's on-screen claim that a change takes effect immediately is now true.
+- **`public-checkin` returns an internal `detail` field on failure.** Aids diagnosis; drop before handover. **Handover blocker.**
+- **`booking_date` / `event_date` are `timestamptz`, not `date`** — every `.eq(date)` in the app works only because every live row is stored at midnight UTC. Not urgent before the walkthrough; **must not survive real data entry.** Detail in FOLLOWUPS.
 
 ---
 
 ## VERIFY-AGAINST-LIVE (don't trust the docs)
 
-- **~~`stock_movements.movement_type` CHECK~~ — SETTLED 9 August.** Live constraint permits `opening_balance`; migration 030 ran. FOLLOWUPS was the wrong doc (a stale pre-apply probe); HISTORY/ARTIFACTS were right. Now corrected.
-- **~~GPS clock-in geofence~~ — ANSWERED 18 August (AUDIT_3 §9).** The logic exists and is **sound**: 100 m haversine against `LODGE_LAT`/`LODGE_LNG`, 5 s timeout, outside-or-unavailable → `unverified` + `within_radius = false`, inside → late-vs-present (`ClockInOutTab.jsx:81-142`). **But it is reachable only through `ClockInOutTab`, which is mounted nowhere — so GPS clock-in is currently dead code.** The manager views do render the radius flag. Whether this survives at all depends on the FA03H decision above.
-- **~~Stall-number regex~~ — SETTLED 18 August.** One shared three-digit `STALL_RE = /^[A-Za-z]+\d{3}$/`, used by **both** Add and Edit. Confirmed in code.
-- **~~Add User bar1/bar2 branching~~ — ANSWERED 18 August.** Gone from the UI; the dropdown derives from `ROLE_LABELS` and rotating shifts are excluded from selection. Residue only: `create-user` still accepts an inert `bar_week` body field the UI never sends, and `AttendanceUI` still carries bar-week shift logic used solely by dead code (FIX_PLAN C-05, PARKED).
+- **~~`stock_movements.movement_type` CHECK~~ — SETTLED 9 August.** Live constraint permits `opening_balance`; migration 030 ran.
+- **~~GPS clock-in geofence~~ — ANSWERED 18 August (AUDIT_3 §9).** The logic exists and is **sound**: 100 m haversine against `LODGE_LAT`/`LODGE_LNG`, 5 s timeout, outside-or-unavailable → `unverified` + `within_radius = false`, inside → late-vs-present (`ClockInOutTab.jsx:81-142`). **But it is reachable only through `ClockInOutTab`, which is mounted nowhere — so GPS clock-in is currently dead code.** Whether this survives at all depends on the FA03H decision above.
+- **~~Stall-number regex~~ — SETTLED 18 August.** One shared three-digit `STALL_RE = /^[A-Za-z]+\d{3}$/`, used by **both** Add and Edit.
+- **~~Add User bar1/bar2 branching~~ — ANSWERED 18 August.** Gone from the UI. Residue only: `create-user` still accepts an inert `bar_week` body field the UI never sends, and `AttendanceUI` still carries bar-week shift logic used solely by dead code (FIX_PLAN C-05, PARKED).
 
 **Nothing is currently open in this section.** Add to it when a new claim enters the docs unverified.
 
 ---
 
-## PHASE 2 SCOPE (see FUNCTIONAL_SPEC for detail)
+## PHASE 2 SCOPE — AS BUILT
 
-Two-tier inventory + per-department stock lists · bar par levels + end-of-day refill cycle · consumption attribution (what/where/who) + rooms + 1-year laundry retention · ~~QR staff attendance~~ **→ SUPERSEDED, see ATTENDANCE below** · Farmers Market 3-month attendance history + waiting-list forfeiture + 3-level product taxonomy + fee schedule (10k / 30k / 20k) · Events payments editable + revenue display.
+Two-tier inventory + per-department stock lists · bar par levels + end-of-day refill cycle · consumption attribution (what/where/who) + rooms + 1-year laundry retention · expanded role model · ~~QR staff attendance~~ **→ SUPERSEDED, see ATTENDANCE above** · Farmers Market 3-month attendance history + waiting-list forfeiture + **per-holder approved-products list** + fee schedule · Events payments editable by reversing entry.
 
-**Role model (`department_head` scoped, `admin`, `hr`) — DONE**, out of open scope. See "NEXT ACTION" above.
+**Two items in the original Phase 2 scope were built and then REMOVED. Do not describe either as live:**
+
+- ~~**Events revenue display**~~ — cut in Block 3 (20 August). `src/lib/revenue.js` is **kept as a library with its tests**; no revenue surface exists anywhere in the app.
+- ~~**Farmers Market 3-level product taxonomy**~~ — retired in `063` (20 August). `fm_categories` / `fm_product_types` / `fm_items` / `fm_approved_items` / `fm_holders.category_id` / `fm_holders.stall_type` are all **dropped**. Replaced by the `fm_holder_products` approved-list model with a per-item change fee.
 
 ---
 
 ## LIVE COMMITMENTS
 
 - **Full working system delivered no different from a paying client.**
-- **Something to show on return, and a call with Dhiren.** Made 27 July. Aman back in Malawi; call likely early in the week of 11 August, exact day TBC.
 - **Testimonial + referrals** post-handover. Nothing specific discussed yet.
 
 ---
@@ -176,13 +213,13 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 
 - **26–27 July** — hardening (Sprints A–E) + FM import + bar import + feedback meeting.
 - **28 July – 7 August** — Aman travelling (South Africa, medical). No dev work.
-- **9 August** — docs brought current to end goal; migration diagnosis + Session A (history repaired).
-- **10 August** — docs updated post-Session A; Session B (012 auth) closed the migration gate.
-- **10–18 August** — Phase 2 built to functional-complete on placeholder data: two-tier inventory (`051`–`057`), Movement Ledger (`058`), bar par cycle (`059`), rooms + consumption (`060`), Farmers Market taxonomy/waiting list/fees (`061`), Events payments + revenue (`062`). **All of it shipped.**
-- **18 August** — two audits run in parallel: Aman's role-by-role browser pass and `WOODLANDS_AUDIT_3.md` (read-only code audit).
-- **19 August (today)** — **Block 1 (correctness) committed** (`5d340b2`); `data-ops/009` applied; attendance pivoted off QR to the FA03H decision; docs synced (this update, plus `WOODLANDS_FIX_PLAN.md` and `WOODLANDS_CLIENT_INPUTS.md` created).
-- **19–27 August** — Block 2 (look), Block 3 (fee wiring), demo curation. Walkthrough rehearsal.
-- **Fri 28 August** — **feedback call with Dhiren.** He owes decisions, not data: the revenue reading, and the FA03H export-or-invest answer. Full ask list in `WOODLANDS_CLIENT_INPUTS.md`.
+- **9–10 August** — docs brought current to end goal; Sessions A and B closed the migration gate.
+- **10–18 August** — Phase 2 built to functional-complete on placeholder data: two-tier inventory (`051`–`057`), Movement Ledger (`058`), bar par cycle (`059`), rooms + consumption (`060`), Farmers Market waiting list + fees (`061`), Events payments by reversing entry (`062`).
+- **18 August** — two audits run in parallel: Aman's role-by-role browser pass and `WOODLANDS_AUDIT_3.md`.
+- **19 August** — **Block 1 (correctness) committed** (`5d340b2`); `data-ops/009` applied; attendance pivoted off QR to the FA03H decision; `WOODLANDS_FIX_PLAN.md` and `WOODLANDS_CLIENT_INPUTS.md` created.
+- **20 August (today)** — **Block 2 (`8ca3378`), Block 3 (`fae6738`) and `063` (`846a5a6`) all shipped.** §2.6 run 10 passed `001`–`062` before `063` was written. Events revenue removed; fee schedule wired live; FM taxonomy retired. Docs synced to this reality.
+- **21–27 August** — demo curation, walkthrough rehearsal, final audit pass.
+- **Fri 28 August** — **feedback call with Dhiren.** He owes **decisions, not data**: the FA03H export-or-invest answer, the **replace-counts-2 fee rule**, Rose's shift times for three departments. Full ask list in `WOODLANDS_CLIENT_INPUTS.md`.
 - **Mon 31 Aug / Tue 1 Sep** — **full-system walkthrough.** The deadline everything is judged against.
 - **After Dhiren verifies** — real data goes in (joint session with Rose + Martin), then an audit against real data, then Sprint F handover mechanics.
 
@@ -190,14 +227,24 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
 
 ## NEXT ACTION
 
-**→ The next action is Block 2 (look), then Block 3 (fee wiring), then demo curation. Tracker: `WOODLANDS_FIX_PLAN.md`.**
+**→ Demo curation.** Nothing is left to build. The tracker is `WOODLANDS_FIX_PLAN.md`; the open client questions are `WOODLANDS_CLIENT_INPUTS.md`.
 
-*Everything below this line is the dated build record of how Phase 2 landed — kept as provenance, not as a queue. Nothing in it is outstanding except where explicitly marked.*
+The three things that most want a decision before the walkthrough:
+
+1. **The placeholder purge** — 6 `Z00n` holders, 8 waiting-list rows, ~687 seeded visits, 190 par-refill requisitions and their 188 ledger rows from the 17 August test counts, 24 placeholder rooms, the 7-item Housekeeping catalogue. Keep, re-type or purge? (FIX_PLAN C-47#6/#7/#8.)
+2. **The Hannah Gondwe mojibake** — a one-row heal on a live table booking that is very likely to be on screen. A *when*, not a *whether*.
+3. **`fm_holders.products` still renders under a "Products:" label** beside the new Approved Products list on the same card. Two product displays on one screen; lean is to hide the old one.
+
+**⚠ If anything below turns into a migration, the `063` rebuild proof is owed first.** That gate has not moved.
+
+---
+
+*Everything below this line is the dated build record of how Phase 2 landed — kept as provenance, not as a queue. Nothing in it is outstanding except where explicitly marked. **Read each entry as true on its date, not as current state.***
 
 **Migration gate closed, role model live, department vocabulary reconciled — none of these block anything anymore.**
 
-**Done since the last update (12 August 2026):**
-- **Migration gate — CLOSED.** See "THE GATE" above; `db push` trustworthy for new schema.
+**Done since 12 August 2026:**
+- **Migration gate — CLOSED.** `db push` trustworthy for new schema.
 - **Role model.** Migrations `037`–`044` applied and proven live — `owner` / `admin` / `hr` / `department_head` all verified in-browser (`department_head` scoped by `user_profiles.department`).
 - **Department vocabulary re-tag.** `scripts/data-ops/003_department_retag.sql` applied live — `departments` table, `staff.department` (62 rows), and `stock_items.department` (559 rows) reconciled to one canonical 11-value list. `department_head` scoping proven live: Main Bar head sees exactly 276 Main Bar items (0 Sports Bar), Sports Bar head exactly 283 (0 Main Bar), Kitchen head correctly sees 0 — confirmed as data-absence, not a policy failure.
 
@@ -229,172 +276,64 @@ Two-tier inventory + per-department stock lists · bar par levels + end-of-day r
   | Kitchen head (holds the stock) | **0 rows** | **1 row**, the Kitchen row, qty 9 |
   | Sports Bar head (gave it away) | **567 rows** — incl. the Kitchen row + all Main Store rows | **283 rows**, Sports Bar only, **0 store rows** |
 
-  Main Bar head 276 rows / 0 store (via a rolled-back re-point — no Main Bar head profile exists yet); Restaurant head 0 rows, still data-absence not policy failure; owner and admin both 1118 rows across both tiers. The `current_stock → stock_items` join a head reads returns **0 null catalogue rows**, so `StockLevelsTab`'s unguarded `r.stock_items.name` cannot throw.
+  Main Bar head 276 rows / 0 store (via a rolled-back re-point — no Main Bar head profile existed yet); Restaurant head 0 rows, still data-absence not policy failure; owner and admin both 1118 rows across both tiers. The `current_stock → stock_items` join a head reads returns **0 null catalogue rows**, so `StockLevelsTab`'s unguarded `r.stock_items.name` cannot throw.
 - **`057` `transfer_stock` + `TransfersTab` wiring** — the transfers bug is closed; see KNOWN BUGS above. `movement_type` is derived server-side (`'issue'` when either end is `'Main Store'`, else `'transfer'`) so a manual store→department move and the identical requisition fulfil cannot disagree in the ledger. Proved live: `Main Store → Sports Bar` returns `'issue'`, `Sports Bar → Main Bar` returns `'transfer'`, a `department_head` is denied `42501`.
 - **`scripts/data-ops/005`** deleted the 2 orphan ledger rows from 27 July. `movement_type='transfer'` count is now 0; balances untouched (the movement never happened, so there was nothing to correct).
-- **Migration history repaired to a clean `001`–`057`, 57 rows, no gaps.** `db push --dry-run` reports "Remote database is up to date."
+- **Migration history repaired to a clean `001`–`057`, 57 rows, no gaps.**
 
 **Done 14 August 2026 — Movement Ledger (`058`) + event department fix (`006`):**
 - **`058` — applied per-file, proven live as roles (rolled back).** `movement_type` CHECK widened `_v3`→`_v4` (adds `event_allocation`, `event_return`); both added to `apply_stock_delta`'s allowlist via in-place replace — **same oid `42385`, byte-identical signature, `proacl` unchanged, one signature in `pg_proc`** (the grant-survival trap this project has hit twice, closed with evidence). 1 event `adjustment` row backfilled → `event_allocation` (−10 preserved), 0 adjustment rows left, 536 total unchanged. Three indexes added to `stock_movements` (was pkey-only): `created_at DESC`, `stock_item_id`, `(from_department, to_department)`. **Migration history now `001`–`058`.**
-- **Event confirm/return code re-typed** `'adjustment'` → `event_allocation`/`event_return` (4 sites: `EventDetailTab` confirm/cancel, `EventStockSection` add/clearance). Runtime-proven in the browser: an event allocation wrote `event_allocation` at 09:38.
-- **Movement Ledger tab** replaces `DeliveryLogTab` — all movement types, ±pair-collapse (`src/lib/ledger.js`, tests 31/31), filters (item/type/department/date), Delivery-only preset. Browser-verified 14 Aug: renders, filters, preset, backfill row, and the event path emitting `event_allocation`.
-- **`scripts/data-ops/006` (data-op, NOT a migration).** Event call sites wrote `from_department`/`to_department` as NULL, so the Movement Ledger department filter **silently dropped every event draw** (filtering Main Bar showed a −2 requisition and hid −10 and −13 event allocations on Main Bar — the ledger lying when filtered). Fixed: `event_allocation` sets `from_department`, `event_return` sets `to_department`; existing rows backfilled keyed on the **event-allocation join, not the deprecated `stock_items.department`** (both derivations confirmed to agree before writing), idempotent, 0 inserts/deletes. Proved live: owner Main Bar filter now returns all 3 rows; Main Bar head sees the event draws (was 0); Restaurant/Sports Bar heads 0 — isolation holds; fresh-connection re-read clean. **data-ops now `001`–`006`.** Browser-verified: the Main Bar filter that was lying now shows the event draws.
-- **Delivery render fix:** `delivery`/`opening_balance` rows suppress the bogus `From → To` (a self-introduced render bug put `parseSupplier(notes)` in the From slot — "Aman → —"; no row was mutated).
+- **Event confirm/return code re-typed** `'adjustment'` → `event_allocation`/`event_return` (4 sites). Runtime-proven in the browser: an event allocation wrote `event_allocation` at 09:38.
+- **Movement Ledger tab** replaces `DeliveryLogTab` — all movement types, ±pair-collapse (`src/lib/ledger.js`), filters (item/type/department/date), Delivery-only preset.
+- **`scripts/data-ops/006` (data-op, NOT a migration).** Event call sites wrote `from_department`/`to_department` as NULL, so the Movement Ledger department filter **silently dropped every event draw** (filtering Main Bar showed a −2 requisition and hid −10 and −13 event allocations on Main Bar — the ledger lying when filtered). Fixed and backfilled keyed on the **event-allocation join, not the deprecated `stock_items.department`** (both derivations confirmed to agree before writing), idempotent, 0 inserts/deletes. **data-ops now `001`–`006`.**
+- **Delivery render fix:** `delivery`/`opening_balance` rows suppress the bogus `From → To`.
 
 **Done 17 August 2026 — §2.6 re-proof run 6, history repair, and BAR PAR LEVELS (`059`):**
 
-- **§2.6 run 6 — PASS, and run BEFORE `059` was written**, as the gate required. Throwaway `ezdzuncwptlslclxepii` (eu-west-1), confirmed empty, `001`–`058` pushed clean via `--db-url` (never re-linking), diffed against production, then deleted. **Tables 28/28, constraints 101/101, indexes 46/46, privileges 631/631, `pg_default_acl` 24/24, RLS 28/28, triggers 1/1 — all exact; every function body byte-identical by `md5(prosrc)`.** Production read-only throughout; data unchanged.
-- **🔴 The proof caught a real files gap `058` had hidden: a rebuild grants `anon` EXECUTE on `current_app_role`/`current_app_department`; production does not.** `050` resets already-created *tables* but never already-created *functions*, and `021`/`037`'s `revoke … from public` strips only the PUBLIC grant, not the explicit anon one. **This contradicted a FOLLOWUPS entry saying the debt "does not exist, do not re-litigate"** — that entry was right about production and wrong about the files, because it was written from a production-only probe. Fixed in `059` §10 (a no-op against production, a real fix on a rebuild) and the entry corrected. **Doctrine: a claim that a debt is absent must say which database it was measured on.**
-- **🔴 The proof also caught the record being wrong: production's migration history stopped at `057`.** `058` had been applied by hand and never recorded — exactly one gap, while its objects were live. STATE and FOLLOWUPS both claimed `001`–`058`. Repaired, re-read on a fresh connection: **58 rows, no gaps**, dry-run clean. `059` was written on a proven base, not a believed one.
-- **🟡 Accepted divergence:** `attendance_records` columns 14–18 are the same five columns in a different ordinal order. Set-identical, needs a table rewrite to align, no app effect (PostgREST returns keyed JSON). Recorded, not chased.
-- **`059` bar par levels — applied per-file (dry-run with ROLLBACK first, negative control confirmed the dry-run really executes), then proven live as the roles.** `current_stock.par_level` (per item per location, NULL = not on the cycle); `bar_count_sessions` + `bar_count_lines` with RLS, policies and grants in the same migration; `requisitions.count_session_id` + `source`; `post_bar_count` (SECURITY DEFINER, gated) and `fulfil_requisition_batch` (INVOKER). **`set_stock_quantity` replaced in place — oid `42386` and `proacl` unchanged**, the grant-survival trap closed with evidence for the third time.
-- **`set_stock_quantity` was writing NULL departments on every adjustment** — the exact fault `data-ops/006` fixed for events, which would have made hundreds of nightly count rows vanish from the Movement Ledger's department filter. Fixed in the same migration (sign decides the side). 0 existing adjustment rows, so no backfill; asserted rather than assumed.
-- **19/19 live role scenarios passed, rolled back.** Sports Bar head: creates a draft for its own bar ✅, denied for another bar (42501) ✅, denied for Main Store (guard) ✅, cannot mark a session posted directly (42501) ✅, posts its own count ✅, cannot re-post ✅, **cannot fulfil the approved refill (42501 on `current_stock`)** ✅. Main Bar head sees 0 of Sports Bar's sessions and lines, and is denied posting a Sports Bar draft on **authorisation** ✅. admin approves and fulfils the batch ✅. End to end: SBA-1001 bar 17 → counted 1 → refilled to par 10, store 100 → 91; one item counted *up* (0 → 1) correctly wrote `to_department` not `from_department`.
-- **Two tests were wrong before the code was** — one denial test was **vacuous** (it fulfilled a batch that was still `pending`, so the loop selected 0 rows and "passed"), and one asserted all three adjustments would be `from_department`. Both corrected and re-run rather than accepted. That is the "a passing test proves the configuration live when it ran" lesson, hit again.
-- **Frontend:** new **Bar Count** tab (pre-filled count sheet, live shortfall preview, recent counts); **Par** column on Stock Levels; **Bar Refills** batch panel in Requisitions with Approve all / Fulfil all. Build clean, ledger tests 31/31.
-- **Folded in:** the delivery **Supplier column** is restored as a real column in the Movement Ledger (and `Route` no longer tries to render a supplier as a route). **Main Bar DOES have a `department_head`** (`mainbar@woodlands.com`) — that STATE/FOLLOWUPS note was stale, and the account was used as a real denial subject in the `059` proof.
-
-**OPEN — carry into next session (none blocking):**
-- **~~Browser-verify the Bar Count tab.~~ — OVERTAKEN BY EVENTS, confirmed 18 August (AUDIT_3 §7).** The cycle has been exercised **against production**, not just in a browser: **2 posted `bar_count_sessions`** (Main Bar + Sports Bar, 17 Aug), **559 `bar_count_lines`**, and **190 par-refill requisitions** (94 fulfilled / 96 rejected) are live. Someone posted and fulfilled for real. The same applies to the Consumption tab — **2 `v_stock_consumption` rows** live. What those 188 ledger rows and 190 requisitions now are is a *demo-curation* question (keep, re-type or purge as test data), not a verification one — `WOODLANDS_FIX_PLAN.md` C-47#8.
-- **No par-level editing UI.** Par is seeded and visible but only changeable by UPDATE. Fine while placeholder; needed at real-data time.
-- **~~`AdjustmentsTab` is location-blind~~ — FIXED AND PROVEN LIVE, 17 August 2026.** Frontend-only, no migration: `setStockQuantity()` now takes `{ location, subLocation }` and `AdjustmentsTab` has a Location selector (plus a Sub-location selector where `SUB_LOCATIONS` defines one), its `stockMap` keyed on `(item, location, sub_location)`, and the `tier='department'` filter that hid all 559 main-store balances removed. Proved as `admin` (`SET LOCAL ROLE`, rolled back): a Main Store take moved Main Store 100 → 42 with **Main Bar unchanged at 5** and wrote `adjustment −58, from_department='Main Store'`; the same call with no location still falls back to the item's department (Main Bar 5 → 7, store untouched) — the old bug, demonstrated rather than described. A `department_head` is still denied `42501` at the store, and `054`'s guard still rejects an invalid location. Rollback re-verified on a fresh connection: 1118 balances, 725 movements, 0 adjustment rows.
-- ~~**`059` is not rebuild-proven.**~~ — CLOSED by run 7, 17 August (this line
-  contradicted the §2.6 section below and was stale when written). **`060` is
-  now the one owed**, before the next migration is written.
+- **§2.6 run 6 — PASS, and run BEFORE `059` was written**, as the gate required. Throwaway `ezdzuncwptlslclxepii` (eu-west-1), confirmed empty, `001`–`058` pushed clean via `--db-url` (never re-linking), diffed against production, then deleted. **Tables 28/28, constraints 101/101, indexes 46/46, privileges 631/631, `pg_default_acl` 24/24, RLS 28/28, triggers 1/1 — all exact; every function body byte-identical by `md5(prosrc)`.**
+- **🔴 The proof caught a real files gap `058` had hidden: a rebuild grants `anon` EXECUTE on `current_app_role`/`current_app_department`; production does not.** `050` resets already-created *tables* but never already-created *functions*, and `021`/`037`'s `revoke … from public` strips only the PUBLIC grant, not the explicit anon one. **This contradicted a FOLLOWUPS entry saying the debt "does not exist, do not re-litigate"** — that entry was right about production and wrong about the files, because it was written from a production-only probe. Fixed in `059` §10. **Doctrine: a claim that a debt is absent must say which database it was measured on.**
+- **🔴 The proof also caught the record being wrong: production's migration history stopped at `057`.** `058` had been applied by hand and never recorded — exactly one gap, while its objects were live. STATE and FOLLOWUPS both claimed `001`–`058`. Repaired, re-read on a fresh connection: **58 rows, no gaps**. `059` was written on a proven base, not a believed one.
+- **🟡 Accepted divergence:** `attendance_records` columns 14–18 are the same five columns in a different ordinal order. Set-identical, needs a table rewrite to align, no app effect.
+- **`059` bar par levels — applied per-file** (dry-run with ROLLBACK first, negative control confirmed the dry-run really executes), then proven live as the roles. `current_stock.par_level`; `bar_count_sessions` + `bar_count_lines` with RLS, policies and grants in the same migration; `requisitions.count_session_id` + `source`; `post_bar_count` (SECURITY DEFINER, gated) and `fulfil_requisition_batch` (INVOKER). **`set_stock_quantity` replaced in place — oid `42386` and `proacl` unchanged.**
+- **`set_stock_quantity` was writing NULL departments on every adjustment** — the exact fault `data-ops/006` fixed for events, which would have made hundreds of nightly count rows vanish from the Movement Ledger's department filter. Fixed in the same migration.
+- **19/19 live role scenarios passed, rolled back.** End to end: SBA-1001 bar 17 → counted 1 → refilled to par 10, store 100 → 91.
+- **Two tests were wrong before the code was** — one denial test was **vacuous** (it fulfilled a batch still `pending`, so the loop selected 0 rows and "passed"). Both corrected and re-run rather than accepted. That is the "a passing test proves the configuration live when it ran" lesson, hit again.
+- **Frontend:** new **Bar Count** tab; **Par** column on Stock Levels; **Bar Refills** batch panel in Requisitions.
+- **Folded in:** the delivery **Supplier column** restored in the Movement Ledger. **Main Bar DOES have a `department_head`** (`mainbar@woodlands.com`) — that STATE/FOLLOWUPS note was stale.
 
 **Done 18 August 2026 — ROOMS + CONSUMPTION LEDGER (`060`):**
 
-- **Applied per-file via `scripts/apply-sql.ps1`** (the UTF-8 + mojibake-refusal path from the 17 August tooling fix), dry-run-with-rollback first, then proven live as the roles. **Migration history now `001`–`060`, 60 rows, no gaps**, recorded via `migration repair` immediately after applying — run 6's "applied but never recorded" finding is not repeated. **0 mojibake** in every function body and every comment, checked after applying.
-- **`rooms`** — 24 placeholder rows (20 rooms across Block A / Block B / Cottages, 4 public areas), RLS in the same migration: SELECT to all authenticated, write owner/admin, **no DELETE policy and no DELETE grant**. `room_type` is plain text with no CHECK. **Not wired to Table Bookings' Private Room**, deliberately. **Admin → Rooms** tab manages it.
-- **`v_stock_consumption`** — the consumption ledger as a **VIEW**, `security_invoker = true`, unioning the bar leg (posted `bar_count_lines` where `system_qty > counted_qty` — 059's stock take IS the night's consumption) with the draw leg (`stock_movements` where `movement_type='consumption'`). No second copy of a number the system already holds, and base-table RLS is its access control.
+- **Applied per-file via `scripts/apply-sql.ps1`** (the UTF-8 + mojibake-refusal path from the 17 August tooling fix), dry-run-with-rollback first, then proven live as the roles. **Migration history now `001`–`060`**, recorded via `migration repair` immediately after applying — run 6's "applied but never recorded" finding is not repeated. **0 mojibake** in every function body and every comment, checked after applying.
+- **`rooms`** — 24 placeholder rows, RLS in the same migration: SELECT to all authenticated, write owner/admin, **no DELETE policy and no DELETE grant**. **Not wired to Table Bookings' Private Room**, deliberately. **Admin → Rooms** tab manages it.
+- **`v_stock_consumption`** — the consumption ledger as a **VIEW**, `security_invoker = true`, unioning the bar leg (posted `bar_count_lines` where `system_qty > counted_qty`) with the draw leg (`stock_movements` where `movement_type='consumption'`). No second copy of a number the system already holds, and base-table RLS is its access control.
 - **`record_consumption`** (SECURITY DEFINER, gated owner/admin or the head whose department IS the location; Main Store refused) delegates the balance write to `apply_stock_delta` — one implementation of locking. `staff_dept_select` added so a head can read their own roster for the "who" picker.
 - **`movement_type` CHECK `_v4` → `_v5`** (adds `consumption`), widened in all three places in the one migration, plus the Movement Ledger's own `TYPES` list — a fourth place that silently loses the *filter* when it drifts.
-- **🔴 `apply_stock_delta`'s oid CHANGED, 42385 → 42960, and that is expected.** Adding `p_room_id`/`p_consumed_by` is a signature change; `CREATE OR REPLACE` with extra parameters overloads rather than replaces (the 052 trap), so the old signature had to be dropped, and no DDL preserves an oid across an argument-list change. **`proacl` was asserted identical in-migration instead** (raw text and sorted set), plus **exactly one signature in `pg_proc`** — the assertion that actually catches the overload trap — plus a live `apply_stock_delta` call as `admin` under RLS, which is the only thing that proves the re-GRANT worked. 055/058/059's oid-unchanged evidence does not apply to this function any more; compare `proacl` and `md5(prosrc)` from here on.
-- **🔴 The guard fired on the first dry run and caught a real defect in the file.** It granted without `revoke execute … from public`, and a new function gets Postgres's built-in PUBLIC EXECUTE default — `proacl` came back with a leading `=X/postgres`, i.e. **anon**, on the function performing every stock write. Same class as run 6's anon-EXECUTE finding. Migration aborted, file fixed at source, re-run clean. Production never saw it.
-- **Proven live as the roles, rolled back, on a REAL depletion — not a flat sheet.** Both 17 August counts are 100% flat (0 lines where system ≠ counted), so they generate no consumption at all and `v_stock_consumption` read **0 rows** immediately after applying: a pre-filled sheet posted unchanged passes every test while measuring nothing. The proof therefore posted a fresh Sports Bar count as the Sports Bar head with three items counted genuinely DOWN (SBA-1001 17→14, SBA-1004 10→7, SBA-1005 24→21), and recorded two attributed draws.
+- **🔴 `apply_stock_delta`'s oid CHANGED, 42385 → 42960, and that is expected.** Adding `p_room_id`/`p_consumed_by` is a signature change; `CREATE OR REPLACE` with extra parameters overloads rather than replaces (the 052 trap). **`proacl` was asserted identical in-migration instead**, plus **exactly one signature in `pg_proc`**, plus a live `apply_stock_delta` call as `admin` under RLS, which is the only thing that proves the re-GRANT worked. Compare `proacl` and `md5(prosrc)` from here on, never oid.
+- **🔴 The guard fired on the first dry run and caught a real defect in the file.** It granted without `revoke execute … from public`, so `proacl` came back with a leading `=X/postgres` — i.e. **anon** — on the function performing every stock write. Migration aborted, file fixed at source, re-run clean. Production never saw it.
+- **Proven live as the roles, rolled back, on a REAL depletion — not a flat sheet.** Both 17 August counts are 100% flat, so they generate no consumption at all: a pre-filled sheet posted unchanged passes every test while measuring nothing. The proof therefore posted a fresh Sports Bar count with three items counted genuinely DOWN, and recorded two attributed draws. 12 scenarios, all passed — including a Housekeeping head denied at another department's location (42501), at Main Store (23514), attributing a Kitchen staff member (42501), and calling `apply_stock_delta` **directly** (42501 — the DEFINER wrapper is the only path), while `admin` calling it directly **succeeded**, which is the grant-survival proof.
 
-  | Scenario (as the role, `SET LOCAL ROLE`, rolled back) | Result |
-  |---|---|
-  | Sports Bar head posts its own count, 3 lines depleted | ✅ balances reconciled to 14/7/21, 1 refill requisition raised |
-  | Housekeeping head draws HK-001 ×4, room **A03 (Mopane)**, staff **Agness Kamande** | ✅ Housekeeping 24 → 20 |
-  | Housekeeping head draws HK-006 ×5 at **Housekeeping/Laundry** | ✅ Laundry 30 → 25, **Housekeeping main untouched at 20** |
-  | Housekeeping head reads the ledger | ✅ **2 rows, both own**; 0 bar rows, 0 other-department rows |
-  | Housekeeping head reads `staff` | ✅ **6 rows, all Housekeeping**; 0 other-department |
-  | Housekeeping head at another department's location | ✅ denied **42501** |
-  | Housekeeping head at 'Main Store' | ✅ denied **23514** |
-  | Housekeeping head attributing a **Kitchen** staff member | ✅ denied **42501** ("not on the Housekeeping roster") |
-  | Housekeeping head calling `apply_stock_delta` **directly** | ✅ denied **42501** on `current_stock` — the DEFINER wrapper is the only path |
-  | Sports Bar head reads the ledger | ✅ **3 rows, own bar leg**; 0 draws, 0 Housekeeping staff |
-  | owner / admin | ✅ **5 rows** — 3 `bar_count` + 2 `draw`, correct what/where/who on every row |
-  | admin calls `apply_stock_delta` directly | ✅ succeeds — **the grant-survival proof** |
+  > **⚠ Read that rollback proof as dated (18 August), not as current state.** **Measured live 18 August: 727 `stock_movements`, 2 `v_stock_consumption` rows, 1135 `current_stock` balances** — real usage happened after the rollback. AUDIT_3 §7 flagged this exact line as a stale-reading claim; annotated rather than rewritten, because the proof itself was true.
+- **Frontend:** Inventory gains a **Consumption** tab; Admin gains a **Rooms** tab.
+- **Placeholder Housekeeping catalogue shipped in the same step** — Housekeeping held **zero** stock items, so the tab would have shipped empty for the one department that asked for the feature. 7 items. Self-contained, so unlike `053`/`059` it applies on a from-files rebuild too.
 
-  Movement rows carry `from_department` (never `to_`), `sub_location='Laundry'` where it applied, room, `consumed_by` (roster) **and** `performed_by` (login) as two distinct non-null columns. **Fresh connection after rollback:** 0 consumption movements, 0 view rows, 725 movements, 1135 balances, balances all back to 24/30/17/10/24, the re-pointed head reverted, `apply_stock_delta` still one signature with unchanged `proacl`, and **0 rows written today anywhere**.
+**Done 18 August 2026 — FARMERS MARKET PHASE 2 (`061` + data-ops/`008`):**
 
-  > **⚠ Read the line above as a dated rollback proof (18 August), not as current state.** It was accurate at that moment. **Measured live 18 August: 727 `stock_movements`, 2 `v_stock_consumption` rows, 1135 `current_stock` balances** — real usage happened after this rollback. AUDIT_3 §7 flagged this exact line as a stale-reading claim; annotated rather than rewritten, because the proof itself was true.
-- **Frontend:** Inventory gains a **Consumption** tab (draw form — location → sub-location → item narrowed to what that location actually holds, plus room, staff, quantity, reason — above a filterable ledger over both legs, badged Draw / Bar count); Admin gains a **Rooms** tab (add, inline edit, Deactivate/Reactivate, no delete control). Build clean, ledger tests 31/31.
-- **Placeholder Housekeeping catalogue shipped in the same step** — Housekeeping held **zero** stock items, so the tab would have shipped empty for the one department that asked for the feature. 7 items at Main Store / Housekeeping / Housekeeping-Laundry. Self-contained, so unlike `053`/`059` it applies on a from-files rebuild too.
+- `fm_waiting_list` + `fm_stall_forfeitures` (neither existed in any form before), `v_fm_attendance` as a `security_invoker` view that **replaces the client-side write-on-read that mutated `fm_holders.status` from a browser page load**, `fm_fee_schedule` with Dhiren's six confirmed fees, and two gated SECURITY DEFINER RPCs — `forfeit_stall()` (flag → owner/admin confirms → releases the stall number, records the forfeiture, offers it to the head of the queue, atomically) and `change_holder_products()`. **32/32 live role scenarios passed, rolled back.**
+- `src/lib/constants.js`'s ID-card fees were **wrong, not stale** (5,000/10,000 against Dhiren's 30,000/20,000) and are corrected.
+- Also fixed: the stall-number regex, which was two-digit and could not accept a single one of the 305 live `A001`–`A347` stalls, while Edit validated nothing at all.
+- **⚠ `061` also shipped a fixed 3-level product taxonomy (`fm_categories` › `fm_product_types` › `fm_items`) and `fm_holders.category_id`. ALL OF IT WAS RETIRED IN `063` on 20 August** — it did not survive contact with real data (311/311 holders sat on `stall_type='Other'`, only 50 ever got a `category_id`, and the 51-item catalogue could not describe what these businesses actually sell). See the `063` entry in WHERE THE BUILD IS. **Nothing in this paragraph describes a live object.**
 
-**Done 18 August 2026 — EVENTS UX (`062`), the last Phase 2 build feature:**
+**Done 18 August 2026 — EVENTS UX (`062`):**
 
-- **Two-phase session, gate first.** The `061` rebuild proof ran **before a line of `062` DDL existed** — run 9, PASS, detail in FOLLOWUPS. Throwaway `njttkfrbhnkdpqrtirlu` (eu-west-1), confirmed empty, `001`–`061` pushed via the **session pooler** (`db.<ref>` was IPv6-unresolvable for the **fourth** run running — treat the direct host as unavailable, not as first choice), never re-linked, link verified as production before *and* after, throwaway deleted via the Management API and confirmed gone. **Ten of thirteen fingerprint categories byte-identical by md5 over full sorted detail; the three that differed differed by exactly the four pre-declared residuals and nothing else. No new finding.**
-- **Revenue display — BUILT TOGGLEABLE, not guessed** (frontend only, no DDL; committed separately as `f452a39`). "Revenue should be different in Events" was never made specific and the 10 August call never answered it, so the reading is offered rather than chosen: **Cash Received** · **Net of Cost** · **By Line**, one selector shared by the Events List strip and a new read-only Revenue section on Event Detail, persisted per browser, with a **non-dismissible on-screen note that the default is provisional**. Pure logic in `src/lib/revenue.js`, **68/68 tests**. Read path proven live as owner and admin (recognised **1,300,000**, bill **1,800,000** across 4 categories) and as `department_head`/`hr` seeing **0** — the live figures are the same figures the tests assert.
-- **🔴 The revenue work found a dead table: `deliveries`.** 0 rows, **RLS enabled with ZERO policies**, `authenticated` holding SELECT/INSERT/UPDATE it cannot use, and **no reader or writer anywhere in the app** — a delivery is really a `stock_movements` row, and `stock_movements` has no price column. So `deliveries.unit_cost` being the only cost column in the schema means **the system does not know what anything costs**, structurally. Net-of-cost therefore shows an em-dash and names the missing source instead of a 100% margin, and the cost query was **removed** rather than left to return `[]` for a reason unrelated to cost — the silently-empty read this log already records twice. Drop-or-wire is a handover decision, logged in FOLLOWUPS.
-- **`062` payments-editable — REVERSING ENTRY, applied per-file and proven live.** Dry-run-with-rollback first, and the **negative control fired** (a deliberately wrong policy-count assertion raised, proving the guards really execute inside the dry run rather than being skipped); rollback left 0 objects and the 5 payments intact. Then applied, and **recorded in the migration history immediately via `migration repair`** — run 6's "applied but never recorded" is not repeated. **History now `001`–`062`, 62 rows, no gaps**, `db push --dry-run` "up to date".
-- **The fork was decided by the schema, not by preference.** `event_payments` has **no DELETE grant and no DELETE policy** for `authenticated`, while `events` and `event_bill_items` both do — that absence is a decision. Edit-in-place would make the one table nobody may delete from silently mutable, destroy the original figure, and *still* need new `amended_by`/`amended_at` columns to surface "last amended by": it does not avoid the DDL, it spends it on worse columns. A reversal carries its own `recorded_by`/`created_at`, so the audit trail is the ledger itself.
-- **One nullable `reverses_payment_id`**, FK to `event_payments(id)` `ON DELETE RESTRICT`, plus a **partial UNIQUE index** (one reversal per payment), two CHECKs (no self-reference; `payment_type='reversal'` **iff** the pointer is set), and a BEFORE trigger for the three rules a CHECK cannot express because they need a subquery (same event, target not itself a reversal, amount matches exactly) — a trigger not a CHECK, exactly as `054`'s location guard. **No new policies and no new grants**, asserted in-migration: `authenticated` must still hold exactly `INSERT,SELECT,UPDATE`, 0 DELETE policies, 4 policies total.
-- **Why the link column is not gold-plating:** without it `deposit_paid` cannot be recomputed — you cannot tell whether a reversal cancelled a deposit or a balance payment, so a reversed deposit would read as paid for ever and the Events List amber "confirmed · unpaid deposit" highlight would silently lie. Same class as `data-ops/006`.
-- **`reverse_event_payment()`** (SECURITY DEFINER, gated owner/admin) writes the reversal **and** recomputes `events.deposit_paid` from the surviving rows in ONE transaction. The browser cannot do that across two PostgREST calls, and the half-applied version is already a scar in this repo (`LogDeliveryTab` inserted the movement first, updated the balance second).
-- **11/11 live role scenarios passed, rolled back, and the money moved correctly at every step:**
+- **Two-phase session, gate first.** The `061` rebuild proof ran **before a line of `062` DDL existed** — run 9, PASS. **No new finding.**
+- **`062` payments-editable — REVERSING ENTRY, applied per-file and proven live.** Dry-run-with-rollback first, and the **negative control fired** (a deliberately wrong policy-count assertion raised, proving the guards really execute inside the dry run rather than being skipped). Then applied and **recorded in the migration history immediately via `migration repair`**. **History now `001`–`062`, 62 rows, no gaps.**
+- **The fork was decided by the schema, not by preference.** `event_payments` has **no DELETE grant and no DELETE policy** for `authenticated`, while `events` and `event_bill_items` both do — that absence is a decision. Edit-in-place would make the one table nobody may delete from silently mutable, destroy the original figure, and *still* need new `amended_by`/`amended_at` columns: it does not avoid the DDL, it spends it on worse columns.
+- **One nullable `reverses_payment_id`**, FK `ON DELETE RESTRICT`, plus a **partial UNIQUE index** (one reversal per payment), two CHECKs, and a BEFORE trigger for the three rules a CHECK cannot express because they need a subquery. **No new policies and no new grants**, asserted in-migration.
+- **Why the link column is not gold-plating:** without it `deposit_paid` cannot be recomputed — you cannot tell whether a reversal cancelled a deposit or a balance payment, so a reversed deposit would read as paid for ever and the Events List amber highlight would silently lie.
+- **11/11 live role scenarios passed, rolled back:** reversing the deposit moved paid 1,300,000 → 1,000,000 and `deposit_paid` true → **false**; the same payment reversed twice refused `23505`; reversing a reversal refused `23514`; a hand-rolled direct insert refused by the trigger and an untyped pointer by the paired CHECK; admin reversing a *balance* correctly left `deposit_paid` false; `department_head` and `hr` both denied `42501`.
+- **Frontend:** the Payments table gained a **Recorded By** column and a **Reverse** action per row, with reversed rows struck through and badged. `reversal` is deliberately **not** in the Add Payment dropdown.
+- **🟡 Adjacent fix:** `OwnerDashboard` derived "deposit paid" as *a deposit row exists*, which after `062` would keep reporting a **reversed** deposit as paid. It now reads `events.deposit_paid` — removing a second, now-wrong definition rather than adding one.
+- **⚠ `062` also shipped the toggleable Events revenue display (`f452a39`). IT WAS REMOVED in Block 3 on 20 August.** `src/lib/revenue.js` and its tests are kept as a library; no revenue surface exists. **Every payment path above is unchanged by that removal.**
+- **🔴 The revenue work found a dead table, and this finding SURVIVES the removal: `deliveries`.** 0 rows, **RLS enabled with ZERO policies**, `authenticated` holding SELECT/INSERT/UPDATE it cannot use, and **no reader or writer anywhere in the app** — a delivery is really a `stock_movements` row, and `stock_movements` has no price column. `deliveries.unit_cost` is the only cost column in the schema, so **the system does not know what anything costs**, structurally. Drop-or-wire is a handover decision, logged in FOLLOWUPS.
 
-  | Scenario (as the role, `SET LOCAL ROLE` + real sub claim, rolled back) | Result |
-  |---|---|
-  | Baseline as owner | 5 payments · bill 1,800,000 · **paid 1,300,000** · balance due 500,000 · `deposit_paid=true` |
-  | owner reverses the **deposit** (300,000) | ✅ **paid 1,000,000 · balance due 800,000 · `deposit_paid` → FALSE** |
-  | Same payment reversed twice | ✅ refused `23505` — "already been reversed" |
-  | Reversing a reversal | ✅ refused `23514` |
-  | Hand-rolled direct insert, wrong amount | ✅ refused `23514` **by the trigger** |
-  | Hand-rolled pointer not typed `reversal` | ✅ refused `23514` **by the paired CHECK** |
-  | admin reverses a **balance** (50,002) | ✅ paid **949,998** · balance due 850,002 · **`deposit_paid` stays FALSE** |
-  | `department_head` reverses | ✅ denied **42501** |
-  | `hr` reverses | ✅ denied **42501** |
-  | Revenue reading (a) across both reversals | ✅ **1,300,000 → 949,998**, exactly `−300,000 −50,002` |
-  | Ledger as owner | ✅ reversals carry `recorded_by` = who reversed (Owner / manager) and `received_by` = NULL |
-
-  **Fresh connection after rollback:** 5 payments, sum 1,500,000, **0 reversals**, `deposit_paid` back to `true` with `updated_at` still 27 July, 0 payments written today, `apply_stock_delta` `md5`/`proacl` unchanged. `062`'s own objects remain (the migration is committed; only the proof rolled back).
-- **Frontend:** the Payments table gains a **Recorded By** column — written since Sprint E and displayed nowhere until now, so verification used to be by SQL — plus a **Reverse** action per row (owner/admin), a reason-required confirmation that says plainly the original is not deleted, reversed rows struck through and badged, and the reversal row naming what it reverses. `reversal` is deliberately **not** in the Add Payment dropdown: it is only ever written by the RPC, which pairs it with its original.
-- **🟡 Adjacent fix, deliberately in scope:** `OwnerDashboard` derived "deposit paid" as *a deposit row exists*, which after `062` would keep reporting a **reversed** deposit as paid. It now reads `events.deposit_paid`, the same definition the Events List highlight already used and the one the RPC maintains atomically — removing a second, now-wrong definition rather than adding one, and deleting a query.
-
-**Forward path — build order:**
-1. ~~**`movement_type` widening**~~ ✅ (`058`) → ~~**Movement Ledger**~~ ✅ (`058` + data-ops/`006`) → ~~**bar par levels + end-of-day cycle**~~ ✅ (`059`) → ~~**rooms + consumption ledger**~~ ✅ (`060`) → ~~**Farmers Market taxonomy + waiting list + fees**~~ ✅ (`061` + data-ops/`008`) → ~~**Events UX — payments editable + revenue display**~~ ✅ (`062`, 18 August) → **real-data dedupe + table split** (deferred to real-data). **Every Phase 2 build feature now exists.**
-2. **Remaining Phase 2 features** — **none building.** QR staff attendance is the one spec item not built; everything else in FUNCTIONAL_SPEC is [DONE]. What is left is the full role-by-role UI/UX run, the browser-verification backlog, and the placeholder purge (post-walkthrough).
-3. **Per-role UI pass** — deferred to end.
-4. **Production cleanup** — drop the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`) from production. Cosmetic, not blocking.
-
----
-
-## §2.6 RE-PROOF — status
-
-**`001`–`058` — CLOSED by run 6, 17 August 2026, on evidence.** Full table in `WOODLANDS_FOLLOWUPS.md`. Everything exact except two known production-only residuals (2 legacy duplicate `service_role` policies, the `handle_new_user` orphan), one accepted ordinal-order divergence on `attendance_records`, and one **real files gap the proof existed to catch** — a rebuild granting `anon` EXECUTE on the two role functions — now fixed in `059`. Run 6 also found production's history had never recorded `058`; repaired, verified 58 rows with no gaps.
-
-*(Historical: gate closed on `001`–`050` at run 4, 12 August; `051`–`057` re-proven at run 5, 14 August — that closure rested on a verbal, and run 6 has now superseded it with a measured artefact covering the whole range. `056` executed out of order in production — `057` ran first — but the two files are disjoint at statement level and commute; confirmed after the fact that applying `056` second left `transfer_stock`/`issue_stock`/`apply_stock_delta` byte-identical by `md5(prosrc)`.)*
-
-**`059` — CLOSED by run 7, 17 August 2026, before any `060` DDL was written.** Throwaway `tnseclavqwijhtmljgui` (eu-west-1), confirmed empty first, `001`–`059` pushed clean via the session pooler (the direct host was IPv6-only again), never re-linked — local link verified `gttsjmxltrxxfplqjans` before *and* after. **Tables 30/30, columns 328/328 (set), constraints 114/114, indexes 54/54, privileges 678/678, `pg_default_acl` 24/24, RLS enablement 30/30, triggers 2/2 — all exact.** Policies 122/120 and the `handle_new_user` orphan are the known production-only residuals; `attendance_records` ordinal order 14–18 the known accepted one.
-
-- **✅ `059` §10 confirmed working — the thing this run existed to test.** `has_function_privilege` for `anon` **and** `public` on `current_app_role`/`current_app_department` is now **false on both databases**. The files gap run 6 found is closed.
-- **🔴 Run 7 caught a new one, and it was on PRODUCTION, not the files: two function bodies and two column comments carried mojibake.** `post_bar_count` held 92 × `U+00E2` where the file has 92 × `U+2500`; `set_stock_quantity` 1 × `U+00E2` for an em-dash; plus the `current_stock.par_level` and `event_stock_allocations.deducted_qty` comments. Cause reproduced, not inferred: the apply helper read files with bare `Get-Content`, which decodes UTF-8 as Windows-1252 on PS 5.1. Cosmetic in effect — every corrupted character sat inside a `--` comment, all 123/73 body lines present, **0 executable lines differed** — but it made `md5(prosrc)` unmatchable forever. `standards.md` §4 already carried the rule; it had been applied to the import path and never to the apply path. **Fixed in `scripts/apply-sql.ps1` (UTF-8 read + a mojibake refusal guard) and healed by `scripts/data-ops/007_encoding_heal.sql`** — tooling first, then the heal, in that order, because a heal through the broken path re-corrupts silently. Both functions now carry the rebuild's exact md5; `oid` (42712 / 42386) and `proacl` unchanged; 0 mojibake anywhere in `pg_description`.
-- **🟡 Noted, not a gap:** a fresh Supabase project now ships an `ensure_rls` event trigger (`rls_auto_enable`) that production predates. It means RLS enablement on a rebuild is not self-evidencing — closed from the other side, since production has no such trigger and still carries RLS on all 30 tables.
-
-**`060` — CLOSED by run 8, 18 August 2026, before any `061` DDL was written.** Throwaway `qjltqaqmuqovhidustbr` (**eu-west-2** — the first run not in eu-west-1; no effect on a schema diff), confirmed empty first (0 tables, 0 views, no migrations table, the lone public function being the platform's `rls_auto_enable`). `001`–`060` pushed via the **session pooler** (`db.<ref>` was IPv6-only again), never re-linked — local link verified `gttsjmxltrxxfplqjans` before *and* after. Throwaway **deleted via the Management API** and confirmed gone (2 projects remain).
-
-**Tables 32/32, columns 358/358 by set, constraints 118/118, indexes 59/59, privileges 128/128, `pg_default_acl` 24/24, RLS enablement 31/31 all `true`, triggers 2/2, object comments 22/22 — all exact.** Every function present on both sides was **byte-identical by `md5(prosrc)` with identical `proacl` and `prosecdef`**. The only four divergences were the four pre-declared residuals and nothing else: the 2 legacy `service_role` duplicate policies (policies 127/125), the `handle_new_user` orphan (prod-only), `rls_auto_enable()` + the `ensure_rls` event trigger (rebuild-only), and the `attendance_records` ordinal order 14–18. **No new finding — the first run in this series that produced none.**
-
-- **✅ The three `060`-specific checks no earlier run could make, all passed.** `v_stock_consumption` exists in the rebuild as relkind `v` with **`security_invoker=true` on both**. The migration-borne Housekeeping seed is present in the rebuild — **7 `HK-` items, 17 `current_stock` rows**, identical names and identical locations (`Main Store | Housekeeping | Housekeeping/Laundry`). `apply_stock_delta` compared by **`proacl` + `md5(prosrc)`, never oid**: `md5=42f31099…` identical, one signature in `pg_proc` on both, no PUBLIC/anon EXECUTE on either. `060`'s own in-migration assertion also fired on the rebuild and reported the oid move (18376 → 18517) with `proacl` identical — the guard works on a fresh database too.
-- **🟡 Tooling note, not a defect:** `apply-sql.ps1`'s mojibake guard **refused the mojibake probe itself**, because a query that searches for `Ã`/`â` necessarily contains them. Re-expressed as `chr(195)`/`chr(226)`. The guard behaved correctly; it cannot distinguish intent. Worth remembering before assuming a refusal means a corrupt file.
-
-**`061` — CLOSED by run 9, 18 August 2026, before any `062` DDL was written.** Throwaway `njttkfrbhnkdpqrtirlu` (eu-west-1), confirmed empty first, `001`–`061` pushed via the **session pooler** — the direct `db.<ref>` host was IPv6-unresolvable for the **fourth run running**, so treat it as unavailable rather than the first thing to try. Never re-linked; local link verified as `gttsjmxltrxxfplqjans` before *and* after. Throwaway **deleted via the Management API** and confirmed gone (2 projects remain).
-
-**Tables 37/37, views 2/2 (both `security_invoker`), columns-by-set 429/429, constraints 142/142, indexes 76/76, privileges 600/600, `pg_default_acl` 24/24, RLS enablement 37/37 all `true`, triggers 2/2, object comments 33/33 — every one byte-identical by md5 over the full sorted detail, not merely equal in count.** The three categories that differed differed by **exactly the four pre-declared residuals and nothing else**: `attendance_records` ordinals 14–18 (set-identical, other 424 rows identical), `handle_new_user` (production-only) against `rls_auto_enable` (rebuild-only) — **the counts cancel at 16, which is precisely why the md5 was needed, and all 15 shared functions were byte-identical with identical `prosecdef` and `proacl`** — and the 2 legacy duplicate `service_role` policies. **No new finding**; the second run in this series to produce none.
-
-- **✅ All four `061`-specific checks passed.** `v_fm_attendance` present in the rebuild as a view with `security_invoker=true` on both. Its two dependencies survived with EXECUTE intact — `fm_market_day` (IMMUTABLE) and `fm_last_n_market_days` (STABLE) both `authenticated`=true, `anon`/`public`=false, `proacl` identical; had those grants not reproduced the view would be dead for `authenticated` on a rebuild while looking fine on production. The migration-borne seed is present at **6/17/51 with all six fee amounts identical**. `apply_stock_delta` compared by **`proacl` + `md5(prosrc)`, never oid**: `42f31099…` identical, one signature, no PUBLIC/anon EXECUTE on either.
-- **✅ The predicted demo-data divergence held exactly** and is a design property, not drift: `fm_holders` 311/0, `fm_visits` 687/0, `fm_waiting_list` 8/0, `fm_approved_items` 72/0. Reference data lives in `061` and IS in the rebuild; demo data lives in `data-ops/008` and is not.
-
-**`062` — WRITTEN AND APPLIED 18 August, NOT REBUILD-PROVEN. This is now the outstanding proof**, owed before any `063` is written. It gives that run two new things: a **self-referencing FK** on `event_payments` with a **partial UNIQUE index** (the rebuild must reproduce the `WHERE reverses_payment_id IS NOT NULL` predicate, not just an index of that name), and a **row-level trigger plus its trigger function** — so the standing "triggers 2/2" line above becomes 3/3 on the next run. It was written on a proven base, which is what the gate requires. A rebuild proof expires: it is a claim about a file range on a date, not a permanent property of the project. Code-only and data-op changes do not touch this clock.
-
-**`062` gives the next run two things to check:** a **self-referencing FK** on `event_payments` (`reverses_payment_id`) whose **partial UNIQUE index** must reproduce its `WHERE reverses_payment_id IS NOT NULL` predicate and not merely its name, and the **first row-level trigger on an Events table** together with its trigger function — `event_payments_reversal_guard`, whose body must come back byte-identical by `md5(prosrc)` or the direct-insert path silently loses its guard while the RPC still looks fine.
-
-Known-expected residuals, so they are not misread as new findings: the 2 legacy `service_role` duplicate policies (`departments`, `user_profiles`), the `handle_new_user` orphan, `attendance_records` ordinal divergence 14–18, and the platform `ensure_rls` event trigger / `rls_auto_enable()` on fresh projects — so RLS enablement must be argued from production's side, never read off the rebuild.
-
-
-
-**⚠ THE 062 PROOF IS STILL OWED — and Block 1 did NOT discharge it.** Block 1 was deliberately scoped to frontend plus one data-op: **no DDL, no migration, no new SQL object**, so the gate was never triggered. It is unchanged and it still gates:
-
-- **Any `063`.** No new migration may be written until `062` is rebuild-proven.
-- **Therefore also**: D-7 (`fm_approved_items` direct-write policies), the C-40 `event_payments` UPDATE policy, the non-atomic-write class (C-29–C-36, each wanting a server-side transaction), dropping the `event_bill_items amount > 0` CHECK if Dhiren wants comped lines, and the legacy `service_role` policy cleanup. **All of Blocks 2 and 3 as currently scoped are frontend-only and clear it** — but check before writing SQL, not after.
-- **Code-only and data-op changes do not touch this clock.** `data-ops/009` (Block 1) is DML against production, quarantined from the migration path, and does not count as a migration.
-- **A rebuild proof expires.** It is a claim about a file range on a date, not a permanent property of the project.
-
-Every new table ships with placeholder seed in its own step.
-
----
-
-## BLOCKING
-
-**Nothing blocks a build.** Revenue display was the one blocked item and is no longer blocking: it shipped **toggleable** (three readings, default `received`, flagged provisional on screen) precisely so the screen is populated at the walkthrough without guessing Dhiren's intent. **What is owed FROM Dhiren on 28 August is a decision, not a dependency:** pick one of the three readings, and the other two plus the toggle come out.
-
-Two questions to put to him at the same time, both found in the 18 August diagnosis: Events showed **no** revenue figure at all before that build (so "different" may have meant "absent"), and `events.total_amount` is a stale `0` against a MWK 1,800,000 bill that no Events code reads or maintains.
-
----
-
-## STATUS SUMMARY
-
-**19 August — Block 1 (correctness) committed (`5d340b2`).** Two audits merged into one queue in **`WOODLANDS_FIX_PLAN.md`**; 17 findings fixed, proven live or in a browser, real data unchanged (62 staff / 311 stallholders / 15 attendance). `data-ops/009` re-tagged the three stale `shift_settings` departments the 12 August re-tag missed. **No DDL — the 062 rebuild proof is untouched and still owed.** Blocks 2 (look) and 3 (fee wiring) are next, then demo curation. **Attendance pivoted off QR** to an FA03H export-or-invest decision pending the 28th — see ATTENDANCE above and `WOODLANDS_CLIENT_INPUTS.md`.
-
-*The paragraphs below are the 18-August state, retained as the record of how each Phase 2 feature landed.*
-
-**Events UX done (`062`, 18 August) — and with it EVERY Phase 2 build feature exists.** Payments are correctable by **reversing entry**, the fork the schema had already made (`event_payments` has no DELETE grant and no DELETE policy while `events` and `event_bill_items` both do). One nullable `reverses_payment_id` + a partial UNIQUE index + two CHECKs + a subquery-needing trigger + `reverse_event_payment()`, which writes the reversal **and** recomputes `deposit_paid` in one transaction. **11/11 live role scenarios passed, rolled back** — reversing the only deposit moved paid 1,300,000 → 1,000,000 **and `deposit_paid` true → false**, a later balance reversal correctly left it false, double reversal and reverse-a-reversal refused, the hand-rolled direct-insert path refused by the trigger and by the CHECK, `department_head` and `hr` denied 42501. **Revenue shipped toggleable** (three readings, default provisional on screen, 68/68 tests, `f452a39`) rather than guessing Dhiren's intent — he picks one on 28 August and the other two come out. That build also found `deliveries` to be a **dead table with RLS on and zero policies**, which is why "the system knows no cost" is structural rather than a data gap. **§2.6 run 9 closed `001`–`061` first, with no new finding; `062` is now the proof owed.** History `001`–`062`, no gaps.
-
-**Farmers Market Phase 2 done (`061` + `data-ops/008`, 18 August)** — 3-level product taxonomy (`fm_categories` › `fm_product_types` › `fm_items`, seeded 6/17/51 in the migration), `fm_holders.category_id` with `stall_type` deprecated in place, `fm_waiting_list` + `fm_stall_forfeitures` (neither existed in any form before), `v_fm_attendance` as a `security_invoker` view that **replaces the client-side write-on-read that mutated `fm_holders.status` from a browser page load**, `fm_fee_schedule` with Dhiren's six confirmed fees, and two gated SECURITY DEFINER RPCs — `forfeit_stall()` (flag → owner/admin confirms → releases the stall number, records the forfeiture, offers it to the head of the queue, atomically) and `change_holder_products()` (raises the MWK 10,000 fee **in the same transaction as the change**, and raises nothing on a no-op). **32/32 live role scenarios passed, rolled back.** `src/lib/constants.js`'s ID-card fees were **wrong, not stale** (5,000/10,000 against Dhiren's 30,000/20,000) and are corrected. **§2.6 run 8 closed `001`–`060` first, with no new findings; `061` is now the proof owed.** Also fixed: the stall-number regex, which was two-digit and could not accept a single one of the 305 live `A001`–`A347` stalls, while Edit validated nothing at all.
-
-**Rooms + consumption ledger done (`060`, 18 August)** — `rooms` seeded and RLS'd, `v_stock_consumption` as a security_invoker VIEW over both legs (bar count shortfall + attributed draw), `record_consumption` gated and delegating to `apply_stock_delta`, `staff_dept_select` so a head's "who" picker is populated and scoped. Proven live as the roles on a REAL depletion, not a flat sheet — 12 scenarios, rolled back, nothing persisted. `apply_stock_delta`'s oid changed by necessity (signature change) and `proacl` was asserted identical instead; the guard caught a genuine PUBLIC/anon EXECUTE defect in the file on the first dry run. **Next: `060`'s rebuild proof is owed before any `061` is written**, then Farmers Market taxonomy + waiting list + fees. Two tabs (Bar Count from `059`, Consumption + Rooms from `060`) still need one browser session.
-
-Hardening done, real data live, migration gate closed, role model live, department vocabulary reconciled. **Two-tier inventory is functionally complete end to end** — location dimension, main store, store→department issuing, department↔department transfers, and the RLS scoping that lets a receiving department *see* what it holds, all proven live as the roles. **Movement Ledger done (`058` + data-ops/`006`)**, with the delivery Supplier column restored. **Bar par levels + the end-of-day count/refill cycle done (`059`, 17 August)** — count sheet pre-filled, posting reconciles the bar balance and raises a pre-filled refill in one transaction, batch approve/fulfil through the existing `issue_stock` path; 19/19 live role scenarios passed. **§2.6 re-proof run 6 closed `001`–`058` on measured evidence** and caught both a real files gap (anon EXECUTE on the role functions) and an unrecorded `058` in production's history — both fixed. Building the rest of Phase 2 to functional-complete on placeholder data — **rooms + consumption ledger next**, with `bar_count_lines` as its natural feed. Re-proof: `059` owed on the next migration written. Deadline: full-system walkthrough with Dhiren Mon 31 Aug / Tue 1 Sep.
+**Production cleanup, still outstanding (cosmetic, not blocking):** drop the 2 legacy duplicate `service_role` policies (`departments`, `user_profiles`) from production.
