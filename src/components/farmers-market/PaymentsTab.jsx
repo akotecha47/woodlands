@@ -2,28 +2,24 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast, EmptyRow, Button } from '../admin/AdminUI'
-import { FM_PAY_METHODS, fmtDate, fmtMWK, todayStr, getMarketDayForMonth } from './FarmersMarketUI'
-import { FM_FEES } from '../../lib/constants'
+import { FM_PAY_METHODS, FM_PAY_TYPES, fmtDate, fmtMWK, todayStr, getMarketDayForMonth } from './FarmersMarketUI'
+import { useFeeSchedule } from '../../lib/fm'
 import { useFlash } from '../ui/useFlash'
 
-const ALL_PAY_TYPES = [
-  { value: 'application', label: 'Application Fee',  amount: FM_FEES.application      },
-  { value: 'acceptance',  label: 'Registration Fee', amount: FM_FEES.acceptance       },
-  { value: 'visit',       label: 'Visit Fee',        amount: FM_FEES.visit            },
-  { value: 'id_card',     label: 'ID Card',          amount: FM_FEES.id_card_initial },
-  { value: 'reprint',     label: 'Reprint',          amount: FM_FEES.id_card_replace  },
-]
+// The five types this screen logs BY HAND. `product_change` is deliberately
+// not among them: that fee is raised by change_holder_products() in the same
+// transaction as the change, and offering it here would let someone book the
+// fee without making the change, or make the change and book it twice.
+const MANUAL_PAY_TYPES = FM_PAY_TYPES.filter(t => t.value !== 'product_change')
 
-const PAY_TYPE_LABELS = {
-  application: 'Application Fee',
-  acceptance:  'Registration Fee',
-  visit:       'Visit Fee',
-  id_card:     'ID Card',
-  reprint:     'Reprint',
-}
+const PAY_TYPE_LABELS = Object.fromEntries(FM_PAY_TYPES.map(t => [t.value, t.label]))
 
 export default function PaymentsTab() {
   const { session } = useAuth()
+  // C-08 — amounts come from fm_fee_schedule, not from a constant.
+  const { fee } = useFeeSchedule()
+  const amountFor = type =>
+    fee(FM_PAY_TYPES.find(t => t.value === type)?.fee ?? type)
 
   const [holders,      setHolders]      = useState([])
   const [payments,     setPayments]     = useState([])
@@ -42,7 +38,7 @@ export default function PaymentsTab() {
   const BLANK_FORM = {
     holder_id:      '',
     payment_type:   'application',
-    amount:         String(FM_FEES.application),
+    amount:         String(amountFor('application')),
     payment_date:   todayStr(),
     payment_method: 'cash',
     reference:      '',
@@ -101,9 +97,9 @@ export default function PaymentsTab() {
 
   function holderOutstanding(h) {
     let total = 0
-    if (!h.application_paid) total += FM_FEES.application
-    if (!h.acceptance_paid)  total += FM_FEES.acceptance
-    if (h.status === 'active' && !isDecemberNow && !visitPaidIds.has(h.id)) total += FM_FEES.visit
+    if (!h.application_paid) total += amountFor('application')
+    if (!h.acceptance_paid)  total += amountFor('acceptance')
+    if (h.status === 'active' && !isDecemberNow && !visitPaidIds.has(h.id)) total += amountFor('visit')
     return total
   }
 
@@ -262,13 +258,13 @@ export default function PaymentsTab() {
                     <td className="px-4 py-3 text-sm">
                       {h.application_paid
                         ? <span className="text-green-600 font-medium">✓ Paid</span>
-                        : <span className="text-red-600">{fmtMWK(FM_FEES.application)}</span>
+                        : <span className="text-red-600">{fmtMWK(amountFor('application'))}</span>
                       }
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {h.acceptance_paid
                         ? <span className="text-green-600 font-medium">✓ Paid</span>
-                        : <span className="text-red-600">{fmtMWK(FM_FEES.acceptance)}</span>
+                        : <span className="text-red-600">{fmtMWK(amountFor('acceptance'))}</span>
                       }
                     </td>
                     <td className="px-4 py-3 text-sm">
@@ -276,7 +272,7 @@ export default function PaymentsTab() {
                         ? <span className="text-gray-400">N/A</span>
                         : visitOk
                           ? <span className="text-green-600 font-medium">✓ Paid</span>
-                          : <span className="text-amber-600">{fmtMWK(FM_FEES.visit)}</span>
+                          : <span className="text-amber-600">{fmtMWK(amountFor('visit'))}</span>
                       }
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold">
@@ -432,11 +428,14 @@ export default function PaymentsTab() {
                     required
                     value={form.payment_type}
                     onChange={e => {
-                      const found = ALL_PAY_TYPES.find(t => t.value === e.target.value)
-                      setForm(p => ({ ...p, payment_type: e.target.value, amount: String(found?.amount ?? p.amount) }))
+                      // The amount pre-fills from the live schedule, not from
+                      // a baked constant. Still editable: a part payment is a
+                      // real thing, and the field was always free text.
+                      const next = amountFor(e.target.value)
+                      setForm(p => ({ ...p, payment_type: e.target.value, amount: String(next ?? p.amount) }))
                     }}
                   >
-                    {ALL_PAY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    {MANUAL_PAY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </Sel>
                 </Field>
               </div>

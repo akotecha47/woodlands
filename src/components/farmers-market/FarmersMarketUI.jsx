@@ -27,13 +27,18 @@ export const FM_PAY_METHODS = [
   { value: 'airtel_money',  label: 'Airtel Money'  },
 ]
 
+// LABELS ONLY. These carried an `amount` each until Block 3 / C, which made
+// this a fourth copy of the fee schedule that nothing reconciled. Amounts come
+// from fm_fee_schedule through useFeeSchedule() at the point of charge; the
+// `fee` key maps a payment TYPE to its fee CODE, which is not always the same
+// word (a 'reprint' payment is the 'id_card_replace' fee).
 export const FM_PAY_TYPES = [
-  { value: 'application', label: 'Application Fee',  amount: 10000 },
-  { value: 'acceptance',  label: 'Registration Fee', amount: 20000 },
-  { value: 'visit',       label: 'Visit Fee',        amount: 10000 },
-  { value: 'id_card',     label: 'ID Card'                         },
-  { value: 'reprint',     label: 'Reprint'                         },
-  { value: 'product_change', label: 'Product Change', amount: 10000 },
+  { value: 'application',    label: 'Application Fee',  fee: 'application'     },
+  { value: 'acceptance',     label: 'Registration Fee', fee: 'acceptance'      },
+  { value: 'visit',          label: 'Visit Fee',        fee: 'visit'           },
+  { value: 'id_card',        label: 'ID Card',          fee: 'id_card_initial' },
+  { value: 'reprint',        label: 'Reprint',          fee: 'id_card_replace' },
+  { value: 'product_change', label: 'Product Change',   fee: 'product_change'  },
 ]
 
 export const HOLDER_STATUS_CFG = {

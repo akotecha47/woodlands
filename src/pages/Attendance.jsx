@@ -1,5 +1,6 @@
-import { useState } from 'react'
 import { PageHeader, Tabs, Card } from '../components/ui/kit'
+import { sectionsFor } from '../lib/sections'
+import { useSectionTab } from '../lib/useSectionTab'
 import TodayTab    from '../components/attendance/TodayTab'
 import HistoryTab  from '../components/attendance/HistoryTab'
 import SettingsTab from '../components/attendance/SettingsTab'
@@ -13,21 +14,17 @@ import SettingsTab from '../components/attendance/SettingsTab'
 // GuardedPage bounced both to /login before this component rendered. Their
 // only content was a "Clock In / Out" tab, which is why ClockInOutTab has no
 // reachable mount point — see WOODLANDS_FOLLOWUPS.md.
-const TABS = [
-  { id: 'today',    label: 'Today'    },
-  { id: 'history',  label: 'History'  },
-  { id: 'settings', label: 'Settings' },
-]
+// One source for the tab list, shared with the top bar's section search (E).
+const TABS = sectionsFor('/attendance')
 
 export default function Attendance() {
-  const [tab, setTab] = useState('today')
+  const [tab, setTab] = useSectionTab('today')
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="People"
         title="Attendance"
-        subtitle="Today's roster, the history behind it, and the shift windows the two are judged against."
       />
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} ariaLabel="Attendance sections" />

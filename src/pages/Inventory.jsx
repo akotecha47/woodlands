@@ -1,7 +1,8 @@
-import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { PageHeader, Tabs, Card } from '../components/ui/kit'
-import { MANAGE_ROLES, INVENTORY_VIEW_ROLES } from '../lib/roles'
+import { sectionsFor } from '../lib/sections'
+import { useSectionTab } from '../lib/useSectionTab'
+import { INVENTORY_VIEW_ROLES } from '../lib/roles'
 import StockLevelsTab  from '../components/inventory/StockLevelsTab'
 import LogDeliveryTab  from '../components/inventory/LogDeliveryTab'
 import RequisitionsTab from '../components/inventory/RequisitionsTab'
@@ -25,35 +26,44 @@ import ConsumptionTab    from '../components/inventory/ConsumptionTab'
 // in Attendance, Events, Table Bookings, Farmers Market and Admin, every tab's
 // own gate is the same constant as its ROUTE_ACCESS entry, so no role that
 // reaches those pages can be refused a tab on them.
-const TABS = [
+// id -> Component. Labels, order AND the U-12 role gates all come from
+// lib/sections.js, so the tab bar and the top bar's section search cannot
+// disagree about which tabs exist or who may reach them.
+const TAB_META = {
   // No self-gate; RLS scopes what a head sees.
-  { id: 'stock',        label: 'Stock Levels', Component: StockLevelsTab,  roles: INVENTORY_VIEW_ROLES },
+  stock:        StockLevelsTab,
   // LogDeliveryTab.jsx:30 -- AccessDenied outside MANAGE_ROLES.
-  { id: 'delivery',     label: 'Log Delivery', Component: LogDeliveryTab,  roles: MANAGE_ROLES },
+  delivery:     LogDeliveryTab,
   // The end-of-day par cycle (059). Sits next to Requisitions because posting
   // a count is what generates one.
   // No self-gate: a head is pinned to their own par-managed bar (BarCountTab.jsx:52).
-  { id: 'barcount',     label: 'Bar Count',    Component: BarCountTab,     roles: INVENTORY_VIEW_ROLES },
+  barcount:     BarCountTab,
   // No self-gate: raising a requisition is explicitly a head's job (roles.js).
-  { id: 'requisitions', label: 'Requisitions', Component: RequisitionsTab, roles: INVENTORY_VIEW_ROLES },
+  requisitions: RequisitionsTab,
   // TransfersTab.jsx:34 -- AccessDenied outside MANAGE_ROLES.
-  { id: 'transfers',    label: 'Transfers',    Component: TransfersTab,    roles: MANAGE_ROLES },
+  transfers:    TransfersTab,
   // AdjustmentsTab.jsx:56 -- AccessDenied outside MANAGE_ROLES.
-  { id: 'adjustments',  label: 'Adjustments',  Component: AdjustmentsTab,  roles: MANAGE_ROLES },
+  adjustments:  AdjustmentsTab,
   // Consumption attribution (060). Sits after the movement tabs because it
   // reads what they produce: the draw leg it writes itself, and the bar leg
   // that a posted Bar Count generates without anyone typing it in.
   // ConsumptionTab.jsx:148 -- gated on INVENTORY_VIEW_ROLES, heads included.
-  { id: 'consumption',  label: 'Consumption',  Component: ConsumptionTab,  roles: INVENTORY_VIEW_ROLES },
+  consumption:  ConsumptionTab,
   // Was 'Delivery Log' (delivery-only). The Ledger shows every movement type;
   // the delivery-only view survives as a preset filter inside it.
   // No self-gate; RLS scopes a head to their own department's movements.
-  { id: 'log',          label: 'Movement Ledger', Component: MovementLedgerTab, roles: INVENTORY_VIEW_ROLES },
-]
+  log:          MovementLedgerTab,
+}
+const TABS = sectionsFor('/').map(s => ({
+  ...s,
+  Component: TAB_META[s.id],
+  // No `roles` on a section means "whatever the module allows".
+  roles: s.roles ?? INVENTORY_VIEW_ROLES,
+}))
 
 export default function Inventory() {
   const { profile } = useAuth()
-  const [tab, setTab] = useState('stock')
+  const [tab, setTab] = useSectionTab('stock')
 
   const visibleTabs = TABS.filter(t => t.roles?.includes(profile?.role))
 
@@ -69,7 +79,6 @@ export default function Inventory() {
       <PageHeader
         eyebrow="Stock control"
         title="Inventory"
-        subtitle="The main store and every department sub-store: what is held, what moved, and what was used."
       />
 
       <Tabs

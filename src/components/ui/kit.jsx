@@ -20,7 +20,8 @@
  * mixes the two loses Fast Refresh for every component in it.
  */
 
-import { ChevronDown, Inbox, ShieldAlert, Search, X } from 'lucide-react'
+import { useState, useRef, useEffect, Children, isValidElement } from 'react'
+import { ChevronDown, Check, Inbox, ShieldAlert, Search, X } from 'lucide-react'
 import { cx, fieldCls, selectCls, BADGE_TONES } from './kit.constants'
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -205,22 +206,208 @@ export function Txt({ className = '', rows = 3, ...props }) {
 }
 
 /**
- * U-05 — the one styled select. Chevron is ours; the control is native.
+ * Flatten <option> children out of whatever the caller passed — a literal list,
+ * a `.map()` array, a fragment, or a conditional that produced false/null.
+ * <optgroup> is walked into rather than skipped.
+ */
+function readOptions(children, out = []) {
+  Children.forEach(children, child => {
+    if (!isValidElement(child)) return
+    if (child.type === 'option') {
+      out.push({
+        value:    child.props.value ?? '',
+        label:    typeof child.props.children === 'string'
+                    ? child.props.children
+                    : Children.toArray(child.props.children).join(''),
+        disabled: !!child.props.disabled,
+      })
+    } else if (child.props?.children) {
+      readOptions(child.props.children, out)
+    }
+  })
+  return out
+}
+
+/**
+ * THE DROPDOWN — U-05, finished in Block 3 / D.
+ *
+ * Block 2 styled the select's CLOSED state and stopped there, because the
+ * closed state is all CSS can reach: the list a native <select> opens is drawn
+ * by the operating system and cannot be styled at all. So a department picker
+ * opened a grey Windows menu two inches from a rounded teal one in the same
+ * top bar. This replaces the OPEN list and nothing else.
+ *
+ * IT IS STILL A REAL <select>. That is the whole design, and it is deliberate:
+ *
+ *   · 23 of the 73 call sites pass `required`, and browser validation only
+ *     applies to a real form control. A div pretending to be a select silently
+ *     drops "you must pick a stock item" on Log Delivery, Transfers,
+ *     Adjustments and Record Payment.
+ *   · Form submission, `name`, `disabled` and the full native keyboard model
+ *     (type-ahead, Home/End, arrows) come free and cannot regress.
+ *   · Screen readers get genuine select semantics rather than an ARIA
+ *     impression of one — which is why the visual list below is aria-hidden:
+ *     it is a skin, and announcing it too would read every option twice.
+ *
+ * The only trick is `onMouseDown` → preventDefault, which stops the OS popup
+ * opening while leaving focus, value and validation entirely native. Our list
+ * opens in its place, styled to match the top bar's jump-to-section dropdown —
+ * same radius, same border, same teal active row.
  *
  * The select is `w-full` and the wrapper is what sizes it. Inside a <Field> in
- * a FormGrid the grid cell already does that, so nothing is needed. In a
- * flex filter bar there is no cell, so pass `wrapClassName="w-44"` (or
- * whatever the row wants) — otherwise the control has no width to fill.
+ * a FormGrid the grid cell already does that. In a flex filter bar there is no
+ * cell, so pass `wrapClassName="w-44"`.
  */
-export function Sel({ children, className = '', wrapClassName = '', ...props }) {
+export function Sel({
+  children, className = '', wrapClassName = '', disabled, onChange, ...props
+}) {
+  const options = readOptions(children)
+  const [open, setOpen] = useState(false)
+  const [cursor, setCursor] = useState(0)
+  const wrapRef = useRef(null)
+  const selRef  = useRef(null)
+  const listRef = useRef(null)
+
+  const value = props.value
+  const selectedIdx = options.findIndex(o => String(o.value) === String(value))
+
+  // Open at the current value, not at the top: a 559-item stock list that
+  // always opened on the first row would make the selected item unfindable.
+  function openList() {
+    if (disabled) return
+    setCursor(selectedIdx >= 0 ? selectedIdx : 0)
+    setOpen(true)
+  }
+
+  function commit(idx) {
+    const opt = options[idx]
+    if (!opt || opt.disabled) return
+    setOpen(false)
+    selRef.current?.focus()
+    // A synthetic event shaped like the native one. Every call site is written
+    // as `e => ... e.target.value`, so this keeps all 73 of them unchanged.
+    onChange?.({ target: { value: opt.value }, currentTarget: { value: opt.value } })
+  }
+
+  useEffect(() => {
+    if (!open) return
+    function onDocDown(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocDown)
+    return () => document.removeEventListener('mousedown', onDocDown)
+  }, [open])
+
+  // Keep the highlighted row in view while arrowing through a long list.
+  useEffect(() => {
+    if (!open || !listRef.current) return
+    const el = listRef.current.querySelector('[data-idx="' + cursor + '"]')
+    if (el) el.scrollIntoView({ block: 'nearest' })
+  }, [open, cursor])
+
+  function step(delta) {
+    setCursor(c => {
+      let next = c
+      for (let i = 0; i < options.length; i++) {
+        next = Math.min(Math.max(next + delta, 0), options.length - 1)
+        if (!options[next]?.disabled) return next
+        if (next === 0 || next === options.length - 1) return c
+      }
+      return c
+    })
+  }
+
+  function onKeyDown(e) {
+    if (!open) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        openList()
+      }
+      // Anything else — type-ahead, Home/End, Tab — stays native.
+      return
+    }
+    if (e.key === 'Escape')    { e.preventDefault(); setOpen(false); return }
+    if (e.key === 'ArrowDown') { e.preventDefault(); step(1);  return }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); step(-1); return }
+    if (e.key === 'Home')      { e.preventDefault(); setCursor(0); return }
+    if (e.key === 'End')       { e.preventDefault(); setCursor(options.length - 1); return }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); commit(cursor); return }
+    if (e.key === 'Tab') setOpen(false)
+  }
+
   return (
-    <div className={cx('relative', wrapClassName)}>
-      <select className={cx(selectCls, className)} {...props}>{children}</select>
+    <div ref={wrapRef} className={cx('relative', wrapClassName)}>
+      <select
+        {...props}
+        ref={selRef}
+        disabled={disabled}
+        onChange={onChange}
+        // Spread FIRST, deliberately: these four handlers are the component,
+        // not defaults. A call site that passed its own onMouseDown would
+        // otherwise re-open the OS popup this exists to replace. No call site
+        // passes one today (checked); this makes that safe rather than lucky.
+        onMouseDown={e => {
+          // The one line that replaces the OS popup with ours. Focus, value,
+          // `required` and form submission all stay native.
+          e.preventDefault()
+          if (open) setOpen(false)
+          else openList()
+        }}
+        onKeyDown={onKeyDown}
+        onBlur={() => setOpen(false)}
+        className={cx(selectCls, className)}
+      >
+        {children}
+      </select>
+
       <ChevronDown
         size={15}
         aria-hidden="true"
-        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+        className={cx(
+          'pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 wl-transition',
+          open && 'rotate-180',
+        )}
       />
+
+      {open && options.length > 0 && (
+        <ul
+          ref={listRef}
+          role="listbox"
+          aria-hidden="true"
+          className="absolute z-40 left-0 right-0 mt-1 min-w-full bg-white border border-line
+                     rounded-xl shadow-lg py-1.5 max-h-72 overflow-y-auto"
+        >
+          {options.map((o, i) => {
+            const isSel = String(o.value) === String(value)
+            return (
+              <li key={String(o.value) + '-' + i} role="option" aria-selected={isSel} data-idx={i}>
+                <button
+                  type="button"
+                  disabled={o.disabled}
+                  tabIndex={-1}
+                  onMouseEnter={() => { if (!o.disabled) setCursor(i) }}
+                  // mousedown, not click: the select's onBlur would close the
+                  // list before a click ever landed.
+                  onMouseDown={e => { e.preventDefault(); commit(i) }}
+                  className={cx(
+                    'w-full flex items-center gap-2 px-3 py-2 text-sm text-left wl-transition',
+                    o.disabled && 'text-gray-300 cursor-not-allowed',
+                    !o.disabled && i === cursor && 'bg-teal-tint text-teal-deep',
+                    !o.disabled && i !== cursor && 'text-gray-700',
+                  )}
+                >
+                  <Check
+                    size={14}
+                    aria-hidden="true"
+                    className={cx('shrink-0', isSel ? 'text-teal' : 'text-transparent')}
+                  />
+                  <span className="truncate">{o.label || ' '}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

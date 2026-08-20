@@ -8,9 +8,8 @@ import {
   EVENT_TYPES, VENUES,   // EVENT_STATUSES dropped with the Edit modal's Status control (C-10/D-4)
   fmtDate, fmtTime, fmtMWK,
   EventStatusBadge, EmptyRow, todayStr,
-  useRevenueReading, RevenueReadingPicker,
 } from './EventsUI'
-import { computePortfolioRevenue, REVENUE_READINGS } from '../../lib/revenue'
+import { summarisePayments } from '../../lib/revenue'
 import { fieldCls } from '../ui/kit.constants'
 import { useFlash } from '../ui/useFlash'
 
@@ -104,14 +103,11 @@ export default function EventsListTab({ onView }) {
   const [events,    setEvents]    = useState([])
   const [loading,   setLoading]   = useState(true)
 
-  // Revenue inputs. Loaded whole rather than per event: all three tables are
-  // small (5 payments, 4 bill items, 2 allocations as of 18 Aug 2026) and
-  // computePortfolioRevenue buckets by event id itself. No cost source is
-  // loaded — see the note in EventRevenueSection.
-  const [reading,   setReading]   = useRevenueReading()
+  // BLOCK 3 / A — payments only. The bill-item and allocation loads that fed
+  // the three revenue readings are gone with them; `payments` stays because
+  // "Payments Received - This Month" is a sum of receipts, not a revenue
+  // calculation.
   const [payments,  setPayments]  = useState([])
-  const [billItems, setBillItems] = useState([])
-  const [allocs,    setAllocs]    = useState([])
   const [toast,     setToast]     = useState(null)
   const flash = useFlash(setToast)
 
@@ -131,17 +127,12 @@ export default function EventsListTab({ onView }) {
 
   async function load() {
     setLoading(true)
-    const [evR, payR, billR, allocR] = await Promise.all([
+    const [evR, payR] = await Promise.all([
       supabase.from('events').select('*, event_checklists(id, is_complete)'),
       supabase.from('event_payments').select('event_id, amount, payment_type'),
-      supabase.from('event_bill_items').select('event_id, category, amount'),
-      supabase.from('event_stock_allocations')
-        .select('event_id, stock_item_id, deducted_qty, returned_qty'),
     ])
     setEvents(evR.data ?? [])
     setPayments(payR.data ?? [])
-    setBillItems(billR.data ?? [])
-    setAllocs(allocR.data ?? [])
     setLoading(false)
   }
 
@@ -160,15 +151,15 @@ export default function EventsListTab({ onView }) {
   })
   const totalThisMonth = monthEvents.length
 
-  // Revenue over THIS MONTH's events, under the selected reading. Cancelled
-  // events are already excluded by monthEvents — a cancelled booking's deposit
-  // is a real receipt, but it is not this month's trading, and mixing the two
-  // is the kind of ambiguity the reading toggle exists to expose rather than
-  // bury.
-  const revenue = computePortfolioRevenue(reading, {
-    events: monthEvents, payments, billItems, allocations: allocs,
-  })
-  const revenueCfg = REVENUE_READINGS.find(r => r.value === revenue.reading)
+  // PAYMENTS RECEIVED this month — a sum of receipts, not a revenue reading.
+  // `summarisePayments` already nets refunds and reversals off the gross, which
+  // is what "received" honestly means: a reversed payment is money that never
+  // arrived. Scoped to this month's events, cancelled ones excluded, exactly as
+  // the count above is.
+  const monthEventIds = new Set(monthEvents.map(e => e.id))
+  const paidThisMonth = summarisePayments(
+    payments.filter(p => monthEventIds.has(p.event_id))
+  ).net
 
   const confirmedUnpaid = events.filter(ev =>
     ev.status === 'confirmed' && !ev.deposit_paid
@@ -285,23 +276,14 @@ export default function EventsListTab({ onView }) {
           <p className="text-2xl font-bold text-blue-700">{inNext7Days}</p>
         </div>
 
-        {/* Revenue — provisional reading, see EventRevenueSection for the full
-            panel and the on-screen warning. */}
+        {/* BLOCK 3 / A — was "Revenue - This Month" under a three-reading
+            toggle. Same money, honest label: this is what was RECEIVED against
+            this month's events, net of refunds and reversals. No toggle, no
+            provisional badge, because there is nothing left to choose. */}
         <div className="bg-gray-50 rounded-xl p-4">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <p className="text-xs text-gray-500">Revenue · This Month</p>
-            <span className="text-[10px] font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded whitespace-nowrap">
-              Provisional
-            </span>
-          </div>
-          {revenue.available
-            ? <p className="text-2xl font-bold text-gray-900">{fmtMWK(revenue.headline)}</p>
-            : <p className="text-2xl font-bold text-gray-300" title={revenue.detail.reason}>—</p>
-          }
-          <p className="text-[11px] text-gray-400 mt-0.5">{revenueCfg?.label}</p>
-          <div className="mt-2">
-            <RevenueReadingPicker reading={revenue.reading} onChange={setReading} size="sm" />
-          </div>
+          <p className="text-xs text-gray-500 mb-1">Payments Received · This Month</p>
+          <p className="text-2xl font-bold text-gray-900">{fmtMWK(paidThisMonth)}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">Net of refunds and reversals</p>
         </div>
       </div>
 

@@ -7,9 +7,12 @@ import {
 } from '../ui/kit'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
 import { fmtDate, fmtMWK, defaultMarketDate, FM_PAY_METHODS, todayStr, isMarketDay, getMarketDayForMonth } from './FarmersMarketUI'
+import { useFeeSchedule } from '../../lib/fm'
 import { useFlash } from '../ui/useFlash'
 
-const VISIT_FEE = 10000
+// The market-day visit fee is fm_fee_schedule's `visit` row (C-08). It was a
+// module constant here, which is why editing the fee in FeesTab changed nothing
+// on this screen.
 
 function fmtTime(ts) {
   if (!ts) return null
@@ -21,6 +24,9 @@ export default function MarketDayTab() {
   const canCheckIn = FM_MANAGE_ROLES.includes(profile?.role)
   const canManage  = FM_MANAGE_ROLES.includes(profile?.role)
 
+  const { fee } = useFeeSchedule()
+  const visitFee = fee('visit')
+
   const [marketDate,      setMarketDate]      = useState(defaultMarketDate)
   const [holders,         setHolders]         = useState([])
   const [visitMap,        setVisitMap]        = useState({}) // holder_id → visit row
@@ -28,7 +34,7 @@ export default function MarketDayTab() {
   const [visitNote,       setVisitNote]       = useState('')
   const [feeModal,        setFeeModal]        = useState(null) // { holder, visitId }
   const [feeMethod,       setFeeMethod]       = useState('cash')
-  const [feeAmount,       setFeeAmount]       = useState(String(VISIT_FEE))
+  const [feeAmount,       setFeeAmount]       = useState('')
   const [feeBusy,         setFeeBusy]         = useState(false)
   const [removeConfirm,   setRemoveConfirm]   = useState(null) // { holder, visitId }
   const [addModal,        setAddModal]        = useState(false)
@@ -144,7 +150,7 @@ export default function MarketDayTab() {
         supabase.from('fm_payments').insert({
           holder_id:      holder.id,
           payment_type:   'visit',
-          amount:         Number(feeAmount) || VISIT_FEE,
+          amount:         Number(feeAmount) || visitFee,
           payment_date:   marketDate,
           payment_method: feeMethod,
           recorded_by:    session?.user?.id ?? null,
@@ -245,8 +251,8 @@ export default function MarketDayTab() {
     ? getMarketDayForMonth(new Date(marketDate + 'T12:00:00').getFullYear() + 1, 0)
     : null
   const checkedInCount = Object.keys(visitMap).filter(id => holders.some(h => h.id === id)).length
-  const collected      = Object.values(visitMap).filter(v => v.fee_paid).length * VISIT_FEE
-  const expected       = checkedInCount * VISIT_FEE
+  const collected      = Object.values(visitMap).filter(v => v.fee_paid).length * visitFee
+  const expected       = checkedInCount * visitFee
   const outstanding    = expected - collected
   const unaddedHolders = holders.filter(h => !visitMap[h.id])
   const colSpan        = 5 + (canManage ? 1 : 0)
@@ -423,7 +429,7 @@ export default function MarketDayTab() {
                       </span>
                     ) : checkedIn && canManage ? (
                       <button
-                        onClick={() => { setFeeModal({ holder: h, visitId: visit.id }); setFeeMethod('cash'); setFeeAmount(String(VISIT_FEE)) }}
+                        onClick={() => { setFeeModal({ holder: h, visitId: visit.id }); setFeeMethod('cash'); setFeeAmount(String(visitFee)) }}
                         className="text-xs font-medium px-2.5 py-1 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 wl-transition"
                       >
                         Log Fee

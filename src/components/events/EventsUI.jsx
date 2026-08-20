@@ -1,8 +1,4 @@
-import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import {
-  REVENUE_READINGS, REVENUE_READING_KEY, DEFAULT_READING, isReading,
-} from '../../lib/revenue'
 import { Badge } from '../ui/kit'
 
 // ── constants ──────────────────────────────────────────────────
@@ -179,71 +175,16 @@ export async function generateBEO(eventId) {
   if (error) throw error
 }
 
-// ── revenue reading ────────────────────────────────────────────
-
-/**
- * The revenue reading, shared across the Events List strip and the Event
- * Detail panel so the two surfaces cannot show two different numbers under one
- * label. Persisted in localStorage rather than lifted into a context: the
- * choice is a viewing preference, it must survive a page reload during the
- * walkthrough, and it is PROVISIONAL — Dhiren picks the real reading on his
- * return (28 August 2026), at which point one reading becomes the only one and
- * this hook goes away with the toggle.
- */
-export function useRevenueReading() {
-  const [reading, setReading] = useState(() => {
-    try {
-      const stored = localStorage.getItem(REVENUE_READING_KEY)
-      return isReading(stored) ? stored : DEFAULT_READING
-    } catch {
-      // Private-mode / blocked storage. A viewing preference is never worth
-      // failing a page render for.
-      return DEFAULT_READING
-    }
-  })
-
-  function choose(next) {
-    if (!isReading(next)) return
-    setReading(next)
-    try { localStorage.setItem(REVENUE_READING_KEY, next) } catch { /* see above */ }
-  }
-
-  return [reading, choose]
-}
-
-/** The reading picker. One control, used by both surfaces. */
-export function RevenueReadingPicker({ reading, onChange, size = 'md' }) {
-  return (
-    <div className="inline-flex rounded-lg border border-line bg-gray-100 p-0.5">
-      {REVENUE_READINGS.map(r => (
-        <button
-          key={r.value}
-          type="button"
-          title={r.blurb}
-          onClick={() => onChange(r.value)}
-          className={`${size === 'sm' ? 'px-2 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'} rounded-md font-medium wl-transition ${
-            reading === r.value
-              ? 'bg-white text-teal shadow-sm'
-              : 'text-ink-soft hover:text-navy'
-          }`}>
-          {r.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-/**
- * The provisional-reading warning. Deliberately not dismissible and deliberately
- * on every revenue surface: the whole point of shipping three readings is that
- * nobody mistakes the default for a decision.
- */
-export function ProvisionalRevenueNote({ className = '' }) {
-  return (
-    <p className={`text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 ${className}`}>
-      <strong>Provisional reading.</strong> "Revenue should be different" was raised on 27 July
-      and never made specific. Three readings are shown so the number can be chosen rather than
-      guessed — Dhiren picks one on his return, and the other two are removed.
-    </p>
-  )
-}
+// ── revenue ─ REMOVED IN BLOCK 3 ──────────────────────────────
+//
+// `useRevenueReading`, `RevenueReadingPicker` and `ProvisionalRevenueNote`
+// lived here. The client asked to RECORD PAYMENTS, not to track revenue, so
+// the three-reading toggle, the 'Recognised' headline and the non-dismissible
+// provisional note are all gone from the UI (Block 3 / A).
+//
+// src/lib/revenue.js is DELIBERATELY KEPT. `summarisePayments` is what the
+// Events List now uses for 'Payments Received - This Month' and what nets
+// refunds and reversals off a gross; the three reading calculators sitting
+// beside it are unreferenced but tested, and deleting a proven calculation to
+// tidy an import list is how a decision becomes irreversible. See the report
+// for which revenue.test.mjs cases are now obsolete.

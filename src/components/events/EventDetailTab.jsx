@@ -12,7 +12,6 @@ import {
 } from './EventsUI'
 import EventBillSection    from './EventBillSection'
 import EventPaymentsSection from './EventPaymentsSection'
-import EventRevenueSection  from './EventRevenueSection'
 import EventSetupSection    from './EventSetupSection'
 import EventStaffSection    from './EventStaffSection'
 import EventStockSection    from './EventStockSection'
@@ -455,12 +454,12 @@ export default function EventDetailTab({ eventId, onBack }) {
         onRefresh={load}
       />
 
-      {/* Revenue — read-only, and last: it is a reading OF the bill and the
-          payments above, not another place to enter either. */}
-      <EventRevenueSection
-        eventId={eventId}
-        billItems={billItems}
-      />
+      {/* BLOCK 3 / A — the Revenue panel is GONE. Dhiren asked to RECORD
+          PAYMENTS, not to track revenue; three toggleable readings of a number
+          nobody asked for is a question on screen, not an answer. What the
+          money surface now shows is what was actually received: the Payments
+          section above, with Total Paid, Balance Due and the reversal flow,
+          all unchanged. */}
     </div>
   )
 }

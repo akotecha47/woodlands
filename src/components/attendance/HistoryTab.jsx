@@ -265,7 +265,11 @@ export default function HistoryTab() {
                         <Th>Net Hours</Th>
                         <Th>Mins Late</Th>
                         <Th>Status</Th>
-                        <Th>Radius</Th>
+                        {/* BLOCK 3 / H — same dead Radius column as Today, one
+                            tab over, hidden for the same reason and on the same
+                            terms: `within_radius` is NULL on all 15 live rows
+                            because every one is manager-written. Data and
+                            column untouched; attendance is parked, not removed. */}
                         <Th>Notes</Th>
                       </tr>
                     </thead>
@@ -299,13 +303,6 @@ export default function HistoryTab() {
                               {late ? fmtLate(late) : null}
                             </td>
                             <td className="px-4 py-3"><StatusBadge status={r.status} minsLate={late} /></td>
-                            <td className="px-4 py-3 text-sm">
-                              {r.within_radius === false
-                                ? <span className="text-amber-500" title="Outside premises">⚑</span>
-                                : r.within_radius === true
-                                ? <span className="text-green-500 text-xs">✓</span>
-                                : <span className="text-gray-300">—</span>}
-                            </td>
                             <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px] truncate" title={r.notes ?? ''}>
                               {r.notes ?? null}
                             </td>

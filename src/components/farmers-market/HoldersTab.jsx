@@ -4,14 +4,13 @@ import { QRCodeCanvas } from 'qrcode.react'
 import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
-import { FM_FEES, FM_ID_CARD_EXTRA_FEE } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import { Field, Inp, Sel, Th, Td, Toast } from '../admin/AdminUI'
 import {
   SearchInput, StatRow, StatTile, TableWrap, Thead, EmptyRow, Tabs, Button,
 } from '../ui/kit'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
-import { fetchAttendance, fetchTaxonomy, itemPath, changeHolderProducts, forfeitStall } from '../../lib/fm'
+import { fetchAttendance, fetchTaxonomy, itemPath, changeHolderProducts, forfeitStall, useFeeSchedule } from '../../lib/fm'
 import {
   STALL_TYPES, FM_PAY_TYPES, FM_PAY_METHODS, HOLDER_STATUS_CFG,
   fmtDate, fmtMWK, validateStall,
@@ -38,6 +37,8 @@ const BLANK_EDIT = {
 export default function HoldersTab() {
   const { profile, session } = useAuth()
   const canManage = FM_MANAGE_ROLES.includes(profile?.role)
+  // Every fee this screen quotes or charges comes from fm_fee_schedule (C-08).
+  const { fee } = useFeeSchedule()
 
   const [holders,          setHolders]          = useState([])
   const [yearVisits,       setYearVisits]        = useState([])
@@ -136,7 +137,7 @@ export default function HoldersTab() {
       setLastMarketDay({
         date:      lastDay,
         attended:  attended.length,
-        collected: attended.filter(v => v.fee_paid).length * 10000,
+        collected: attended.filter(v => v.fee_paid).length * fee('visit'),
         noShows:   [...activeIds].filter(id => !attendedIds.has(id)).length,
       })
     }
@@ -444,7 +445,7 @@ export default function HoldersTab() {
         const { error: payErr } = await supabase.from('fm_payments').insert({
           holder_id:      holder.id,
           payment_type:   'reprint',
-          amount:         FM_FEES.id_card_replace,
+          amount:         fee('id_card_replace'),
           payment_date:   today,
           payment_method: method,
           reference,
@@ -837,7 +838,7 @@ export default function HoldersTab() {
                                       <td className="py-1.5">
                                         {c.status === 'active' && (
                                           <button
-                                            onClick={() => openCardConfirm({ type: 'reprint', holder: h, cardNum: c.card_number, fee: FM_FEES.id_card_replace, cardId: c.id })}
+                                            onClick={() => openCardConfirm({ type: 'reprint', holder: h, cardNum: c.card_number, fee: fee('id_card_replace'), cardId: c.id })}
                                             className="text-xs px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded wl-transition"
                                           >
                                             Reprint
@@ -853,10 +854,12 @@ export default function HoldersTab() {
                           {canManage && (() => {
                             const nextNum = expandedIdCards.filter(c => c.status !== 'cancelled').length + 1
                             // 30,000 covers the first TWO cards, so card #2 adds nothing. Card 3+ has no
-                            // confirmed price and is charged at the replacement rate - see constants.js.
-                            const issueFee = nextNum === 1 ? FM_FEES.id_card_initial
+                            // confirmed price and is charged at the replacement rate, which is a
+                            // recorded assumption (WOODLANDS_FOLLOWUPS.md), not an invented figure.
+                            // Both amounts come from fm_fee_schedule now (C-08).
+                            const issueFee = nextNum === 1 ? fee('id_card_initial')
                                            : nextNum === 2 ? 0
-                                           : FM_ID_CARD_EXTRA_FEE
+                                           : fee('id_card_replace')
                             return (
                               <button
                                 onClick={() => openCardConfirm({ type: 'issue', holder: h, cardNum: nextNum, fee: issueFee })}
@@ -885,9 +888,14 @@ export default function HoldersTab() {
                               ))}
                             </ul>
                           )}
+                          {/* BLOCK 3 / G — the line read "From the Feb 2026
+                              register: ...". Where the text came from is our
+                              record-keeping, not the client's business; the
+                              products themselves are the useful half and stay. */}
                           {h.products && (
-                            <p className="text-xs text-gray-400 mb-3 italic">
-                              From the Feb 2026 register: {h.products}
+                            <p className="text-xs text-gray-500 mb-3">
+                              <span className="font-semibold text-ink-soft">Products: </span>
+                              {h.products}
                             </p>
                           )}
                           {canManage && (
@@ -1074,7 +1082,7 @@ export default function HoldersTab() {
             <p className="text-sm text-gray-600 mb-4">
               {cardConfirm.type === 'issue'
                 ? `Issue Card #${cardConfirm.cardNum} for ${cardConfirm.holder.full_name}? Fee: ${fmtMWK(cardConfirm.fee)}`
-                : `Reprint Card #${cardConfirm.cardNum}? A fee of ${fmtMWK(FM_FEES.id_card_replace)} applies.`
+                : `Reprint Card #${cardConfirm.cardNum}? A fee of ${fmtMWK(fee('id_card_replace'))} applies.`
               }
             </p>
             <div className="space-y-3 mb-5">
@@ -1182,7 +1190,7 @@ export default function HoldersTab() {
               Change products — {productEdit.holder.full_name} ({productEdit.holder.stall_number})
             </h4>
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-              Saving a changed product list raises the <strong>{fmtMWK(FM_FEES.product_change)}</strong> product
+              Saving a changed product list raises the <strong>{fmtMWK(fee('product_change'))}</strong> product
               change fee automatically. Saving an unchanged list raises nothing.
             </p>
 

@@ -63,7 +63,10 @@ export default function FeesTab() {
 
       <h2 className="text-[15px] font-bold text-navy">Fee Schedule</h2>
       <p className="text-xs text-gray-500 mt-0.5 mb-5">
-        The amounts the system charges. All six confirmed by Dhiren, 18 August 2026.
+        {/* BLOCK 3 / G — was "All six confirmed by Dhiren, 18 August 2026", an
+            internal provenance note on a client-facing screen. The provenance
+            belongs in the repo, not in the product. */}
+        The amounts the Farmers Market charges.
         {canEdit
           ? ' Changing an amount here takes effect immediately — no deploy needed.'
           : ' Only the owner can change an amount.'}

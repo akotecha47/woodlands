@@ -343,7 +343,15 @@ export default function TodayTab() {
                     <Th>Hours</Th>
                     <Th>Break</Th>
                     <Th>Status</Th>
-                    <Th>Radius</Th>
+                    {/* BLOCK 3 / H — the Radius column is HIDDEN, not deleted.
+                        It reported `attendance_records.within_radius`, the GPS
+                        geofence check, and every one of the 15 live rows is
+                        manager-written with no GPS reading at all, so the column
+                        printed an em dash on every line under a header that
+                        promised a verdict. Automated capture is PARKED, not
+                        removed (CLAUDE.md): the column, the data and
+                        `within_radius` itself all stay exactly where they are,
+                        and this display comes back the day a capture path does. */}
                     <Th>Actions</Th>
                   </tr>
                 </thead>
@@ -380,13 +388,6 @@ export default function TodayTab() {
                         <Td>{brk > 0 ? `${brk}m` : null}</Td>
                         <td className="px-4 py-3">
                           <StatusBadge status={effStatus} minsLate={late} />
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {rec ? (
-                            rec.within_radius === false
-                              ? <span className="text-amber-500" title="Outside premises">⚑</span>
-                              : <span className="text-green-500 text-xs">✓</span>
-                          ) : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1.5">

@@ -4,6 +4,7 @@ import { Menu, Search, LogOut, ChevronDown } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { ROLE_LABELS } from '../lib/roles'
 import { navItemsForRole, getInitials } from './Sidebar.nav'
+import { sectionIndexForRole, matchSections } from '../lib/sections'
 
 /**
  * U-02 — the top bar, on EVERY page.
@@ -28,9 +29,16 @@ export default function TopBar({ onOpenMenu }) {
   const { profile, signOut } = useAuth()
   const role = profile?.role ?? ''
 
-  const destinations = navItemsForRole(role)
-  const current = destinations.find(d =>
+  const navItems = navItemsForRole(role)
+  const current = navItems.find(d =>
     d.path === '/' ? location.pathname === '/' : location.pathname.startsWith(d.path))
+
+  // E — the index reaches IN-MODULE TABS, not just the seven routes. It was
+  // top-level only, so "bus" (Farmers Market > Businesses) matched nothing and
+  // the box quietly taught people it did not work. Same ROUTE_ACCESS filter as
+  // the sidebar, so nothing is widened: a tab is offered only where its module
+  // already is.
+  const destinations = sectionIndexForRole(role, navItems)
 
   const [query,     setQuery]     = useState('')
   const [openList,  setOpenList]  = useState(false)
@@ -39,9 +47,7 @@ export default function TopBar({ onOpenMenu }) {
   const searchRef = useRef(null)
   const menuRef   = useRef(null)
 
-  const matches = query.trim()
-    ? destinations.filter(d => d.label.toLowerCase().includes(query.trim().toLowerCase()))
-    : destinations
+  const matches = matchSections(destinations, query)
 
   // Click-away for both poppers.
   useEffect(() => {
@@ -53,17 +59,20 @@ export default function TopBar({ onOpenMenu }) {
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
 
-  function go(path) {
+  // `state.tab` is what lets a hit land on the TAB rather than on the module
+  // and whatever tab it happens to open on. Module-level hits pass null and the
+  // page keeps its own default.
+  function go(dest) {
     setQuery('')
     setOpenList(false)
-    navigate(path)
+    navigate(dest.path, dest.tab ? { state: { tab: dest.tab } } : undefined)
   }
 
   function onSearchKey(e) {
     if (e.key === 'Escape')      { setOpenList(false); e.currentTarget.blur(); return }
     if (e.key === 'ArrowDown')   { e.preventDefault(); setOpenList(true); setCursor(c => Math.min(c + 1, matches.length - 1)); return }
     if (e.key === 'ArrowUp')     { e.preventDefault(); setCursor(c => Math.max(c - 1, 0)); return }
-    if (e.key === 'Enter' && matches[cursor]) { e.preventDefault(); go(matches[cursor].path) }
+    if (e.key === 'Enter' && matches[cursor]) { e.preventDefault(); go(matches[cursor]) }
   }
 
   // Sign-out must actually end the session. AuthContext.signOut clears the
@@ -121,7 +130,7 @@ export default function TopBar({ onOpenMenu }) {
             <ul
               id="topbar-jump-list"
               role="listbox"
-              className="absolute right-0 mt-2 w-full min-w-[15rem] bg-white border border-line rounded-xl shadow-lg py-1.5 overflow-hidden"
+              className="absolute right-0 mt-2 w-full min-w-[19rem] bg-white border border-line rounded-xl shadow-lg py-1.5 max-h-[60vh] overflow-y-auto"
             >
               {matches.length === 0 && (
                 <li className="px-3 py-2.5 text-[13px] text-ink-soft">
@@ -131,17 +140,22 @@ export default function TopBar({ onOpenMenu }) {
               {matches.map((d, i) => {
                 const Icon = d.icon
                 return (
-                  <li key={d.path} role="option" aria-selected={i === cursor}>
+                  <li key={d.key} role="option" aria-selected={i === cursor}>
                     <button
                       type="button"
                       onMouseEnter={() => setCursor(i)}
-                      onClick={() => go(d.path)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-left wl-transition ${
+                      onClick={() => go(d)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-left wl-transition ${
                         i === cursor ? 'bg-teal-tint text-teal-deep' : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >
                       <Icon size={14} className="shrink-0 text-gray-400" aria-hidden="true" />
-                      {d.label}
+                      {/* A bare "Today" is ambiguous — Attendance and Table
+                          Bookings both have one. The module qualifies it. */}
+                      {d.module && (
+                        <span className="text-gray-400 shrink-0">{d.module} ›</span>
+                      )}
+                      <span className="font-semibold truncate">{d.label}</span>
                     </button>
                   </li>
                 )

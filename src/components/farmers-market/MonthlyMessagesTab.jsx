@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { FM_FEES } from '../../lib/constants'
+import { useFeeSchedule } from '../../lib/fm'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
 import { getMarketDayForMonth, AccessDenied } from './FarmersMarketUI'
 import { Button, Field, Inp, SearchInput, EmptyState } from '../ui/kit'
@@ -21,6 +21,9 @@ function defaultMonthVal() {
 }
 
 export default function MonthlyMessagesTab() {
+  // C-08 — the amounts quoted in a generated message come from
+  // fm_fee_schedule, so a fee edit reaches the next month's messages.
+  const { fee } = useFeeSchedule()
   const { profile } = useAuth()
   const canAccess = FM_MANAGE_ROLES.includes(profile?.role)
 
@@ -112,9 +115,11 @@ export default function MonthlyMessagesTab() {
     const monthName = MONTH_NAMES[selMonthIdx - 1]
 
     const outstanding = []
-    if (!h.application_paid) outstanding.push(`- Application fee: MWK ${FM_FEES.application.toLocaleString('en-US')}`)
-    if (!h.acceptance_paid)  outstanding.push(`- Registration fee: MWK ${FM_FEES.acceptance.toLocaleString('en-US')}`)
-    if (!visitPaid.has(h.id)) outstanding.push(`- Visit fee for ${monthName}: MWK ${FM_FEES.visit.toLocaleString('en-US')}`)
+    // Amounts quoted to a stallholder come from fm_fee_schedule, not a
+    // constant: a message that quotes last month's price is a fee dispute.
+    if (!h.application_paid) outstanding.push(`- Application fee: MWK ${fee('application').toLocaleString('en-US')}`)
+    if (!h.acceptance_paid)  outstanding.push(`- Registration fee: MWK ${fee('acceptance').toLocaleString('en-US')}`)
+    if (!visitPaid.has(h.id)) outstanding.push(`- Visit fee for ${monthName}: MWK ${fee('visit').toLocaleString('en-US')}`)
 
     const lines = [
       `Hi ${h.full_name},`,

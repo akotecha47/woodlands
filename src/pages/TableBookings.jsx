@@ -1,26 +1,21 @@
-import { useState } from 'react'
 import { PageHeader, Tabs, Card } from '../components/ui/kit'
+import { sectionsFor } from '../lib/sections'
+import { useSectionTab } from '../lib/useSectionTab'
 import TodayTab       from '../components/table-bookings/TodayTab'
 import UpcomingTab    from '../components/table-bookings/UpcomingTab'
 import NewBookingTab  from '../components/table-bookings/NewBookingTab'
 import AllBookingsTab from '../components/table-bookings/AllBookingsTab'
 
-const TABS = [
-  { id: 'today',    label: 'Today'        },
-  { id: 'upcoming', label: 'Upcoming'     },
-  { id: 'new',      label: 'New Booking'  },
-  { id: 'all',      label: 'All Bookings' },
-]
+const TABS = sectionsFor('/table-bookings')
 
 export default function TableBookings() {
-  const [tab, setTab] = useState('today')
+  const [tab, setTab] = useSectionTab('today')
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Restaurant"
         title="Table Bookings"
-        subtitle="Reservations for the restaurant — today's service, what is coming, and the full record."
       />
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} ariaLabel="Table Bookings sections" />

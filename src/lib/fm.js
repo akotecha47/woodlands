@@ -17,7 +17,9 @@
 //      client would silently skip the charge, which is the exact failure
 //      FUNCTIONAL_SPEC §7 calls out.
 
+import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
+import { FM_FEES } from './constants'
 
 // ── taxonomy ───────────────────────────────────────────────────────────────
 
@@ -115,6 +117,44 @@ export function feeAmount(byCode, code, fallback = null) {
   const row = byCode?.[code]
   if (row && row.is_active) return Number(row.amount)
   return fallback
+}
+
+/**
+ * THE FEE SEAM — C-08, wired in Block 3 / C.
+ *
+ * fm_fee_schedule has been authoritative in name only. Six charging surfaces
+ * read their amounts from the FM_FEES constant instead, and FeesTab told the
+ * owner on screen that "changing an amount here takes effect immediately — no
+ * deploy needed". All the copies agreed, so nothing looked wrong until the
+ * owner edited a fee — at which point the claim was falsifiable in two clicks.
+ *
+ * Every charging surface now takes its amount from here. `FM_FEES` survives as
+ * what its own comment always said it was: a FIRST-PAINT FALLBACK, used for the
+ * few hundred milliseconds before the table resolves and if the row is missing
+ * or deactivated. It is never the source of a charge that lands in the
+ * database once the schedule has loaded.
+ *
+ * `loaded` is exposed so a surface that must not quote a stale figure — the
+ * confirm dialog on a charge, say — can wait rather than flash the fallback.
+ */
+export function useFeeSchedule() {
+  const [byCode, setByCode] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchFeeSchedule()
+      .then(r => { if (alive) setByCode(r.byCode) })
+      // A failed read must not take the screen down, and must not silently
+      // become "free" either: the fallback is the last known-good schedule.
+      .catch(() => { if (alive) setByCode({}) })
+    return () => { alive = false }
+  }, [])
+
+  return {
+    byCode,
+    loaded: byCode !== null,
+    fee: code => feeAmount(byCode, code, FM_FEES[code] ?? null),
+  }
 }
 
 // ── waiting list ───────────────────────────────────────────────────────────
