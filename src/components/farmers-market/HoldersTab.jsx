@@ -10,9 +10,9 @@ import {
   SearchInput, StatRow, StatTile, TableWrap, Thead, EmptyRow, Tabs, Button,
 } from '../ui/kit'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
-import { fetchAttendance, fetchTaxonomy, itemPath, changeHolderProducts, forfeitStall, useFeeSchedule } from '../../lib/fm'
+import { fetchAttendance, fetchHolderProducts, changeHolderProducts, forfeitStall, useFeeSchedule } from '../../lib/fm'
 import {
-  STALL_TYPES, FM_PAY_TYPES, FM_PAY_METHODS, HOLDER_STATUS_CFG,
+  FM_PAY_TYPES, FM_PAY_METHODS, HOLDER_STATUS_CFG,
   fmtDate, fmtMWK, validateStall,
   getLastNMarketDays, getMarketDaysSince,
   HolderStatusBadge, PaidIcon,
@@ -31,7 +31,7 @@ const FILTER_TABS = [
 
 const BLANK_EDIT = {
   full_name: '', business_name: '', stall_number: '',
-  stall_type: 'Produce', phone: '', email: '', notes: '', status: 'active',
+  phone: '', email: '', notes: '', status: 'active',
 }
 
 export default function HoldersTab() {
@@ -61,8 +61,10 @@ export default function HoldersTab() {
   const [qrHolder,         setQrHolder]          = useState(null)
   const [lastMarketDay,    setLastMarketDay]      = useState(null) // { date, attended, collected, noShows }
   const [attendance,       setAttendance]         = useState({ byHolder: {}, marketDates: [] })
-  const [taxonomy,         setTaxonomy]           = useState(null)
-  const [productEdit,      setProductEdit]        = useState(null) // { holder, selected:Set, categoryId }
+  // 063: every holder's approved list, keyed by holder id.
+  const [productsBy,       setProductsBy]         = useState({})
+  // { holder, items: string[], draft: string } - a typed, editable list.
+  const [productEdit,      setProductEdit]        = useState(null)
   const [forfeitTarget,    setForfeitTarget]      = useState(null) // holder pending forfeit confirm
   const [busy,             setBusy]              = useState(false)
   const [itemBusy,         setItemBusy]          = useState(false)
@@ -111,19 +113,19 @@ export default function HoldersTab() {
     // load — a mutation performed by a read, running as whoever happened to
     // open the tab, silently overwriting a status a manager may have set by
     // hand. v_fm_attendance now computes the same judgement and writes nothing.
-    const [holdersR, yearVisitsR, lastVisitsR, attendanceR, taxonomyR] = await Promise.all([
+    const [holdersR, yearVisitsR, lastVisitsR, attendanceR, productsR] = await Promise.all([
       supabase.from('fm_holders').select('*').order('stall_number'),
       supabase.from('fm_visits').select('holder_id').gte('visit_date', yearStart),
       lastDay
         ? supabase.from('fm_visits').select('holder_id, fee_paid').eq('visit_date', lastDay)
         : Promise.resolve({ data: [] }),
       fetchAttendance().catch(() => ({ byHolder: {}, marketDates: [] })),
-      fetchTaxonomy().catch(() => null),
+      fetchHolderProducts().catch(() => ({ byHolder: {} })),
     ])
 
     setYearVisits(yearVisitsR.data ?? [])
     setAttendance(attendanceR)
-    setTaxonomy(taxonomyR)
+    setProductsBy(productsR.byHolder ?? {})
 
     const allHolders = holdersR.data ?? []
     setHolders(allHolders)
@@ -169,38 +171,20 @@ export default function HoldersTab() {
   // Do not infer debt from application_paid / acceptance_paid flags alone.
   const outstandingTotal = 0
 
-  // §7 DISPLAY HALF (AUDIT_3 §7 / Fable).
+  // §7, FINISHED AT 063.
   //
-  // `stall_type` is the deprecated classification: all 311 live rows carry
-  // 'Other', so this strip read "Produce: 0 · Crafts: 0 · … Other: 311" and the
-  // Type column said "Other" on every row. The 3-level taxonomy replaced it in
-  // the data layer at 061 — fm_categories → fm_product_types → fm_items, with
-  // fm_holders.category_id as the holder's category — and the product picker
-  // already writes it through change_holder_products(). Only the DISPLAY was
-  // left behind.
+  // This strip used to read "Produce: 0 · Crafts: 0 · ... Other: 311", because
+  // `stall_type` was 'Other' on every row. 061 replaced it with a fixed
+  // taxonomy and the strip became "Not yet classified: 261", which was true and
+  // still useless — the 51-item catalogue could not describe these businesses.
   //
-  // So this reads the taxonomy that load() already fetches, against the
-  // category_id that fm_holders.select('*') already returns. Nothing new is
-  // queried and nothing is written.
-  //
-  // Holders with no category_id are counted as "Not yet classified" rather than
-  // being dropped or folded into a category they were never assigned. That is a
-  // true statement about the data; filling it in is a data-curation job, not a
-  // display one.
-  const categoryName = h => taxonomy?.categories?.find(c => c.id === h.category_id)?.name ?? null
-
-  const categoryBreakdown = [
-    ...(taxonomy?.categories ?? []).map(c => ({
-      key:   c.id,
-      label: c.name,
-      count: activeHolders.filter(h => h.category_id === c.id).length,
-    })),
-    {
-      key:   'unclassified',
-      label: 'Not yet classified',
-      count: activeHolders.filter(h => !h.category_id).length,
-    },
-  ].filter(row => row.count > 0)
+  // 063 retired both. There is no such thing as an uncategorised holder any
+  // more, so the strip stops counting categories and reports the thing that is
+  // now actually true and actionable: who has an approved product list on
+  // record, and who does not. Both numbers are read from data already loaded.
+  const listedCount   = activeHolders.filter(h => (productsBy[h.id]?.length ?? 0) > 0).length
+  const unlistedCount = activeHolders.length - listedCount
+  const itemsTotal    = activeHolders.reduce((n, h) => n + (productsBy[h.id]?.length ?? 0), 0)
 
   const q = query.trim().toLowerCase()
   const filtered = holders
@@ -224,7 +208,7 @@ export default function HoldersTab() {
       supabase.from('fm_payments').select('*').eq('holder_id', holder.id).order('payment_date', { ascending: false }),
       supabase.from('fm_visits').select('*').eq('holder_id', holder.id),
       supabase.from('fm_id_cards').select('*').eq('holder_id', holder.id).order('card_number'),
-      supabase.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at'),
+      supabase.from('fm_holder_products').select('*').eq('holder_id', holder.id).order('item_name'),
     ])
     setExpandedPayments(pR.data ?? [])
     setExpandedVisits(vR.data ?? [])
@@ -288,7 +272,6 @@ export default function HoldersTab() {
       full_name:     holder.full_name,
       business_name: holder.business_name ?? '',
       stall_number:  holder.stall_number,
-      stall_type:    holder.stall_type,
       phone:         holder.phone ?? '',
       email:         holder.email ?? '',
       notes:         holder.notes ?? '',
@@ -310,7 +293,6 @@ export default function HoldersTab() {
         full_name:     editForm.full_name,
         business_name: editForm.business_name || null,
         stall_number:  stall,
-        stall_type:    editForm.stall_type,
         phone:         editForm.phone,
         email:         editForm.email || null,
         notes:         editForm.notes || null,
@@ -354,44 +336,77 @@ export default function HoldersTab() {
     finally { setBusy(false) }
   }
 
-  // ── approved products, from the controlled taxonomy ────────────────────────
-  // Goes through change_holder_products(), never a direct write: the RPC raises
-  // the MWK 10,000 product-change fee in the same transaction. A direct insert
-  // would change the products and skip the charge.
+  // ── approved products (063) ─────────────────────────────────
+  //
+  // A typed list, not a picker: the businesses sell things no fixed catalogue
+  // predicted ("Mello nana chips- Banana chips with seasoning").
+  //
+  // Every save goes through change_holder_products(), never a direct write.
+  // Since 063 that is enforced by the database and not by this comment —
+  // `authenticated` has SELECT and nothing else on fm_holder_products — so a
+  // change cannot be made without the per-item fee being raised beside it.
 
   function openProductEdit(holder) {
     setProductEdit({
       holder,
-      selected:   new Set(expandedItems.map(i => i.item_id)),
-      categoryId: holder.category_id ?? '',
+      items: (productsBy[holder.id] ?? expandedItems).map(i => i.item_name),
+      draft: '',
     })
   }
 
-  function toggleProduct(itemId) {
+  function addDraftItem() {
     setProductEdit(p => {
-      const next = new Set(p.selected)
-      if (next.has(itemId)) next.delete(itemId); else next.add(itemId)
-      return { ...p, selected: next }
+      const v = p.draft.trim()
+      if (!v) return p
+      // Case-insensitive, matching the unique index on the table: adding an
+      // item that differs only in case is not a change, and must not look like
+      // one on a screen that is about to charge for changes.
+      if (p.items.some(i => i.toLowerCase() === v.toLowerCase())) return { ...p, draft: '' }
+      return { ...p, items: [...p.items, v], draft: '' }
     })
   }
+
+  function removeItemAt(idx) {
+    setProductEdit(p => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))
+  }
+
+  function editItemAt(idx, value) {
+    setProductEdit(p => ({ ...p, items: p.items.map((it, i) => (i === idx ? value : it)) }))
+  }
+
+  // What the save WOULD cost, computed the same way the RPC computes it:
+  // |added| + |removed|, case-insensitive. Shown before the click so nobody is
+  // surprised by the charge. The server recomputes it and the server's answer
+  // is what gets reported afterwards — this is a preview, not the source.
+  const productDiff = (() => {
+    if (!productEdit) return null
+    const before = new Set((productsBy[productEdit.holder.id] ?? []).map(i => i.item_name.trim().toLowerCase()))
+    const after  = new Set(productEdit.items.map(i => i.trim().toLowerCase()).filter(Boolean))
+    const added   = [...after].filter(i => !before.has(i)).length
+    const removed = [...before].filter(i => !after.has(i)).length
+    const isInitial = !productEdit.holder.products_set_at
+    return { added, removed, charged: isInitial ? 0 : added + removed, isInitial }
+  })()
 
   async function saveProducts() {
-    const { holder, selected, categoryId } = productEdit
-    if (selected.size === 0) { flash('Select at least one product', false); return }
+    const { holder, items } = productEdit
+    const clean = items.map(i => i.trim()).filter(Boolean)
+    if (clean.length === 0) { flash('List at least one product', false); return }
     setItemBusy(true)
     try {
-      const res = await changeHolderProducts({
-        holderId:   holder.id,
-        itemIds:    [...selected],
-        categoryId: categoryId || null,
-      })
-      flash(
-        res.fee_raised
-          ? `Products updated — ${fmtMWK(res.fee_amount)} product change fee raised`
-          : 'No change to the product list — no fee raised'
-      )
+      const res = await changeHolderProducts({ holderId: holder.id, itemNames: clean })
+      // Reported from the SERVER's arithmetic, never recomputed here: the
+      // number on screen has to be the number that hit fm_payments.
+      if (!res.changed) {
+        flash('No change to the product list — no fee raised')
+      } else if (res.initial) {
+        flash(`Initial product list recorded (${res.items_added} items) — no fee`)
+      } else {
+        flash(`${res.items_charged} item${res.items_charged === 1 ? '' : 's'} changed — ${fmtMWK(res.fee_total)} product-change fee raised`)
+      }
       setProductEdit(null)
-      const { data } = await supabase.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at')
+      const { data } = await supabase.from('fm_holder_products')
+        .select('*').eq('holder_id', holder.id).order('item_name')
       setExpandedItems(data ?? [])
       load()
     } catch (err) { flash(err.message, false) }
@@ -457,7 +472,7 @@ export default function HoldersTab() {
       const [pR, idR, itR] = await Promise.all([
         supabase.from('fm_payments').select('*').eq('holder_id', holder.id).order('payment_date', { ascending: false }),
         supabase.from('fm_id_cards').select('*').eq('holder_id', holder.id).order('card_number'),
-        supabase.from('fm_approved_items').select('*').eq('holder_id', holder.id).order('created_at'),
+        supabase.from('fm_holder_products').select('*').eq('holder_id', holder.id).order('item_name'),
       ])
       setExpandedPayments(pR.data ?? [])
       setExpandedIdCards(idR.data ?? [])
@@ -468,13 +483,12 @@ export default function HoldersTab() {
 
   // ── approved item actions ──────────────────────────────────────────────────
 
-  // REMOVED at 061: the free-text add/remove pair that wrote fm_approved_items
-  // directly. Two reasons it could not stay. It inserted only item_name, which
-  // is no longer the classification and no longer sufficient — item_id is NOT
-  // NULL — so it would fail outright. And it changed a holder's products
-  // without raising the MWK 10,000 fee, which is the precise failure
-  // FUNCTIONAL_SPEC §7 exists to prevent. Both paths now go through
-  // change_holder_products(); see saveProducts above.
+  // The free-text add/remove pair that wrote fm_approved_items directly was
+  // removed at 061 because it skipped the fee. 063 brings free text BACK as the
+  // model, but the write path stays the RPC — see saveProducts above. The
+  // difference is that the database now enforces it.
+
+
 
   return (
     <div className="p-6">
@@ -500,23 +514,31 @@ export default function HoldersTab() {
         />
       </StatRow>
 
-      {/* Product categories — the 3-level taxonomy, not the deprecated
-          stall_type. Only categories that actually have holders are shown. */}
-      {categoryBreakdown.length > 0 && (
+      {/* 063 — the strip reports what is now true. It used to count a
+          taxonomy that could not describe these businesses, so it said
+          "Other: 311" and then "Not yet classified: 261". Both were accurate
+          and neither was useful. Approved lists on record is the number
+          somebody can actually act on. */}
+      {activeHolders.length > 0 && (
         <div className="mb-5">
           <p className="text-[11px] font-bold uppercase tracking-[.08em] text-ink-soft mb-2">
-            Active businesses by product category
+            Approved product lists
           </p>
           <div className="flex flex-wrap gap-2">
-            {categoryBreakdown.map(c => (
-              <span
-                key={c.key}
-                className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-white text-xs"
-              >
-                <span className="font-semibold text-navy">{c.label}</span>
-                <span className="font-bold text-ink-soft tnum">{c.count}</span>
+            <span className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-white text-xs">
+              <span className="font-semibold text-navy">On record</span>
+              <span className="font-bold text-ink-soft tnum">{listedCount}</span>
+            </span>
+            {unlistedCount > 0 && (
+              <span className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-white text-xs">
+                <span className="font-semibold text-navy">No list yet</span>
+                <span className="font-bold text-ink-soft tnum">{unlistedCount}</span>
               </span>
-            ))}
+            )}
+            <span className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-white text-xs">
+              <span className="font-semibold text-navy">Approved products</span>
+              <span className="font-bold text-ink-soft tnum">{itemsTotal}</span>
+            </span>
           </div>
         </div>
       )}
@@ -631,7 +653,7 @@ export default function HoldersTab() {
               <Th>Stall</Th>
               <Th>Name</Th>
               <Th>Business</Th>
-              <Th>Category</Th>
+              <Th>Products</Th>
               <Th>Phone</Th>
               <Th>Status</Th>
               <Th>App fee</Th>
@@ -655,10 +677,26 @@ export default function HoldersTab() {
                     </button>
                   </td>
                   <Td>{h.business_name}</Td>
-                  {/* §7: the category from the taxonomy, not the dead stall_type. */}
+                  {/* 063: the approved list itself, not a category standing in
+                      for it. Truncated to two names plus a count, because the
+                      longest list is 15 items and the column is not the place
+                      to read them all — expanding the row is. */}
                   <Td>
-                    {categoryName(h)
-                      ?? <span className="text-gray-400">Not yet classified</span>}
+                    {(() => {
+                      const items = productsBy[h.id] ?? []
+                      if (items.length === 0) {
+                        return <span className="text-gray-400">No list yet</span>
+                      }
+                      const shown = items.slice(0, 2).map(i => i.item_name).join(', ')
+                      return (
+                        <span title={items.map(i => i.item_name).join(', ')}>
+                          {shown}
+                          {items.length > 2 && (
+                            <span className="text-gray-400"> +{items.length - 2}</span>
+                          )}
+                        </span>
+                      )
+                    })()}
                   </Td>
                   <Td>{h.phone}</Td>
                   <td className="px-4 py-3"><HolderStatusBadge status={h.status} /></td>
@@ -871,19 +909,19 @@ export default function HoldersTab() {
                           })()}
                         </div>
 
-                        {/* Approved products, from the controlled taxonomy */}
+                        {/* Approved products — the business's own list (063) */}
                         <div>
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Approved Products</p>
                           {expandedItems.length === 0 ? (
                             <p className="text-sm text-gray-400 mb-3">
-                              Not yet classified. {canManage && 'Set the products this business is approved to sell.'}
+                              No approved list yet. {canManage && 'The first list recorded is free \u2014 changes after that raise the per-item fee.'}
                             </p>
                           ) : (
-                            <ul className="space-y-1.5 mb-3">
+                            <ul className="flex flex-wrap gap-1.5 mb-3">
                               {expandedItems.map(item => (
-                                <li key={item.id} className="text-sm text-gray-700">
-                                  {itemPath(taxonomy, item.item_id)}
-                                  {item.item_name && <span className="text-gray-400"> · {item.item_name}</span>}
+                                <li key={item.id}
+                                  className="text-xs px-2.5 py-1 rounded-lg border border-line bg-white text-gray-700">
+                                  {item.item_name}
                                 </li>
                               ))}
                             </ul>
@@ -1015,20 +1053,11 @@ export default function HoldersTab() {
                     onBlur={() => setEditForm(p => ({ ...p, stall_number: p.stall_number.trim().toUpperCase() }))} />
                   {editStallError && <p className="text-xs text-red-600 mt-1">{editStallError}</p>}
                 </Field>
-                {/* Same honest hint the Add Business form carries. This field
-                    still writes the deprecated `stall_type`; the real product
-                    classification is `category_id`, set through the product
-                    picker, which is also the only path that raises the
-                    MWK 10,000 change fee. Repointing the two forms is a WRITE
-                    change and is FLAGGED-1, not Block 2 work. */}
-                <Field
-                  label="Stall Type *"
-                  hint="The broad category. What they are approved to SELL is set on the business record, through the product picker."
-                >
-                  <Sel required value={editForm.stall_type} onChange={ef('stall_type')}>
-                    {STALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </Sel>
-                </Field>
+                {/* Stall Type is GONE. The column was dropped in 063: it was
+                    NOT NULL, 'Other' on all 311 rows, and read by nothing but
+                    its own CHECK. What a business sells is its approved product
+                    list, edited through Change Products so the per-item fee
+                    cannot be skipped. */}
               </div>
               <Field label="Phone *">
                 <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white focus-within:ring-2 focus-within:ring-teal/25 focus-within:border-teal">
@@ -1182,56 +1211,108 @@ export default function HoldersTab() {
         </div>
       )}
 
-      {/* Product change — controlled list, and the fee is raised by the save */}
+      {/* Change products — a TYPED list (063). The fee is raised by the save,
+          per item changed, and the header states the cost before the click. */}
       {productEdit && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h4 className="text-base font-semibold text-gray-900 mb-1">
               Change products — {productEdit.holder.full_name} ({productEdit.holder.stall_number})
             </h4>
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-              Saving a changed product list raises the <strong>{fmtMWK(fee('product_change'))}</strong> product
-              change fee automatically. Saving an unchanged list raises nothing.
+
+            {/* The two cases read differently on purpose: setting a list for
+                the first time is free, and saying so plainly is what makes an
+                honest first listing the cheap option. */}
+            {productDiff?.isInitial ? (
+              <p className="text-xs text-green-700 bg-ok-bg border border-green-200 rounded-lg px-3 py-2 mb-4">
+                <strong>First list — no fee.</strong> Recording what this business
+                is already approved to sell costs nothing. Changes made after this
+                raise {fmtMWK(fee('product_change'))} per item changed.
+              </p>
+            ) : (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                Every item added or removed raises the{' '}
+                <strong>{fmtMWK(fee('product_change'))}</strong> product-change fee.
+                Saving an unchanged list raises nothing.
+              </p>
+            )}
+
+            {/* Current list — each item editable in place, each removable. */}
+            <p className="text-[11px] font-bold uppercase tracking-[.08em] text-ink-soft mb-2">
+              Approved products ({productEdit.items.length})
             </p>
+            {productEdit.items.length === 0 ? (
+              <p className="text-sm text-gray-400 mb-3">Nothing listed yet — add the first item below.</p>
+            ) : (
+              <ul className="space-y-2 mb-4">
+                {productEdit.items.map((item, idx) => (
+                  <li key={idx} className="flex items-center gap-2">
+                    <Inp
+                      value={item}
+                      aria-label={`Approved product ${idx + 1}`}
+                      onChange={e => editItemAt(idx, e.target.value)}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => removeItemAt(idx)}
+                      aria-label={`Remove ${item}`}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
 
-            <Field label="Primary Category">
-              <Sel value={productEdit.categoryId}
-                onChange={e => setProductEdit(p => ({ ...p, categoryId: e.target.value }))}>
-                <option value="">— none —</option>
-                {(taxonomy?.categories ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Sel>
-            </Field>
-
-            <div className="mt-4 space-y-4">
-              {(taxonomy?.byCategory ?? []).map(cat => (
-                <div key={cat.id}>
-                  <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">{cat.name}</p>
-                  {cat.types.map(t => (
-                    <div key={t.id} className="mb-2 pl-3 border-l-2 border-gray-100">
-                      <p className="text-xs text-gray-500 mb-1">{t.name}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {t.items.map(i => {
-                          const on = productEdit.selected.has(i.id)
-                          return (
-                            <button key={i.id} type="button" onClick={() => toggleProduct(i.id)}
-                              className={`text-xs px-2.5 py-1 rounded-lg border wl-transition ${
-                                on ? 'bg-teal text-white border-teal'
-                                   : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
-                              }`}>
-                              {i.name}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
+            {/* Add by typing. Enter adds, so a list of ten is ten keystrokes
+                and a return, not ten trips to a button. */}
+            <div className="flex items-center gap-2 mb-4">
+              <Inp
+                value={productEdit.draft}
+                placeholder="Add a product…"
+                aria-label="Add a product"
+                onChange={e => setProductEdit(p => ({ ...p, draft: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraftItem() } }}
+              />
+              <Button variant="secondary" onClick={addDraftItem} disabled={!productEdit.draft.trim()}>
+                Add
+              </Button>
             </div>
 
-            <div className="flex gap-2 mt-5">
-              <Button onClick={saveProducts} disabled={itemBusy || productEdit.selected.size === 0} className="flex-1">
-                {itemBusy ? 'Saving…' : `Save (${productEdit.selected.size} selected)`}
+            {/* What this save will cost, before the click. Computed the same
+                way the RPC computes it; the server's answer is what gets
+                reported after. */}
+            <div className="border border-line rounded-lg px-3 py-2.5 mb-4 text-sm">
+              {productDiff.added === 0 && productDiff.removed === 0 ? (
+                <span className="text-ink-soft">No change — saving raises nothing.</span>
+              ) : productDiff.isInitial ? (
+                <span className="text-green-700 font-semibold">
+                  {productDiff.added} item{productDiff.added === 1 ? '' : 's'} — initial list, no fee
+                </span>
+              ) : (
+                <>
+                  <span className="font-semibold text-navy">
+                    {productDiff.charged} item{productDiff.charged === 1 ? '' : 's'} changed
+                  </span>
+                  <span className="text-ink-soft">
+                    {' '}({productDiff.added} added, {productDiff.removed} removed)
+                    {' · '}
+                  </span>
+                  <span className="font-semibold text-amber-700">
+                    {fmtMWK(productDiff.charged * (fee('product_change') ?? 0))} fee
+                  </span>
+                </>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={saveProducts}
+                disabled={itemBusy || productEdit.items.filter(i => i.trim()).length === 0}
+                className="flex-1"
+              >
+                {itemBusy ? 'Saving…' : 'Save products'}
               </Button>
               <Button variant="secondary" onClick={() => setProductEdit(null)} className="flex-1">
                 Cancel

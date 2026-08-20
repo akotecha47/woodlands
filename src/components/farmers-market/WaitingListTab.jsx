@@ -3,9 +3,9 @@ import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Th, Td, Toast } from '../admin/AdminUI'
+import { Field, Inp, Th, Td, Toast } from '../admin/AdminUI'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
-import { fetchWaitingList, fetchTaxonomy, fetchForfeitures } from '../../lib/fm'
+import { fetchWaitingList, fetchForfeitures } from '../../lib/fm'
 import { Badge, StatRow, StatTile, EmptyRow } from '../ui/kit'
 import { fmtDate, AccessDenied } from './FarmersMarketUI'
 import { fieldCls } from '../ui/kit.constants'
@@ -21,7 +21,10 @@ const STATUS_CFG = {
   withdrawn: { label: 'Withdrawn', tone: 'neutral' },
 }
 
-const BLANK = { full_name: '', business_name: '', phone: '', email: '', category_id: '', products_note: '', notes: '' }
+// 063: no `category_id`. The taxonomy it pointed at was retired, and this
+// table already carried `products_note` free text - the same shape the whole
+// Farmers Market product model moved to.
+const BLANK = { full_name: '', business_name: '', phone: '', email: '', products_note: '', notes: '' }
 
 export default function WaitingListTab() {
   const { profile, session } = useAuth()
@@ -29,7 +32,6 @@ export default function WaitingListTab() {
 
   const [entries,     setEntries]     = useState([])
   const [forfeitures, setForfeitures] = useState([])
-  const [categories,  setCategories]  = useState([])
   const [form,        setForm]        = useState(BLANK)
   const [showAdd,     setShowAdd]     = useState(false)
   const [busy,        setBusy]        = useState(false)
@@ -38,9 +40,8 @@ export default function WaitingListTab() {
 
   async function load() {
     try {
-      const [w, tx, ff] = await Promise.all([fetchWaitingList(), fetchTaxonomy(), fetchForfeitures()])
+      const [w, ff] = await Promise.all([fetchWaitingList(), fetchForfeitures()])
       setEntries(w)
-      setCategories(tx.categories)
       setForfeitures(ff)
     } catch (err) { flash(err.message, false) }
   }
@@ -60,7 +61,6 @@ export default function WaitingListTab() {
         business_name: form.business_name || null,
         phone:         form.phone,
         email:         form.email || null,
-        category_id:   form.category_id || null,
         products_note: form.products_note || null,
         notes:         form.notes || null,
         created_by:    session?.user?.id ?? null,
@@ -133,15 +133,13 @@ export default function WaitingListTab() {
             </Field>
             <Field label="Email"><Inp type="email" value={form.email} onChange={f('email')} /></Field>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <Field label="Intended Category">
-              <Sel value={form.category_id} onChange={f('category_id')}>
-                <option value="">— not stated —</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Sel>
-            </Field>
-            <Field label="Products"><Inp value={form.products_note} onChange={f('products_note')} placeholder="What they intend to sell" /></Field>
-          </div>
+          {/* 063: the Intended Category picker went with the taxonomy. What
+              they intend to sell is free text, matching how an approved list
+              is recorded once they have a stall. */}
+          <Field label="Products">
+            <Inp value={form.products_note} onChange={f('products_note')}
+              placeholder="What they intend to sell" />
+          </Field>
           <Field label="Notes">
             <textarea rows={2} className={`${fieldCls} resize-none`} value={form.notes} onChange={f('notes')} />
           </Field>

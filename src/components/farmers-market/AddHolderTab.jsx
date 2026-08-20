@@ -3,15 +3,15 @@ import PhoneInput from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Field, Inp, Sel, Txt, Toast } from '../admin/AdminUI'
+import { Field, Inp, Txt, Toast } from '../admin/AdminUI'
 import { Button, FormGrid, FormActions, SectionHead } from '../ui/kit'
 import { FM_MANAGE_ROLES } from '../../lib/roles'
-import { STALL_TYPES, todayStr, AccessDenied, validateStall } from './FarmersMarketUI'
+import { AccessDenied, validateStall } from './FarmersMarketUI'
 import { useFlash } from '../ui/useFlash'
 
 const BLANK = {
   full_name: '', business_name: '', stall_number: '',
-  stall_type: 'Produce', phone: '', email: '', notes: '',
+  phone: '', email: '', notes: '',
 }
 
 export default function AddHolderTab({ onCreated }) {
@@ -61,7 +61,6 @@ export default function AddHolderTab({ onCreated }) {
         full_name:        form.full_name,
         business_name:    form.business_name    || null,
         stall_number:     stall,
-        stall_type:       form.stall_type,
         phone:            form.phone,
         email:            form.email            || null,
         notes:            form.notes            || null,
@@ -111,14 +110,11 @@ export default function AddHolderTab({ onCreated }) {
             />
           </Field>
 
-          <Field
-            label="Stall type *"
-            hint="The broad category. What they are approved to SELL is set on the business record, through the product picker."
-          >
-            <Sel required value={form.stall_type} onChange={f('stall_type')}>
-              {STALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </Sel>
-          </Field>
+          {/* Stall type is GONE (063). The column was dropped: NOT NULL,
+              'Other' on all 311 rows, read by nothing but its own CHECK. What a
+              business sells is its approved product list, recorded on the
+              business record once it exists - the first list is free, and only
+              later changes raise the per-item fee. */}
 
           <Field label="Phone *">
             <div className="flex items-center border border-gray-300 rounded-lg px-2 bg-white wl-transition focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/25">

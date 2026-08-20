@@ -3,7 +3,9 @@ import { Badge } from '../ui/kit'
 
 // ── constants ──────────────────────────────────────────────────────────────────
 
-export const STALL_TYPES = ['Produce', 'Crafts', 'Food & Beverages', 'Clothing', 'Other']
+// STALL_TYPES was the five-value list behind fm_holders.stall_type. The column
+// was DROPPED in 063 - NOT NULL, 'Other' on all 311 rows, and read by nothing
+// but its own CHECK. What a business sells is its approved product list.
 
 // ── stall numbers ──────────────────────────────────────────────────────────────
 // THREE digits, not two. Every one of the 305 live stalls is A001-A347 (verified

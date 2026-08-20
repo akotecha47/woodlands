@@ -12,49 +12,39 @@
 //      reconciled it against anything.
 //
 //   2. A PRODUCT CHANGE GOES THROUGH THE RPC, NEVER THROUGH DIRECT WRITES.
-//      change_holder_products raises the MWK 10,000 fee in the same
-//      transaction as the change. Writing fm_approved_items directly from the
-//      client would silently skip the charge, which is the exact failure
-//      FUNCTIONAL_SPEC §7 calls out.
+//      change_holder_products raises the product-change fee PER ITEM CHANGED,
+//      in the same transaction as the change. Since 063 this is enforced by
+//      the database rather than by convention: `authenticated` holds SELECT
+//      and nothing else on fm_holder_products, so a client-side insert cannot
+//      skip the charge even if someone writes one.
 
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import { FM_FEES } from './constants'
 
-// ── taxonomy ───────────────────────────────────────────────────────────────
+// ── approved products (063) ────────────────────────────────
 
-// Returns { categories, types, items, byCategory, typesById, itemsById }.
-// One round trip per level; the lists are small (6 / 17 / 51) and fully cached
-// by the caller for the lifetime of the tab.
-export async function fetchTaxonomy() {
-  const [cR, tR, iR] = await Promise.all([
-    supabase.from('fm_categories').select('*').eq('is_active', true).order('sort_order').order('name'),
-    supabase.from('fm_product_types').select('*').eq('is_active', true).order('sort_order').order('name'),
-    supabase.from('fm_items').select('*').eq('is_active', true).order('sort_order').order('name'),
-  ])
-  const categories = cR.data ?? []
-  const types      = tR.data ?? []
-  const items      = iR.data ?? []
+// Every business's approved list, as { holderId: [{ id, item_name, added_at }] }.
+// One round trip for all of them: 663 rows across 289 holders is smaller than
+// the holder list itself, and the Businesses screen needs every holder's items
+// to render the table without an N+1.
+//
+// Replaces fetchTaxonomy(). The fm_categories / fm_product_types / fm_items
+// tables and fm_approved_items were RETIRED in 063 — 311 of 311 holders could
+// not be classified into the 51-item catalogue, and the real answer was already
+// in fm_holders.products, the February register text, on 289 of them.
+export async function fetchHolderProducts() {
+  const { data, error } = await supabase
+    .from('fm_holder_products')
+    .select('id, holder_id, item_name, added_at')
+    .order('item_name')
+  if (error) throw error
 
-  const typesById = Object.fromEntries(types.map(t => [t.id, t]))
-  const itemsById = Object.fromEntries(items.map(i => [i.id, i]))
-  const byCategory = categories.map(c => ({
-    ...c,
-    types: types
-      .filter(t => t.category_id === c.id)
-      .map(t => ({ ...t, items: items.filter(i => i.product_type_id === t.id) })),
-  }))
-
-  return { categories, types, items, byCategory, typesById, itemsById }
-}
-
-// "Crafts › Paintings › Oil painting" for one item id.
-export function itemPath(taxonomy, itemId) {
-  const item = taxonomy?.itemsById?.[itemId]
-  if (!item) return '—'
-  const type = taxonomy.typesById?.[item.product_type_id]
-  const cat  = taxonomy.categories?.find(c => c.id === type?.category_id)
-  return [cat?.name, type?.name, item.name].filter(Boolean).join(' › ')
+  const byHolder = {}
+  for (const r of data ?? []) {
+    (byHolder[r.holder_id] ??= []).push(r)
+  }
+  return { byHolder, rows: data ?? [] }
 }
 
 // ── attendance ─────────────────────────────────────────────────────────────
@@ -81,7 +71,6 @@ export async function fetchAttendance() {
         full_name:        r.full_name,
         business_name:    r.business_name,
         status:           r.status,
-        category_id:      r.category_id,
         attended_count:   r.attended_count,
         missed_count:     r.missed_count,
         last_visit_date:  r.last_visit_date,
@@ -179,17 +168,20 @@ export async function fetchWaitingList() {
 
 // ── the two RPCs ───────────────────────────────────────────────────────────
 
-// Replaces the holder's approved items AND raises the product-change fee, in
-// one transaction, server-side. Returns the RPC's jsonb result, which reports
-// whether a fee was actually raised — an unchanged set is a no-op and charges
-// nothing.
+// Replaces a business's approved product list and raises the product-change fee
+// PER ITEM CHANGED, in one transaction, server-side.
+//
+// `itemNames` is free text now, not catalogue ids (063). The RPC returns what
+// it actually did — how many items were added, removed and CHARGED, and whether
+// this was the free initial list — so the screen reports the charge from the
+// server's own arithmetic rather than recomputing it and risking a different
+// answer from the one that hit fm_payments.
 export async function changeHolderProducts({
-  holderId, itemIds, categoryId = null, paymentMethod = 'cash', reference = null, notes = null,
+  holderId, itemNames, paymentMethod = 'cash', reference = null, notes = null,
 }) {
   const { data, error } = await supabase.rpc('change_holder_products', {
     p_holder_id:      holderId,
-    p_item_ids:       itemIds,
-    p_category_id:    categoryId,
+    p_item_names:     itemNames,
     p_payment_method: paymentMethod,
     p_reference:      reference,
     p_notes:          notes,
