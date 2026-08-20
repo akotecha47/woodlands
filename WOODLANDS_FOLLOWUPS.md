@@ -403,7 +403,22 @@ snapshot ✅ → merge 008 ✅ → ghost-table CREATEs 031/032/033 ✅ (applied 
 
 - **⚠ seed.sql's `ALTER COLUMN date DROP NOT NULL` never took effect, and was a live-vs-file trap in the opposite direction.** Live `attendance_records.date` is still `NOT NULL` (matching `001_schema.sql:104`; no migration relaxes it). Keeping that statement would have made a rebuild produce a *nullable* `date`. Removed from seed.sql rather than adopted into 010. `TodayTab.jsx:169,:202` already document the live `NOT NULL`.
 
-**Final live policy set on `attendance_records` — 7, verified on a fresh connection after every step:**
+**Policy set on `attendance_records` as Session B left it — 7, verified on a fresh connection after every step:**
+
+> **⚠ HISTORICAL — THE PREDICATES BELOW ARE DEAD. DO NOT COPY THIS TABLE.**
+> This is the 10 August record of what Session B built, kept as provenance for *how the hole was closed*. The **role collapse of 11 August (migrations 037–044) rewrote every `manage` predicate in it.** `manager`, `kitchen_manager` and `restaurant_manager` **no longer exist** — a policy written from the predicates below would compile and silently exclude every `admin` and every `hr`. **The live set is in the correction immediately after the table.**
+
+| Policy (as at 10 Aug) | Cmd | Role | Predicate (**superseded 11 Aug**) |
+|---|---|---|---|
+| `service_role_all_attendance` | ALL | service_role | `true` / `true` |
+| `attendance_own_select` | SELECT | authenticated | `user_id = auth.uid()` |
+| `attendance_own_insert` | INSERT | authenticated | `user_id = auth.uid()` |
+| `attendance_own_update` | UPDATE | authenticated | `user_id = auth.uid()` (both) |
+| ~~`attendance_manage_select`~~ | SELECT | authenticated | ~~`current_app_role() IN ('owner','manager')`~~ |
+| ~~`attendance_manage_insert`~~ | INSERT | authenticated | ~~`current_app_role() IN ('owner','manager')`~~ |
+| ~~`attendance_manage_update`~~ | UPDATE | authenticated | ~~`current_app_role() IN ('owner','manager')`~~ (both) |
+
+**✅ THE LIVE SET — measured on production 20 August 2026, still 7 policies:**
 
 | Policy | Cmd | Role | Predicate |
 |---|---|---|---|
@@ -411,15 +426,17 @@ snapshot ✅ → merge 008 ✅ → ghost-table CREATEs 031/032/033 ✅ (applied 
 | `attendance_own_select` | SELECT | authenticated | `user_id = auth.uid()` |
 | `attendance_own_insert` | INSERT | authenticated | `user_id = auth.uid()` |
 | `attendance_own_update` | UPDATE | authenticated | `user_id = auth.uid()` (both) |
-| `attendance_manage_select` | SELECT | authenticated | `current_app_role() IN ('owner','manager')` |
-| `attendance_manage_insert` | INSERT | authenticated | `current_app_role() IN ('owner','manager')` |
-| `attendance_manage_update` | UPDATE | authenticated | `current_app_role() IN ('owner','manager')` (both) |
+| `attendance_manage_select_v2` | SELECT | authenticated | `current_app_role() IN ('owner','admin','hr')` |
+| `attendance_manage_insert_v2` | INSERT | authenticated | `current_app_role() IN ('owner','admin','hr')` |
+| `attendance_manage_update_v2` | UPDATE | authenticated | `current_app_role() IN ('owner','admin','hr')` (both) |
 
-No DELETE policy, deliberately: nothing in `src/` deletes an attendance record and `authenticated` holds no DELETE grant, so DELETE is fail-closed at the grant layer. Recorded as a decision, unlike the unplanned `stock_items` asymmetry noted earlier in this log.
+The three own-row policies and the service_role escape hatch survived the collapse unchanged — they key on `auth.uid()`, not on a role name, which is exactly why they did. The three `manage` policies were replaced by `_v2` successors gating on the live three-role management set, which matches `AT_MANAGE_ROLES` in `roles.js:27` (`['owner','admin','hr']`): `hr` owns the roster, so it manages attendance alongside owner and admin; `department_head` is deliberately excluded.
 
-Role set is `('owner','manager')` = `ROUTE_ACCESS['/attendance']`, not the four-role set. `kitchen_manager` and `restaurant_manager` cannot open the module. **~~Note: `AT_MANAGE_ROLES` in `AttendanceUI.jsx:3` lists `restaurant_manager`, whom `RouteGuard` blocks before any tab renders — a dead role gate.~~ — CLOSED, confirmed 18 August 2026 (AUDIT_3 §7).** The constant now lives in `roles.js:27` as `['owner','admin','hr']`, and a whole-`src` grep confirms **no component gates on a role the router blocks**. This entry was stale.
+No DELETE policy, deliberately: nothing in `src/` deletes an attendance record and `authenticated` holds no DELETE grant, so DELETE is fail-closed at the grant layer. Recorded as a decision, unlike the unplanned `stock_items` asymmetry noted earlier in this log. **Still true on the live set.**
 
-**Access proved by running as the roles themselves**, not through the Management API (which connects as `postgres`, `rolbypassrls = true` — a statement succeeding there proves nothing about what a role may do). 17 scenarios, each `SET LOCAL ROLE authenticated` with a real `sub` claim; the write scenarios wrapped in a transaction that rolled back, rollback re-verified on a fresh connection (still 15 rows, 0 with `user_id`, no test note). All passed: owner/manager read 15; kitchen_manager, restaurant_manager and an unknown-`sub` user read 0; a staff user can insert/read/update only their own row, cannot update another's (0 rows affected), cannot insert one attributed to another user (denied), cannot insert a roster row with `user_id` NULL (denied); a manager can insert and update roster rows; neither can DELETE.
+**~~Note: `AT_MANAGE_ROLES` in `AttendanceUI.jsx:3` lists `restaurant_manager`, whom `RouteGuard` blocks before any tab renders — a dead role gate.~~ — CLOSED, confirmed 18 August 2026 (AUDIT_3 §7).** The constant now lives in `roles.js:27` as `['owner','admin','hr']`, and a whole-`src` grep confirms **no component gates on a role the router blocks**. This entry was stale.
+
+**Access proved by running as the roles themselves**, not through the Management API (which connects as `postgres`, `rolbypassrls = true` — a statement succeeding there proves nothing about what a role may do). 17 scenarios, each `SET LOCAL ROLE authenticated` with a real `sub` claim; the write scenarios wrapped in a transaction that rolled back, rollback re-verified on a fresh connection (still 15 rows, 0 with `user_id`, no test note). All passed — **read the role names below as the 10 August cast, not as current subjects**: owner/manager read 15; kitchen_manager, restaurant_manager and an unknown-`sub` user read 0; a staff user can insert/read/update only their own row, cannot update another's (0 rows affected), cannot insert one attributed to another user (denied), cannot insert a roster row with `user_id` NULL (denied); a manager can insert and update roster rows; neither can DELETE. **The equivalent proof against the live four-role model ran as part of migrations 037–044 (11 August).**
 
 ### ⚠ §2.6 rebuild proof — RUN 12 August 2026, FAILED at migration 016. Fixed in files; proof not yet re-run.
 
@@ -1269,7 +1286,7 @@ so a future audit recognises it as known rather than re-discovering it as new.
 
 - **Key rotation must update the Edge Function secret in the same window.** Both `create-user` and `public-checkin` read `Deno.env.get('SERVICE_ROLE_KEY')`, a manually-set project secret. Rotating the service_role key in the Supabase dashboard does *not* update it. If it is not updated, user creation AND all public QR check-in break simultaneously. See `src/lib/standards.md` §4.
 
-- **`store_supervisor` gates left in place.** `LogDeliveryTab.jsx:7` and `TransfersTab.jsx:7` still list a role that cannot exist, and `InventoryUI.jsx:82` filters on it. Migration 022 deliberately did not grant it anything. Those two tabs remain `AccessDenied` to everyone except owner/manager. **Sprint E.**
+- **~~`store_supervisor` gates left in place.~~ — CLOSED, confirmed 20 August 2026.** The finding as written (26 July): `LogDeliveryTab.jsx:7` and `TransfersTab.jsx:7` listed a role deleted from `roles.js` in **June**, and `InventoryUI.jsx:82` filtered on it, so both tabs were `AccessDenied` to every role that could actually exist. Migration 022 deliberately granted it nothing. **All three gates are gone.** A whole-repo grep now returns `store_supervisor` in exactly four places, none of them a gate: three explanatory comments recording the removal (`InventoryUI.jsx:62`, `LogDeliveryTab.jsx:11`, `TransfersTab.jsx:11`), plus `022_sprint_b_policies.sql:63`, which is the migration comment that documented the dead role in the first place. **The role does not exist and nothing gates on it.** *(The "Sprint E" tag was never actioned under that name; the gates went with the role-model work of 11 August. Recorded so a reader does not go looking for a Sprint E that closed it.)*
 
 - **~~Inventory module had no runtime exercise~~ — CLOSED 26 July 2026 evening.** After the `/inventory` route fix and Bug 6 (requisitions column drift) fix, the requisition raise → approve → fulfil path was exercised end-to-end via the browser. Sprint C's `apply_stock_delta` RPC verified for the first time through the UI. Delivery Log shows exactly one movement row per fulfil (no double-write). Stock Levels reflected the delta correctly.
 
